@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>xdpcap: XDP Packet Capture</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/xdpcap/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="xdpcap: XDP Packet Capture" />
+    <meta property="og:description" content="Our servers process a lot of network packets, be it legitimate traffic or large denial of service attacks. To do so efficiently, we’ve embraced eXpress Data Path (XDP), a Linux kernel technology that provides a high performance mechanism for low level packet processing." />
+    <meta property="og:url" content="https://blog.cloudflare.com/xdpcap/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/04/White_tailed_eagle_raftsund_square_crop-1.jpg" />
+    <meta property="article:published_time" content="2019-04-24T18:21:59.000Z" />
+    <meta property="article:modified_time" content="2019-08-27T18:21:45.000Z" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Developers" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="xdpcap: XDP Packet Capture" />
+    <meta name="twitter:description" content="Our servers process a lot of network packets, be it legitimate traffic or large denial of service attacks. To do so efficiently, we’ve embraced eXpress Data Path (XDP), a Linux kernel technology that provides a high performance mechanism for low level packet processing." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/xdpcap/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/04/White_tailed_eagle_raftsund_square_crop-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Arthur Fabre" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Linux, Developers, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Arthur Fabre",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/arthurheadshot.png",
+            "width": 427,
+            "height": 427
+        },
+        "url": "https://blog.cloudflare.com/author/arthur/",
+        "sameAs": []
+    },
+    "headline": "xdpcap: XDP Packet Capture",
+    "url": "https://blog.cloudflare.com/xdpcap/",
+    "datePublished": "2019-04-24T18:21:59.000Z",
+    "dateModified": "2019-08-27T18:21:45.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/04/White_tailed_eagle_raftsund_square_crop-1.jpg",
+    "keywords": "Linux, Developers, Programming",
+    "description": "Our servers process a lot of network packets, be it legitimate traffic or large denial of service attacks. To do so efficiently, we’ve embraced eXpress Data Path (XDP), a Linux kernel technology that provides a high performance mechanism for low level packet processing.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-linux tag-developers tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-linux tag-developers tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">xdpcap: XDP Packet Capture</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-04-24T19:21:59+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">April 24, 2019 7:21PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/arthur/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/arthurheadshot.png" alt="Arthur Fabre" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/arthur" class="fw5 f3 no-underline black mr3">Arthur Fabre</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>Our servers process a lot of network packets, be it legitimate traffic or <a href="https://blog.cloudflare.com/say-cheese-a-snapshot-of-the-massive-ddos-attacks-coming-from-iot-cameras/">large</a> <a href="https://blog.cloudflare.com/how-the-consumer-product-safety-commission-is-inadvertently-behind-the-internets-largest-ddos-attacks/">denial of service</a> <a href="https://blog.cloudflare.com/reflections-on-reflections/">attacks</a>. To do so efficiently, we’ve embraced <a href="http://docs.cilium.io/en/latest/bpf/">eXpress Data Path (XDP)</a>, a Linux kernel technology that provides a high performance mechanism for low level packet processing. We’re using it to <a href="https://blog.cloudflare.com/l4drop-xdp-ebpf-based-ddos-mitigations/">drop DoS attack packets with L4Drop</a>, and also in our new layer 4 load balancer. But there’s a downside to XDP: because it processes packets before the normal Linux network stack sees them, packets redirected or dropped are invisible to regular debugging tools such as <a href="https://www.tcpdump.org/">tcpdump</a>.</p><p>To address this, we built a tcpdump replacement for XDP, xdpcap. We are open sourcing this tool: the <a href="https://github.com/cloudflare/xdpcap">code and documentation are available on GitHub</a>.</p><p>xdpcap uses our classic BPF (cBPF) to eBPF or C compiler, cbpfc, which we are also open sourcing: the <a href="https://github.com/cloudflare/cbpfc">code and documentation are available on GitHub</a>.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/04/White_tailed_eagle_raftsund_square_crop.jpg" class="kg-image"><figcaption><a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> <a href="https://commons.wikimedia.org/wiki/File:White_tailed_eagle_raftsund_square_crop.jpg">image</a> by <a href="http://www.christophmueller.org">Christoph Müller</a></figcaption></figure><p>Tcpdump provides an easy way to dump specific packets of interest. For example, to capture all IPv4 DNS packets, one could:</p><pre><code>$ tcpdump ip and udp port 53
+</code></pre><p>xdpcap reuses the same syntax! xdpcap can write packets to a pcap file:</p><pre><code class="language-c">$ xdpcap /path/to/hook capture.pcap "ip and udp port 53"
+XDPAborted: 0/0   XDPDrop: 0/0   XDPPass: 254/0   XDPTx: 0/0   (received/matched packets)
+XDPAborted: 0/0   XDPDrop: 0/0   XDPPass: 995/1   XDPTx: 0/0   (received/matched packets)
+</code></pre><p>Or write the pcap to stdout, and decode the packets with tcpdump:</p><pre><code class="language-c">$ xdpcap /path/to/hook - "ip and udp port 53" | sudo tcpdump -r -
+reading from file -, link-type EN10MB (Ethernet)
+16:18:37.911670 IP 1.1.1.1 &gt; 1.2.3.4.21563: 26445$ 1/0/1 A 93.184.216.34 (56)
+</code></pre><p>The remainder of this post explains how we built xdpcap, including how <code>/path/to/hook/</code> is used to attach to XDP programs.</p><h2 id="tcpdump">tcpdump</h2><p>To replicate tcpdump, we first need to understand its inner workings. <a href="https://blog.cloudflare.com/bpf-the-forgotten-bytecode/">Marek Majkowski has previously written a detailed post on the subject</a>. Tcpdump exposes a high level filter language, <a href="https://www.tcpdump.org/manpages/pcap-filter.7.html">pcap-filter</a>, to specify which packets are of interest. Reusing our earlier example, the following filter expression captures all IPv4 UDP packets to or from port 53, likely DNS traffic:</p><pre><code class="language-c">ip and udp port 53
+</code></pre><p>Internally, tcpdump uses libpcap to compile the filter to classic BPF (cBPF). cBPF is a simple bytecode language to represent programs that inspect the contents of a packet. A program returns non-zero to indicate that a packet matched the filter, and zero otherwise. The virtual machine that executes cBPF programs is very simple, featuring only two registers, <code>a</code> and <code>x</code>. There is no way of checking the length of the input packet<sup><a href="https://blog.cloudflare.com/xdpcap/#fn1">[1]</a></sup>; instead any out of bounds packet access will terminate the cBPF program, returning 0 (no match). The full set of opcodes are listed in <a href="https://www.kernel.org/doc/Documentation/networking/filter.txt">the Linux documentation</a>. Returning to our example filter, <code>ip and udp port 53</code> compiles to the following cBPF program, expressed as an annotated flowchart:</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/Screen-Shot-2019-08-27-at-10.43.41-AM.png" class="kg-image"><figcaption>Example cBPF filter flowchart</figcaption></figure><p>Tcpdump attaches the generated cBPF filter to a raw packet socket using a <code>setsockopt</code> system call with <code>SO_ATTACH_FILTER</code>. The kernel runs the filter on every packet destined for the socket, but only delivers matching packets. Tcpdump displays the delivered packets, or writes them to a pcap capture file for later analysis.</p><h2 id="xdpcap">xdpcap</h2><p>In the context of XDP, our tcpdump replacement should:</p><ul><li>Accept filters in the same filter language as tcpdump</li><li>Dynamically instrument XDP programs of interest</li><li>Expose matching packets to userspace</li></ul><h3 id="xdp">XDP</h3><p>XDP uses an extended version of the cBPF instruction set, eBPF, to allow arbitrary programs to run for each packet received by a network card, potentially modifying the packets. A stringent kernel verifier statically analyzes eBPF programs, ensuring that memory bounds are checked for every packet load.</p><p>eBPF programs can return:</p><ul><li><code>XDP_DROP</code>: Drop the packet</li><li><code>XDP_TX</code>: Transmit the packet back out the network interface</li><li><code>XDP_PASS</code>: Pass the packet up the network stack</li></ul><p>eBPF introduces several new features, notably helper function calls, enabling programs to call functions exposed by the kernel. This includes retrieving or setting values in maps, key-value data structures that can also be accessed from userspace.</p><h3 id="filter-function filter() { [native code] }1">Filter</h3><p>A key feature of tcpdump is the ability to efficiently pick out packets of interest; packets are filtered before reaching userspace. To achieve this in XDP, the desired filter must be converted to eBPF.</p><p>cBPF is already used in our <a href="https://blog.cloudflare.com/l4drop-xdp-ebpf-based-ddos-mitigations/#bpf-support">XDP based DoS mitigation pipeline</a>: cBPF filters are first converted to C by cbpfc, and the result compiled with Clang to eBPF. Reusing this mechanism allows us to fully support libpcap filter expressions:</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/2-1.png" class="kg-image"><figcaption>Pipeline to convert pcap-filter expressions to eBPF via C using cbpfc</figcaption></figure><p>To remove the Clang runtime dependency, our cBPF compiler, cbpfc, was extended to directly generate eBPF:</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/3-1.png" class="kg-image"><figcaption>Pipeline to convert pcap-filter expressions directly to eBPF using cbpfc</figcaption></figure><p>Converted to eBPF using cbpfc, <code>ip and udp port 53</code> yields:</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/Screen-Shot-2019-08-27-at-10.44.20-AM.png" class="kg-image"><figcaption>Example cBPF filter converted to eBPF with cbpfc flowchart</figcaption></figure><p>The emitted eBPF requires a prologue, which is responsible for loading a pointer to the beginning, and end, of the input packet into registers <code>r6</code>and <code>r7</code> respectively<sup><a href="https://blog.cloudflare.com/xdpcap/#fn2">[2]</a></sup>.</p><p>The generated code follows a very similar structure to the original cBPF filter, but with:</p><ul><li>Bswap instructions to convert big endian packet data to little endian.</li><li>Guards to check the length of the packet before we load data from it. These are required by the kernel verifier.</li></ul><p>The epilogue can use the result of the filter to perform different actions on the input packet.</p><p>As mentioned earlier, we’re open sourcing cbpfc; <a href="https://github.com/cloudflare/cbpfc">the code and documentation are available on GitHub</a>. It can be used to compile cBPF to C, or directly to eBPF, and the generated code is accepted by the kernel verifier.</p><h3 id="instrument">Instrument</h3><p>Tcpdump can start and stop capturing packets at any time, without requiring coordination from applications. This rules out modifying existing XDP programs to directly run the generated eBPF filter; the programs would have to be modified each time xdpcap is run. Instead, programs should expose a hook that can be used by xdpcap to attach filters at runtime.</p><p>xdpcap’s hook support is built around eBPF tail-calls. XDP programs can yield control to other programs using the tail-call helper. Control is never handed back to the calling program, the return code of the subsequent program is used. For example, consider two XDP programs, foo and bar, with foo attached to the network interface. Foo can tail-call into bar:</p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2019/08/5.png" class="kg-image"></figure><p>Flow of XDP program foo tail-calling into program bar</p><p>The program to tail-call into is configured at runtime, using a special eBPF program array map. eBPF programs tail-call into a specific index of the map, the value of which is set by userspace. From our example above, foo’s tail-call map holds a single entry:</p><!--kg-card-begin: markdown--><table>
+<thead>
+<tr>
+<th>index</th>
+<th>program</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>bar</td>
+</tr>
+</tbody>
+</table>
+<!--kg-card-end: markdown--><p>A tail-call into an empty index will not do anything, XDP programs always need to return an action themselves after a tail-call should it fail. Once again, this is enforced by the kernel verifier. In the case of program foo:</p><pre><code class="language-c">int foo(struct xdp_md *ctx) {
+    // tail-call into index 0 - program bar
+    tail_call(ctx, &amp;map, 0);
+
+    // tail-call failed, pass the packet
+    return XDP_PASS;
+}
+</code></pre><p>To leverage this as a hook point, the instrumented programs are modified to always tail-call, using a map that is exposed to xdpcap by <a href="https://facebookmicrosites.github.io/bpf/blog/2018/08/31/object-lifetime.html#bpffs">pinning it to a bpffs</a>. To attach a filter, xdpcap can set it in the map. If no filter is attached, the instrumented program returns the correct action itself.</p><p>With a filter attached to program foo, we have:</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/6.png" class="kg-image"><figcaption>Flow of XDP program foo tail-calling into an xdpcap filter</figcaption></figure><p>The filter must return the original action taken by the instrumented program to ensure the packet is processed correctly. To achieve this, xdpcap generates one filter program per possible XDP action, each one hardcoded to return that specific action. All the programs are set in the map:</p><!--kg-card-begin: markdown--><table>
+<thead>
+<tr>
+<th>index</th>
+<th>program</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 (<code>XDP_ABORTED</code>)</td>
+<td>filter <code>XDP_ABORTED</code></td>
+</tr>
+<tr>
+<td>1 (<code>XDP_DROP</code>)</td>
+<td>filter <code>XDP_DROP</code></td>
+</tr>
+<tr>
+<td>2 (<code>XDP_PASS</code>)</td>
+<td>filter <code>XDP_PASS</code></td>
+</tr>
+<tr>
+<td>3 (<code>XDP_TX</code>)</td>
+<td>filter <code>XDP_TX</code></td>
+</tr>
+</tbody>
+</table>
+<!--kg-card-end: markdown--><p>By tail-calling into the correct index, the instrumented program determines the final action:</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/08/7.png" class="kg-image"><figcaption>Flow of XDP program foo tail-calling into xdpcap filters, one for each action</figcaption></figure><p>xdpcap provides a helper function that attempts a tail-call for the given action. Should it fail, the action is returned instead:</p><pre><code class="language-c">enum xdp_action xdpcap_exit(struct xdp_md *ctx, enum xdp_action action) {
+    // tail-call into the filter using the action as an index
+    tail_call((void *)ctx, &amp;xdpcap_hook, action);
+
+    // tail-call failed, return the action
+    return action;
+}
+</code></pre><p>This allows an XDP program to simply:</p><pre><code class="language-c">int foo(struct xdp_md *ctx) {
+    return xdpcap_exit(ctx, XDP_PASS);
+}
+</code></pre><h3 id="expose">Expose</h3><p>Matching packets, as well as the original action taken for them, need to be exposed to userspace. Once again, such a mechanism is already part of our <a href="https://blog.cloudflare.com/l4drop-xdp-ebpf-based-ddos-mitigations/#packet-sampling">XDP based DoS mitigation pipeline</a>!</p><p>Another eBPF helper, <code>perf_event_output</code>, allows an XDP program to generate a perf event containing, amongst some metadata, the packet. As xdpcap generates one filter per XDP action, the filter program can include the action taken in the metadata. A userspace program can create a perf event ring buffer to receive events into, obtaining both the action and the packet.</p><hr><ol><li>This is true of the original cBPF, but Linux implements a number of extensions, one of which allows the length of the input packet to be retrieved. <a href="https://blog.cloudflare.com/xdpcap/#fnref1">↩︎</a></li><li>This example uses registers <code>r6</code> and <code>r7</code>, but cbpfc can be configured to use any registers. <a href="https://blog.cloudflare.com/xdpcap/#fnref2">↩︎</a></li></ol><p></p>
+            </div>
+        </section>
+
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-02T12:00:00Z">March 02, 2021 12:00PM</p>
+        <a href="/how-to-execute-an-object-file-part-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How to execute an object file: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Ever wondered if it is possible to execute an object file without linking? Or use any object file as a library? Follow along to learn how to decompose an object file and import code from it along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/compiler/" class="no-underline f1 fw2 blue3 underline-hover">Compiler</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/software/" class="no-underline f1 fw2 blue3 underline-hover">Software</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-08T12:00:00+01:00">July 08, 2020 12:00PM</p>
+        <a href="/sandboxing-in-linux-with-zero-lines-of-code/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Sandboxing in Linux with zero lines of code</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In this post we will review Linux seccomp and learn how to sandbox any (even a proprietary) application without writing a single line of code....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-25T12:00:00Z">March 25, 2020 12:00PM</p>
+        <a href="/speeding-up-linux-disk-encryption/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Speeding up Linux disk encryption</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Encrypting data at rest is vital for Cloudflare with more than 200 data centres across the world. In this post, we will investigate the performance of disk encryption on Linux and explain how we made it at least two times faster for ourselves and our customers!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-07-10T14:07:21+01:00">July 10, 2019 2:07PM</p>
+        <a href="/a-gentle-introduction-to-linux-kernel-fuzzing/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A gentle introduction to Linux Kernel fuzzing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It's a good target: it's an obscure part of kernel, and it's relatively easy to automatically craft valid messages....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"si":10,"rayId":"633cc846fe71eaae","version":"2021.2.0"}'></script>
+</body>
+
+</html>

@@ -1,0 +1,951 @@
+
+<!doctype html>
+<html >
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-16x16.png">
+	<link rel="manifest" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/site.webmanifest">
+	<link rel="mask-icon" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/safari-pinned-tab.svg" color="#000000">
+	<meta name="msapplication-TileColor" content="#000000">
+	<meta name="theme-color" content="#000">
+  <title>Analyzing the Various Layers of AgentTesla’s Packing</title>
+<link rel="alternate" hreflang="en" href="https://unit42.paloaltonetworks.com/unit42-analyzing-various-layers-agentteslas-packing/" />
+
+<!-- This site is optimized with the Yoast SEO plugin v12.6.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<meta name="description" content="Palo Alto Networks Unit 42 analyzes the layers of AgentTesla&#039;s Packing."/>
+<meta name="robots" content="max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<link rel="canonical" href="https://unit42.paloaltonetworks.com/unit42-analyzing-various-layers-agentteslas-packing/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Analyzing the Various Layers of AgentTesla’s Packing" />
+<meta property="og:description" content="Palo Alto Networks Unit 42 analyzes the layers of AgentTesla&#039;s Packing." />
+<meta property="og:url" content="https://unit42.paloaltonetworks.com/unit42-analyzing-various-layers-agentteslas-packing/" />
+<meta property="og:site_name" content="Unit42" />
+<meta property="article:tag" content="AgentTesla" />
+<meta property="article:tag" content="dnSpy" />
+<meta property="article:section" content="Unit 42" />
+<meta property="article:published_time" content="2017-09-25T17:00:50+00:00" />
+<meta property="og:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<meta property="og:image:secure_url" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<meta property="og:image:width" content="650" />
+<meta property="og:image:height" content="300" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:description" content="Palo Alto Networks Unit 42 analyzes the layers of AgentTesla&#039;s Packing." />
+<meta name="twitter:title" content="Analyzing the Various Layers of AgentTesla’s Packing" />
+<meta name="twitter:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel='dns-prefetch' href='//www.google.com' />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel="alternate" type="application/rss+xml" title="Unit42 &raquo; Analyzing the Various Layers of AgentTesla’s Packing Comments Feed" href="https://unit42.paloaltonetworks.com/unit42-analyzing-various-layers-agentteslas-packing/feed/" />
+<meta property="og:likes" content="0"/>
+<meta property="og:readtime" content="10"/>
+<meta property="og:views" content="16,978"/>
+<meta property="og:date_created" content="September 25, 2017 at 10:00 AM"/>
+<meta property="og:post_length" content="2806"/>
+<meta property="og:category" content="Unit 42"/>
+<meta property="og:category_link" content="https://unit42.paloaltonetworks.com/category/unit42/"/>
+<meta property="og:author" content="Jeff White"/>
+<meta property="og:authorlink" content="https://unit42.paloaltonetworks.com/author/jeff-white/"/>
+<meta property="og:author_image_link" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/11/unit-news-meta.svg"/>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"BlogPosting","headline":"Analyzing the Various Layers of AgentTesla\u2019s Packing","name":"Analyzing the Various Layers of AgentTesla\u2019s Packing","description":"Palo Alto Networks Unit 42 analyzes the layers of AgentTesla's Packing.","url":"https:\/\/unit42.paloaltonetworks.com\/unit42-analyzing-various-layers-agentteslas-packing\/","mainEntityOfPage":"https:\/\/unit42.paloaltonetworks.com\/unit42-analyzing-various-layers-agentteslas-packing\/","datePublished":"September 25, 2017","articleBody":"AgentTesla is a fairly popular key logger built using the Microsoft .NET Framework and has shown a substantial rise in usage over the past few months.\n\n\n\n&nbsp;\n\nIt offers all of the standard features of a keylogger but goes beyond the typical confines of this type of software. One particular feature of interest is the custom packer it uses to hide the primary AgentTesla binary. Packers allow for a binary to essentially be wrapped in another binary to mask the original one from detection.\n\nThere are a number of excellent blogs out there covering AgentTesla\u2019s functionality and it\u2019s various obfuscations, but having I recently unpacked a sample and wanted to focus on this particular function and provide some helpful tools to aide in unpacking it.\n\nFor this analysis, I\u2019ll be using a PE32 version AgentTesla file seen in the wild on August 29th with hash \u201cca29bd44fc1c4ec031eadf89fb2894bbe646bc0cafb6242a7631f7404ef7d15c\u201d. You\u2019ll find AgentTesla delivered commonly via phishing documents that usually contain VBA macros to download and run a file \u2013 like the one in question.\n\nAs it\u2019s a commercial product, you\u2019ll find a lot of variety in the initial carrier files that deliver the AgentTesla binary; however, at some point you\u2019ll find yourself with a PE.\nThus, begins the journey\u2026\nI suppose the first layer of obfuscation really begins with the file itself, called \u201cone.jpeg.png.exe\u201d and an icon of a JPG trying to create an illusion of legitimacy.\n\n\n\nThis is a common technique to fool people and they\u2019ve taken it one step further by opening an image when you execute the binary.\n\n\n\nThe first executable is a .NET application, which is no surprise since AgentTesla is very well known for being a .NET key logger. To analyze .NET applications, I prefer to use the application dnSpy and, once loading up this sample, we can see there is only one namespace of interest with a handful of functions and a byte array.\n\n\n\nThe Japanese kanji stands out at first glance but I believe this is less about language and more about being a form of obfuscation \u2013 I\u2019ll explain why shortly.\n\nLooking at the Main() function shows a pattern of multiple calls to two other functions.\n\n\n\nTake for example the below string.\n\u3086.\u304f(\u3086.\u308b\u3053(New Byte() { 129, 148, 157, 176, 144, 129, 163, 219 })),\n\nThe namespace is \u201c\u3086\u201d and the functions are \u201c\u304f\u201d and \u201c\u308b\u3053\u201d, with the latter taking a byte array as input and then the resulting output of that function being passed to the former.\n\nStarting with the first function, there are two XOR operations that occur with what looks like two values from the passed in byte array and then a static XOR key.\n\n\nLooking at this function deeper, it uses the last value in the byte array as one of the 3 XOR keys, then adjusts the array in size and begins the decoding loop. Starting at the first byte, it will take this number as the second XOR key and increment it each iteration. The final XOR key is pulled from the GetBytes call on the long string of kanji.\n\nBefore going any further though, can you spot the issue with the function above? It works and successfully decodes the byte array but there is a flaw in codes logic that threw me for a loop when trying to implement the code in Python.\n\nIf you manually XOR those values together (129 [first byte] ^ 214 [last byte] ^ 12375 [first kanji]), the resulting output isn\u2019t what gets returned within the debugger. In fact, it\u2019s not even close which left me scratching my head for a while.\n129^214^12375 = 12288 (0x3000)\n\nInstead, what we end up with is 104 (0x68). It\u2019s clearly wrong though and I assumed I was missing something in what appeared to be a relatively straight forward, par for the course, decoding function. If I XOR the know good result with the two values from the byte array, I end up with 63 (0x3F), otherwise known as \u201c?\u201d.\n\nWhat\u2019s happening is that the GetBytes call is set to use the default system encoding, which in my case is Windows-1252, so the bytes fall outside of the acceptable range and all return as 63 (0x3F), regardless of where the index pointer is in the array. Given this, the only two values I ever need to worry about are within the array itself and I can ignore most of this code.\n\nBelow is a small Python script which will decode the strings passed into it.\ndef decode(a):\n\txorkey = a[-1]\n\ta = a[0:-1]\n\tb = [0] * len(a)\n\tnum = 0\n\tcounter = 0\n\tmaxlength = len(b) - 1\n\twhile counter &lt;= maxlength:\n\t\tb[len(b) - 1 - counter] = chr(a[counter] ^ xorkey ^ 0x3f)\n\t\tcounter += 1\n\treturn \"\".join(b)\n\n&gt;&gt;&gt; a = [129,148,157,176,144,129,163,219]\n&gt;&gt;&gt; decode(a)\n'GetType'\nAs the string successfully decodes with using XOR key 0x3F, it implies it was also encoded with this value initially, so the default code page used by the author when encoding it was also most likely Windows-1252.\n\nThe reason I believe the kanji is more for obfuscation than anything else is because of this and what the XOR key displays, which is nothing but a jumble of random characters without any coherent message.\n\nThis randomness in function and variable names is similar to the techniques they use in later payloads but now with a different character set.\n\nFor the second function, \u201c\u304f\u201d it simply returns a string from the byte array of the previous function.\n\nGoing back to the previously mentioned byte array, it\u2019s quite large and only has one reference inside this code, highlighted below.\n\n\nAfter the byte array is passed to the decoding function, the output is used as input into a new function, \u201c\u3046\u3080\u308c\u3050\u201d, that is responsible for decompressing the data.\n\n\n\nOnce decompressed, the new data is returned in a byte array.\n\nAt this point I copied out the list of integers for the byte array and ran it through the decoding Python function and decompressed the it with the zlib library into the next payload.\nfh = open(\"output\", \"w\")\nfh.write(zlib.decompress(decode(a), -15))\nfh.close()\n\nLooking at the new file shows that it is a DLL named \u201crp.dll\u201d.\n\n\nThis was also a .NET file and we can load it into dnSpy for further analysis; however, before doing that I\u2019ll go over the final part of the first packer.\nDim objectValue As Object = RuntimeHelpers.GetObjectValue(NewLateBinding.LateGet(Nothing,CType(NewLateBinding.LateGet(Nothing, \u201cSystem.Type\u201d,\u201cGetType\u201d, \u201cSystem.Reflection.Assembly\u201d, Nothing, Nothing, Nothing), Type), \u201cLoad\u201d, BINARY_ARRAY, Nothing, Nothing, Nothing))\n\nDim objectValue2 As Object = RuntimeHelpers.GetObjectValue(NewLateBinding.LateGet(RuntimeHelpers.GetObjectValue(objectValue), Nothing, \"GetType\", \"\u3068\u3080\u66ae.\u3068\u3080\u66ae\", Nothing, Nothing, Nothing))\n\nNewLateBinding.LateGet(Nothing, CType(NewLateBinding.LateGet(Nothing, Type.[GetType](\"System.Type\", \"GetType\", \"System.Activator\", Nothing, Nothing, Nothing), Type), \"CreateInstance\", New Object() { RuntimeHelpers.GetObjectValue(objectValue2) }, Nothing, Nothing, Nothing)\n\nI\u2019ve cleaned up the encoded strings so you can see what it\u2019s doing but effectively, it takes the DLL assembly, loads it, and calls the main function, \u201c\u3068\u3080\u66ae.\u3068\u3080\u66ae\u201d, within it.\n\nThis DLL uses the same byte array string obfuscation as the initial executable.\n\n\nIn the above image, you can see it begins by checking whether the file \u201c\\\\Products\\\\WinDecode.exe\u201d exists and then will create the \u201c\\\\Products\\\\\u201d directory if it does not. After that it will enumerate processes to kill, delete files, establish itself in the registry for persistence and other characteristics typical of this malware.\n\n\n\nBut, eventually during the execution, you\u2019ll end up at the next part of the unpacking code.\nDim obj2 As Object = \u3068\u3080\u66ae.\u308c\u306a\u3064(Me.\u307e\u3053\u3046\u306b(Me.\u3053\u306a\u304d(Me.\u308c\u306a())))\nDim \u3046\u3072\u786f\u308b As \u3046\u3072\u786f\u308b = New \u3046\u3072\u786f\u308b()\nReturn \u3046\u3072\u786f\u308b.\u3046(\"Nothing\", String.Empty, CType(obj2, Byte()), True)\n\nThe first line calls multiple functions - starting on the far right is \u201c\u308c\u306a\u201d. This function can be seen below and creates an object from a PNG file in the resources section of the DLL.\n\n\nPicture Time\nThe PNG itself doesn\u2019t visually show anything of note but static.\n\n\n\nThe next function \u201c\u3053\u306a\u304d\u201d is a bit more interesting.\n\n\n\nThis loads the image as a bitmap and then it will read the pixels in a certain order to build an array from the values for Red, Green, and Blue that get returned.\n\nFor example, if you look at the bottom left of the image (0,192), you will see a dark green with the hex value 0x1AE2C.\n\n\n\nThe first entries in the array would be 0x2C (Blue), 0xAE (Green), 0x1 (Red)\n\nTo unpack this, I once again re-wrote the code in Python and used the Python Imaging Library (PIL) to extract the bytes. This particular image is 192x192 pixels and 24bits per pixel (3 bytes \u2013 RGB) and it iterates over each pixel from left to right, bottom to top, for the array of data.\nfrom PIL import Image\nim = Image.open(\"\/Users\/pickleRICK\/19.png\")\n\ndef imparse(a):\n\twidth, height = im.size\n\tcounter = 0\n\tb = [0] * (width * height * 3)\n\tfor y in range(height - 1, -1, -1):\n\t\tfor x in range(0,width):\n\t\t\tpixel = im.getpixel((x,y))\n\t\t\tb[counter * 3 + 2] = pixel[0] # R\n\t\t\tb[counter * 3 + 1] = pixel[1] # G\n\t\t\tb[counter * 3 + 0] = pixel[2] # B\n\t\t\tcounter += 1\n\twhile b[-1] == 0:\n\t\tdel b[-1]\n\treturn b\n\nAfter it returns, the byte array gets passed to the now familiar decode function and then the deflate function.\n&gt;&gt;&gt; dec = imparse(im)\n&gt;&gt;&gt; dec\n[44, 174, 1, 0, 237, 11, 8, 125, 109, 41, 15, \u2026\n\n&gt;&gt;&gt; dec = decode(dec)\n&gt;&gt;&gt; dec\n'\\xec\\xbd\\tx\\x1c\\xc5\\x95\\x00\\xdcs\\xf59#\\xa9\\xa6G \u2026\n\n&gt;&gt;&gt; dec = zlib.decompress(dec,-15)\n&gt;&gt;&gt; dec\n'MZ\\x90\\x00\\x03\\x00\\x00\\x00\\x04\\x00\\x00\\x00\\xff\\xff\\x00 \u2026\n\nAs you can see, we have the MZ header and the next binary.\n\nWithin the DLL are additional functions which handle executing the new payload and I\u2019ve gone ahead and decoded some of the native API\u2019s they use to show how they carry out activity.\n\nThe final payload\nArrival of the last binary \u2013 another .NET application called \u201cRII9DKFR5LC4Y669MLOA2C50SFLPHZBN61CZ160Z.exe\u201d. If you read any of the posts mentioned earlier on the analysis of AgentTesla, then this will look familiar.\n\n\n\nFunction and variable names are encoded with Unicode values in the range of 0x200B-0x200E. Strings are decrypted by, in this sample, function \u201cKMBHFDXSELJYYLVK\\u3002\u201d.\n\n\n\nThis function uses a hardcoded password and salt to derive a key from the SHA1 hashing algorithm as implemented by Microsoft (modified PBKDF1). Afterwards, it uses the key and hardcoded IV to decrypt the string with AES-CBC.\n\n\n\nA quick Google for that IV shows hundreds of results for it, with most revolving around an encryption example that was used as the base for this function \u2013 it even copies the examples variable names.\n\nWhat I found interesting here is that none of these values ever change sample to sample. Even going back to the samples in the write-ups on AgentTesla from over 6 months ago, I was able to decrypt their base64 strings listed in the blog. This confirms the same values are in use and likely hard coded into the builder for AgentTesla.\n\nGiven that everything is static then, it\u2019s fairly trivial to extract all of the base64 encoded strings, decrypt them, and look for interesting IoC\u2019s.\nfrom Crypto.Cipher import AES\ndef stringdecrypt(a):\n\tstring = base64.b64decode(a)\n\tiv = \"@1B2c3D4e5F6g7H8\"\n\tkey = \"\\x34\\x88\\x6D\\x5B\\x09\\x7A\\x94\\x19\\x78\\xD0\\xE3\\x8b\\x1b\\x5c\\xa3\\x29\\x60\\x74\\x6a\\x5e\\x5d\\x64\\x87\\x11\\xb1\\x2c\\x67\\xaa\\x5b\\x3a\\x8e\\xbf\" #to 6a\/5e for first iteration\n\tcleartext = AES.new(key[0:32], AES.MODE_CBC, iv).decrypt(string)\n\treturn cleartext\n\nfh = open(\"extractedb64\")\ncontent = fh.readlines()\nfh.close()\nfor i in content:\n\ttry:\n\t\tdec = stringdecrypt(i)\n\t\tprint \"%s | %s\" % (i.strip(),dec.strip())\n\texcept:\n\t\tpass\n\nWhat we end up with is a long list of values like the below.\ncWUeT8dJU4KfzxUEgGflzQ== | temp\ny9\/s0\/2Soj9dWZ7YCF9viw== | \\des_date.txt\nhQ1zQ5Cg31OSE+BZ2Os36w== | 2017-08-25\ncWUeT8dJU4KfzxUEgGflzQ== | temp\ny9\/s0\/2Soj9dWZ7YCF9viw== | \\des_date.txt\n1IhffSZWWBl13XPDs8n3myYCTMqLedaSKEkL\/imL258= | dd.MM.yyyy HH:mm:ss\ncWUeT8dJU4KfzxUEgGflzQ== | temp\naXsej6rp5uxy+3ym08w3iA== | ApplicationData\nhaLsi+cj0yodiuWmM+o4Wg== | appdata\nAnV66gJ6ewY8YTWIByRSMA== | Temp\ncWUeT8dJU4KfzxUEgGflzQ== | temp\nzYMGsY8aSA781gMxSStsC9UAfia6hLdLRxgBeS3NtD0= | \\Java\\JavaUpdtr.exe\ncWUeT8dJU4KfzxUEgGflzQ== | temp\ny9\/s0\/2Soj9dWZ7YCF9viw== | \\des_date.txt\nAkq+\/Qobe3bW+jdjmv5oI6h1rNqdq+rlANdh6Ef29KelgAp0y6gsCspLDS+k+xmNC9TpnFhgwZyL\/\/\/RhoSWxQ== | Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows\naZG83zDiQxysOvFJFc8qmg== | Load\n8mFIzTz8+GxS3SBdy62qeA== | JavaUpdtr\nIMqa7\/uMjEFhAZrJPRn9Gw== | False\nqQj4VB+mzRT8iDf7llcE6Q== | xyz\nhyNN5z+7qAsS695lDXLuHg== | True\n\u2026\n82ZGUDSQrPCv8v1Hf+HpRA== | &lt;\/span&gt;\nBJsW0oB1ieLYwE8A0Yu6OlLBTcrh0varR+ibOkyOCrk= | mylogbox4h@gmail.com\n2qbrW8tf2IZoaPGZlcaKWw== | \/log.tmp\nv4EpbnhZTubu6HTjEZ8Gdw== | [SavedLog (\nI\/tDnJPWEB6yySAivkY\/576ixyY2gOP+bLVbbaRIV8A= | yyyy_MM_dd_HH_mm_ss\n2qbrW8tf2IZoaPGZlcaKWw== | \/log.tmp\nQ9Yhy5Uive3G6Gspdid9EQ== | Saved_Log_From_\neCqe8oqjGUIRwUWqnBrrpA== | \/\nq542gy\/+wDIUJhH3OGKnNg== | -\n3TzIyOOSC+3lcpPaeTxO6g== | _\n4T5LGk6qEvqUS2xRJLUlww== | .html\n\nFile names, registry keys, and e-mails to start off hunting with. You can also see where the corresponding base64 is within the code and then use dnSpy to obtain further context on how AgentTesla utilizes these values.\n\nFor example, below is something that stood out as interesting almost immediately.\n4nmIR8y7iw8axs2u6GfIQ8f\/7fSpMKvqD0ODaew16nI= | mylogbox3h@gmail.com\n5XDX6cForslWY791UzW+zw== | sammy1990\nwf990RzBidRdPMgWIckJ2g== | smtp.gmail.com\n\nPivoting to these values in dnSpy will land you in a function that seems responsible for sending the stolen data back to the attacker.\n\nPivoting on a hunch\nAt this point, I\u2019ve accomplished the goal I set out for \u2013 covering the packing techniques used by the current version of AgentTesla, offering some code to automate unpacking and decrypt some configuration data.\n\nBut why stop when you\u2019re ahead?\n\nI like to Google static values and constants when analyzing malware because you can usually find some interesting stuff \u2013 configurations, forums, accounts, panels, etc. When I began searching for the file \u201cone.jpeg.png.exe\u201d I stumbled across a site, \u201cb-f-v[.]info\u201d, which hosts various versions of this keylogger.\n\n\n\nThey all function in the same way but the image that displays is related to the first part of the file name. The images are various sizes so the decoding would be different for each; however, the code shown previously will grab the correct Width and Height for building the array.\n\nAlso take note of the dates and when they were modified. The sample covered in this blog was seen on August 29th, just two days before these were created \u2013 so the person or group behind these appear to be actively creating new versions to send out. I confirmed in these samples we find the same SMTP credentials.\nConclusion\nHopefully this overview of their packing techniques, along with the scripts to unpack each phase, prove helpful to others when looking at AgentTesla. Given its recent spikes in popularity, it\u2019s likely not going anywhere anytime soon so the more knowledge you have of the threat, the better you can defend yourself.\n\nYou can continue to track this threat through the Palo Alto Networks AutoFocus AgentTesla tag and you will find the hashes for all of the files covered in this blog below:\nIndicators of Compromise\nInitial PE32\n\none.jpeg.png.exe | ca29bd44fc1c4ec031eadf89fb2894bbe646bc0cafb6242a7631f7404ef7d15c\n\nmypic.jpeg.png.exe | cb0de059cbd5eba8c61c67bedcfa399709e40246039a0457ca6d92697ea516f9\n\nfamilyhome.jpeg.png.exe \/ myhome.jpeg.png.exe | 444e9fbf683e2cff9f1c64808d2e6769c13ed6b29899060d7662d1fe56c3121b\n\ngift-certificate.pdf.png.exe | 124bb13ede19e56927fe5afc5baf680522586534727babbe1aa1791d116caeeb\n\nrequest-for-quotation.pdf.png.exe | dce91ff60c8d843c3e5845061d6f73cfc33e34a5b8347c4d9c468911e29c3ce6\nDLL\u2019s\nrp.dll | 3c48c7f16749126a06c2aae58ee165dc72df658df057b1ac591a587367eae4ad\n\nrp.dll | a5768f1aa364d69e47351c81b1366cc2bfb1b67a0274a56798c2af82ae3525a8\nSecond stage encoded images\n19.png | e42a0fb66dbf40578484566114e5991cf9cf0aa05b1bd080800a55e1e13bff9e\n\n72.png | cd64f1990d3895cb7bd69481186d5a2b1b614ee6ac453102683dba8586593c03\nAgentTesla\nRII9DKFR5LC4Y669MLOA2C50SFLPHZBN61CZ160Z.exe\u00a0 | 3e588ec87759dd7f7d34a8382aad1bc91ce4149b5f200d16ad1e9c1929eec8ec\n\nB92MKZFESR6J7R2PNQ9ZTBA6QN0LIEXTUQEVH3T3.exe\u00a0 | 8fb72967b67b5a224c0fcfc10ab939999e5dc2e877a511875bd4438bcc2f5494","publisher":{"@type":"Organization","@id":"#panworg"},"image":{"@type":"ImageObject","url":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/uploads\/2016\/09\/unit42-web-banner-650x300-150x150.jpg","width":150,"height":150},"author":[{"@type":"Person","name":"Jeff White"}]}</script><link rel='stylesheet' id='crayon-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/css/min/crayon.min.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-theme-classic-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/themes/classic/classic.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-font-monaco-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/fonts/monaco.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='wp-block-library-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dist/block-library/style.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='dashicons-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dashicons.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='post-views-counter-frontend-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/post-views-counter/css/frontend.css?ver=1.3.1' type='text/css' media='all' />
+<link rel='stylesheet' id='bodhi-svgs-attachment-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/svg-support/css/svgs-attachment.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-horizontal-list-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-list-horizontal/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-post-translations-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-post-translations/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wordpress-popular-posts-css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/css/wpp.css?ver=5.0.1' type='text/css' media='all' />
+<link rel='stylesheet' id='unit42/css-css'  href='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/styles/main.css' type='text/css' media='all' />
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery.js?ver=1.12.4-wp'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery-migrate.min.js?ver=1.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","ajaxurl":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":""};
+var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/js/min/crayon.min.js?ver=_2.7.2_beta'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpp_params = {"sampling_active":"0","sampling_rate":"100","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-json\/wordpress-popular-posts\/v1\/popular-posts","ID":"42813","token":"7e15a0f8b3","debug":""};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/js/wpp-5.0.0.min.js?ver=5.0.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpml_xdomain_data = {"css_selector":"wpml-ls-item","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","current_lang":"en"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/res/js/xdomain-data.js?ver=4.3.5'></script>
+<link rel='https://api.w.org/' href='https://unit42.paloaltonetworks.com/wp-json/' />
+<link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://unit42.paloaltonetworks.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://unit42.paloaltonetworks.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.4.1" />
+<link rel='shortlink' href='https://unit42.paloaltonetworks.com/?p=42813' />
+<link rel="alternate" type="application/json+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-analyzing-various-layers-agentteslas-packing%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-analyzing-various-layers-agentteslas-packing%2F&#038;format=xml" />
+<meta name="generator" content="WPML ver:4.3.5 stt:1,28;" />
+<meta name="google-site-verification" content="zHZtYOWm9hm4SZgsH7wqiYcOwmsAsxDUDU4UD1QxB40" /><style>#wpdevart_lb_overlay{background-color:#000000;} #wpdevart_lb_overlay.wpdevart_opacity{opacity:0.8 !important;} #wpdevart_lb_main_desc{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;} #wpdevart_lb_information_content{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;}
+		#wpdevart_lb_information_content{
+			width:100%;	
+		}
+		#wpdevart_info_counter_of_imgs{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_caption{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_title{
+			    display: inline-block;
+				padding-left:5px;
+				padding-right:5px;
+				font-size:15px;
+				color:#000000;
+		}
+		@-webkit-keyframes rotate {
+			to   {-webkit-transform: rotate(360deg);}
+			from  {-webkit-transform: rotate(0deg);}
+		}
+		@keyframes rotate {
+			to   {transform: rotate(360deg);}
+			from  {transform: rotate(0deg);}
+		}
+		#wpdevart_lb_loading_img,#wpdevart_lb_loading_img_first{
+			-webkit-animation: rotate 2s linear  infinite;
+    		animation: rotate 2s linear infinite;
+		}
+	  </style>        <script>var $ = jQuery;</script>
+  
+  
+<script type="text/javascript">
+;(function(win, doc, style, timeout) {
+var STYLE_ID = 'at-body-style';
+function getParent() {
+return doc.getElementsByTagName('head')[0];
+}
+function addStyle(parent, id, def) {
+if (!parent) {
+return;
+}
+var style = doc.createElement('style');
+style.id = id;
+style.innerHTML = def;
+parent.appendChild(style);
+}
+function removeStyle(parent, id) {
+if (!parent) {
+return;
+}
+var style = doc.getElementById(id);
+if (!style) {
+return;
+}
+parent.removeChild(style);
+}
+addStyle(getParent(), STYLE_ID, style);
+setTimeout(function() {
+removeStyle(getParent(), STYLE_ID);
+}, timeout);
+}(window, document, "body {visibility:hidden !important}", 3000));
+</script>
+
+<script src="//assets.adobedtm.com/9273d4aedcd2/0d76ae0322d7/launch-425c423d843b.min.js" async></script>
+<script type="text/javascript" src="https://www.paloaltonetworks.com/content/dam/pan/en_US/includes/attribution.js"></script>
+  </head>
+  <body class="post-template-default single single-post postid-42813 single-format-standard">
+    <!--[if IE]>
+      <div class="alert alert-warning">
+        You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.      </div>
+    <![endif]-->
+    <header class="haeder py-15 position-relative z-index-2">
+  <div class="container px-sm-30 px-35">
+    <div class="row">
+      <div class="first-logo col-sm-auto col-6 mb-sm-0 mb-40 text-sm-center order-1">
+                  <a href="https://www.paloaltonetworks.com/">
+<!--<img src="/wp-content/uploads/2019/07/paloaltonetwork.svg" class="attachment-full size-full" alt="" height="43" width="124" />-->
+<svg width="140" height="26" viewBox="0 0 140 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M59.4802 4.69592C57.6721 4.69592 55.7937 5.18876 53.469 6.43377L54.7605 9.62741C56.7794 8.50019 58.447 8.00735 59.6682 8.00735C61.0538 8.00735 61.6644 8.52395 61.6644 9.20483V9.25133C61.6644 9.72143 61.2883 9.97974 60.3729 10.0738L58.7766 10.238C54.7843 10.6606 53.1404 12.3985 53.1404 14.7934V14.9577C53.1404 17.2359 55.0188 19.0203 57.6721 19.0203C59.4192 19.0203 60.937 18.2826 61.8597 16.9807L62.1572 18.7857H65.7734V10.5904C65.7734 6.71584 63.5428 4.69592 59.4802 4.69592ZM59.1279 15.8969C57.7899 15.8969 57.1555 15.3803 57.1555 14.5816V14.5351C57.1555 13.8305 57.5543 13.3139 59.0101 13.1031L59.6445 13.0091C60.5713 12.8799 61.1406 12.7095 61.6644 12.3923V13.4317C61.6644 15.0052 60.6777 15.8969 59.1279 15.8969Z" fill="white"/>
+<path d="M25.4785 4.78994L20.8528 0.164276L16.2271 4.78994L18.5281 7.09192L6.92828 18.6917L11.5539 23.3174L16.1796 18.6917L13.8787 16.3908L25.4785 4.78994Z" fill="white"/>
+<path d="M11.6001 0.164048L0 11.7642L4.62603 16.3902L16.2262 4.79008L11.6001 0.164048Z" fill="white"/>
+<path d="M27.7794 7.09215L16.1793 18.6923L20.8053 23.3183L32.4054 11.7182L27.7794 7.09215Z" fill="white"/>
+<path d="M72.231 0H68.1219V18.7857H72.231V0Z" fill="white"/>
+<path d="M46.2366 4.69592C44.3685 4.69592 42.8683 5.52249 42.0428 6.81709L41.7287 4.93046H38.1125V23.4806H42.2215V17.051C43.0037 18.2567 44.4832 19.0193 46.2366 19.0193C49.5242 19.0193 52.2013 16.1077 52.2013 12.0916V11.6215C52.2013 7.60853 49.5242 4.69592 46.2366 4.69592ZM47.9744 11.9759C47.9744 14.0888 46.871 15.6159 45.0391 15.6159C43.2072 15.6159 42.1038 14.0898 42.1038 11.9759V11.7414C42.1038 9.62741 43.2072 8.10137 45.0391 8.10137C46.871 8.10137 47.9744 9.62741 47.9744 11.7414V11.9759Z" fill="white"/>
+<path d="M127.672 4.69592C123.469 4.69592 120.51 7.6075 120.51 11.6236V12.0937C120.51 16.1087 123.469 19.0213 127.672 19.0213C131.875 19.0213 134.834 16.1097 134.834 12.0937V11.6236C134.834 7.60853 131.875 4.69592 127.672 4.69592ZM130.607 11.9759C130.607 14.0888 129.504 15.6159 127.672 15.6159C125.84 15.6159 124.736 14.0898 124.736 11.9759V11.7414C124.736 9.62741 125.84 8.10137 127.672 8.10137C129.504 8.10137 130.607 9.62741 130.607 11.7414V11.9759Z" fill="white"/>
+<path d="M138.708 5.54211V5.47185C138.708 5.07304 138.404 4.79097 137.863 4.79097H136.924V6.9514H137.37V6.22299H137.866L138.239 6.9514H138.732L138.274 6.09694C138.552 6.01119 138.708 5.80248 138.708 5.54211ZM137.369 5.18979H137.862C138.144 5.18979 138.261 5.28381 138.261 5.49562V5.51938C138.261 5.70742 138.143 5.82418 137.862 5.82418H137.369V5.18979Z" fill="white"/>
+<path d="M137.769 3.63998C136.502 3.63998 135.539 4.60293 135.539 5.87067C135.539 7.13842 136.502 8.10137 137.769 8.10137C139.037 8.10137 140 7.13842 140 5.87067C140 4.60293 139.037 3.63998 137.769 3.63998ZM137.769 7.79554C136.666 7.79554 135.867 6.99687 135.867 5.86964C135.867 4.74241 136.666 3.94375 137.769 3.94375C138.873 3.94375 139.671 4.74241 139.671 5.86964C139.671 6.99687 138.873 7.79554 137.769 7.79554Z" fill="white"/>
+<path d="M108.416 0H104.307V18.7857H108.416V0Z" fill="white"/>
+<path d="M116.518 15.6159C115.321 15.6159 114.874 15.029 114.874 13.7613V8.10137H119.712V4.93149H114.874V1.76058L110.765 2.37121V14.159C110.765 17.3765 112.409 19.0203 115.697 19.0203C117.153 19.0203 118.867 18.5739 120.276 17.7753L119.102 14.8637C118.279 15.31 117.129 15.6159 116.518 15.6159Z" fill="white"/>
+<path d="M95.6662 4.69592C93.8581 4.69592 91.9797 5.18876 89.655 6.43377L90.9465 9.62741C92.9654 8.50019 94.633 8.00735 95.8542 8.00735C97.2397 8.00735 97.8504 8.52395 97.8504 9.20483V9.25133C97.8504 9.72143 97.4743 9.97974 96.5589 10.0738L94.9626 10.238C90.9702 10.6606 89.3264 12.3985 89.3264 14.7934V14.9577C89.3264 17.2359 91.2048 19.0203 93.8581 19.0203C95.6042 19.0203 97.123 18.2826 98.0456 16.9807L98.3432 18.7857H101.959V10.5904C101.959 6.71584 99.7287 4.69592 95.6662 4.69592ZM95.3138 15.8969C93.9748 15.8969 93.3415 15.3803 93.3415 14.5816V14.5351C93.3415 13.8305 93.7403 13.3139 95.1961 13.1031L95.8304 13.0091C96.7572 12.8799 97.3265 12.7095 97.8493 12.3923V13.4317C97.8493 15.0052 96.8637 15.8969 95.3138 15.8969Z" fill="white"/>
+<path d="M81.225 4.69592C77.022 4.69592 74.0629 7.6075 74.0629 11.6236V12.0937C74.0629 16.1087 77.022 19.0213 81.225 19.0213C85.4281 19.0213 88.3872 16.1097 88.3872 12.0937V11.6236C88.3862 7.60853 85.4281 4.69592 81.225 4.69592ZM84.1593 11.9759C84.1593 14.0888 83.0559 15.6159 81.224 15.6159C79.3921 15.6159 78.2887 14.0898 78.2887 11.9759V11.7414C78.2887 9.62741 79.3921 8.10137 81.224 8.10137C83.0559 8.10137 84.1593 9.62741 84.1593 11.7414V11.9759Z" fill="white"/>
+<path d="M98.0446 22.1168H99.0975L100.551 24.0334H100.566V22.1168H101.532V25.4964H100.513L99.0251 23.5313H99.0107V25.4964H98.0446V22.1168Z" fill="white"/>
+<path d="M102.816 22.1168H105.771L105.81 22.9372H103.825V23.4011H105.385V24.1491H103.825V24.676H105.868L105.829 25.4964H102.816V22.1168Z" fill="white"/>
+<path d="M107.925 22.9857H106.742L106.78 22.1168H110.088L110.127 22.9857H108.944V25.4964H107.925V22.9857Z" fill="white"/>
+<path d="M110.943 22.1168H112.024L112.575 24.4632H112.628L113.342 22.1168H114.333L115.033 24.4632H115.086L115.627 22.1168H116.66L115.771 25.4964H114.444L113.826 23.4589H113.797L113.169 25.4964H111.836L110.943 22.1168Z" fill="white"/>
+<path d="M117.404 23.8071C117.404 22.7057 118.152 22.0155 119.335 22.0155C120.518 22.0155 121.267 22.7057 121.267 23.8071C121.267 24.9085 120.519 25.5987 119.335 25.5987C118.152 25.5987 117.404 24.9075 117.404 23.8071ZM120.257 23.8071C120.257 23.2234 119.92 22.8752 119.335 22.8752C118.75 22.8752 118.412 23.2234 118.412 23.8071C118.412 24.3919 118.75 24.7391 119.33 24.7391C119.914 24.7391 120.257 24.3909 120.257 23.8071Z" fill="white"/>
+<path d="M122.363 22.1168H124.334C125.231 22.1168 125.672 22.5414 125.672 23.3287C125.672 23.8691 125.449 24.2369 125.014 24.4105L125.816 25.4974H124.667L124.044 24.6089H123.378V25.4974H122.363V22.1168ZM124.202 23.8164C124.54 23.8164 124.661 23.6284 124.661 23.3721C124.661 23.1159 124.54 22.933 124.202 22.933H123.377V23.8164H124.202Z" fill="white"/>
+<path d="M126.989 22.1168H128.002V23.3628H128.418L129.408 22.1168H130.547L130.552 22.1209L129.259 23.7389L130.625 25.4923L130.62 25.4964H129.437L128.414 24.1977H128.002V25.4964H126.989V22.1168Z" fill="white"/>
+<path d="M131.402 25.2743V24.3475H131.407C131.972 24.6327 132.523 24.7721 133 24.7721C133.363 24.7721 133.546 24.6853 133.546 24.5159C133.546 24.3465 133.425 24.3031 132.7 24.1873C131.909 24.0623 131.382 23.8247 131.382 23.1438C131.382 22.5115 131.938 22.0238 133.024 22.0238C133.459 22.0238 133.912 22.1158 134.333 22.2945V23.212L134.328 23.2172C133.927 22.9857 133.386 22.84 132.951 22.84C132.565 22.84 132.411 22.932 132.411 23.0859C132.411 23.2843 132.648 23.3029 133.242 23.4052C134.033 23.5406 134.56 23.7627 134.56 24.4777C134.56 25.0325 134.145 25.5884 132.952 25.5884C132.364 25.5884 131.894 25.4675 131.402 25.2743Z" fill="white"/>
+</svg>
+
+</a>
+
+      </div>
+
+      <div class="col-sm-auto col-6 text-sm-center order-sm-2 order-4 second-logo-unit">
+        <a href="https://unit42.paloaltonetworks.com/"><img src="/wp-content/uploads/2019/07/unit42.svg" class="attachment-full size-full" alt="" height="35" width="105" /></a>
+      </div>
+
+      <div class="col-auto d-sm-none ml-auto mb-40 order-2">
+        <button class="btn__search" data-toggle="collapse" data-target="#search"><i class="ui ui-1"></i></button>
+      </div>
+
+      <div id="search" class="collapse d-sm-block col-sm-auto col-12 ml-auto order-3">
+        <div class="pt-sm-0 pt-20 pb-sm-0 pb-40 mt-sm-0 mt-n30">
+                      <input type="search" placeholder="Search Unit 42" id="innerSearch" class="header__search" value="" required>
+                  </div>
+      </div>
+
+      <div class="col-auto d-sm-none d-flex ml-auto align-items-center order-5">
+        <button class="btn__menu rounded" data-toggle="collapse" data-target="#navigation">Menu</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="navigation" class="site-nav collapse d-sm-block pb-20 mt-sm-10">
+  <div class="container px-sm-30">
+    <ul id="menu-primary-navigation" class="main-menu d-sm-flex font-weight-medium"><li id="menu-item-97290" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-97290"><a href="https://unit42.paloaltonetworks.com/tools/">Tools</a></li>
+<li id="menu-item-41" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-41"><a href="https://unit42.paloaltonetworks.com/atoms/">ATOMs</a></li>
+<li id="menu-item-98931" class="menu-item menu-item-type-post_type_archive menu-item-object-events menu-item-98931"><a href="https://unit42.paloaltonetworks.com/events/">Speaking Events</a></li>
+<li id="menu-item-81229" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-81229"><a href="https://unit42.paloaltonetworks.com/about-unit-42/">About Us</a></li>
+</ul>  </div>
+</nav>
+
+  <article class="article overflow-hidden">
+    
+<header class="article__header py-sm-25 pt-40 pb-25 bg-gray-700">
+  <div class="container">
+    
+    <h1 class="article__header__title mb-sm-30 mb-40">Analyzing the Various Layers of AgentTesla’s Packing</h1>
+
+    <ul class="article__entry-meta d-flex flex-wrap align-items-center text-black">
+      <li class="mr-10 mb-10 px-20 rounded-pill d-flex bg-gray-200"><div class="post-views post-42813 entry-meta">
+			
+			
+			<span class="post-views-count">16,978</span>
+			</div> <span class="ml-5">people reacted</span></li>
+      <li class="d-sm-none col-12 p-0"></li>
+      <li class="mr-10 mb-10 px-20 rounded-pill bg-gray-200"><span class="ldc-ul_cont idc_ul_cont_not_liked_inner" onclick="alter_ul_post_values(this,'42813','like')"><i class="ui ui-2"></i><span class="ml-5">0</span></span></li>
+      <li class="mb-10 px-20 rounded-pill bg-gray-200"><span class="span-reading-time rt-reading-time"><span class="rt-label rt-prefix"></span> <span class="rt-time"> 10</span> <span class="rt-label rt-postfix"></span></span> min. read</li>
+    </ul>
+
+    <div class="article__share position-relative">
+      <div class="dropdown dropdown-right">
+        <button type="button" class="px-25 text-black bg-white text-uppercase rounded-pill" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Share <i class="ui ui-6 ml-10 align-text-top"></i>
+        </button>
+        <div class="dropdown-menu rounded-pill" role="toolbar">
+          <div class="share-dropdown px-20 py-10 text-black font-size-sm">
+            <div class="row align-items-center flex-nowrap">
+              <div class="col">
+                <div class="d-flex align-items-center">
+                  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-analyzing-various-layers-agentteslas-packing%2F" target="_blank"><i class="ui ui-7"></i></a>
+                  <a href="https://twitter.com/home?status=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-analyzing-various-layers-agentteslas-packing%2F+-+Analyzing+the+Various+Layers+of+AgentTesla%E2%80%99s+Packing" target="_blank"><i class="ui ui-8"></i></a>
+                  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-analyzing-various-layers-agentteslas-packing%2F&title=Analyzing+the+Various+Layers+of+AgentTesla%E2%80%99s+Packing&summary=&source=" target="_blank"><i class="ui ui-9"></i></a>
+                  <a href="//www.reddit.com/submit?url=https://unit42.paloaltonetworks.com/unit42-analyzing-various-layers-agentteslas-packing/" target="_blank"><i class="ui ui-10"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>    <div class="article__summary py-25 text-gray-500 font-size-sm">
+  <div class="container">
+    <div class="row align-items-center no-gutters">
+      <div class="col-sm-auto col-12 mb-sm-0 mb-35">
+        <i class="ui ui-11 text-gray-700 mr-sm-20"></i>
+      </div>
+  
+      <div class="col-sm col-12">
+        <p>
+          By <a href="https://unit42.paloaltonetworks.com/author/jeff-white/" title="Posts by Jeff White" class="author url fn" rel="author">Jeff White</a>        </p>
+        <p><time datetime="2017-09-25T17:00:50+00:00">September 25, 2017 at 10:00 AM</time></p>
+        <p>Category: <a href="https://unit42.paloaltonetworks.com/category/unit42/" rel="category tag">Unit 42</a></p>
+        <p>Tags: <a href="https://unit42.paloaltonetworks.com/tag/agenttesla/" rel="tag">AgentTesla</a>, <a href="https://unit42.paloaltonetworks.com/tag/dnspy/" rel="tag">dnSpy</a></p>
+      </div>
+    </div>
+  </div>
+</div>    <div class="py-30 bg-white">
+      <div class="container">
+        <div class="article__content pb-30">
+                      <figure class="mb-30 text-center">
+              <img width="650" height="300" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" class="attachment-single size-single wp-post-image" alt="" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg 650w, https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300-300x138.jpg 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300-370x171.jpg 370w" sizes="(max-width: 650px) 100vw, 650px" />            </figure>
+                    <p>AgentTesla is a fairly popular key logger built using the <a href="https://en.wikipedia.org/wiki/.NET_Framework">Microsoft .NET Framework</a> and has shown a substantial rise in usage over the past few months.</p>
+<p><img class="alignnone size-full wp-image-42816" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_1.png" alt="agenttesla_1" width="811" height="379" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_1.png 811w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_1-300x140.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_1-768x359.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_1-370x173.png 370w" sizes="(max-width: 811px) 100vw, 811px" /></p>
+<p>&nbsp;</p>
+<p>It offers all of the standard features of a keylogger but goes beyond the typical confines of this type of software. One particular feature of interest is the custom packer it uses to hide the primary AgentTesla binary. Packers allow for a binary to essentially be wrapped in another binary to mask the original one from detection.</p>
+<p>There are a number of excellent blogs out there covering <a href="https://www.google.com/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=11&amp;cad=rja&amp;uact=8&amp;ved=0ahUKEwiuguS2j4PWAhXkzIMKHWy1Ass4ChAWCCcwAA&amp;url=https%3A%2F%2Fblog.fortinet.com%2F2017%2F06%2F28%2Fin-depth-analysis-of-net-malware-javaupdtr&amp;usg=AFQjCNG0sqBMWMMIo">AgentTesla’s functionality</a> and it’s <a href="https://blogs.forcepoint.com/security-labs/part-two-camouflage-netting">various obfuscations</a>, but having I recently unpacked a sample and wanted to focus on this particular function and provide some helpful tools to aide in unpacking it.</p>
+<p>For this analysis, I’ll be using a PE32 version AgentTesla file seen in the wild on August 29<sup>th</sup> with hash “ca29bd44fc1c4ec031eadf89fb2894bbe646bc0cafb6242a7631f7404ef7d15c”. You’ll find AgentTesla delivered commonly via <a href="https://cysinfo.com/agent-tesla-new-spyware-variant-plucked-hackers-arena/">phishing documents</a> that usually contain VBA macros to download and run a file – like the one in question.</p>
+<p>As it’s a commercial product, you’ll find a lot of variety in the initial carrier files that deliver the AgentTesla binary; however, at some point you’ll find yourself with a PE.</p>
+<h2>Thus, begins the journey…</h2>
+<p>I suppose the first layer of obfuscation really begins with the file itself, called “one.jpeg.png.exe” and an icon of a JPG trying to create an illusion of legitimacy.</p>
+<p><img class="alignnone size-full wp-image-42840" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_2.png" alt="agenttesla_2" width="288" height="258" /></p>
+<p>This is a common technique to fool people and they’ve taken it one step further by opening an image when you execute the binary.</p>
+<p><img class="alignnone size-full wp-image-42864" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_3.png" alt="agenttesla_3" width="681" height="706" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_3.png 681w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_3-289x300.png 289w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_3-370x384.png 370w" sizes="(max-width: 681px) 100vw, 681px" /></p>
+<p>The first executable is a .NET application, which is no surprise since AgentTesla is very well known for being a .NET key logger. To analyze .NET applications, I prefer to use the application dnSpy and, once loading up this sample, we can see there is only one namespace of interest with a handful of functions and a byte array.</p>
+<p><img class="alignnone size-full wp-image-42888" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_4.png" alt="agenttesla_4" width="629" height="640" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_4.png 629w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_4-295x300.png 295w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_4-370x376.png 370w" sizes="(max-width: 629px) 100vw, 629px" /></p>
+<p>The Japanese kanji stands out at first glance but I believe this is less about language and more about being a form of obfuscation – I’ll explain why shortly.</p>
+<p>Looking at the Main() function shows a pattern of multiple calls to two other functions.</p>
+<p><img class="alignnone size-full wp-image-42912" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5.png" alt="agenttesla_5" width="974" height="238" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5-900x220.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5-300x73.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5-768x188.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_5-370x90.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>Take for example the below string.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b00fb363508442" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+ゆ.く(ゆ.るこ(New Byte() { 129, 148, 157, 176, 144, 129, 163, 219 })),</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b00fb363508442-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b00fb363508442-1">ゆ<span class="crayon-sy">.</span>く<span class="crayon-sy">(</span>ゆ<span class="crayon-sy">.</span>るこ<span class="crayon-sy">(</span><span class="crayon-r">New</span><span class="crayon-h"> </span><span class="crayon-t">Byte</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-cn">129</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">148</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">157</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">176</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">144</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">129</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">163</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">219</span><span class="crayon-h"> </span><span class="crayon-sy">}</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0003 seconds] -->
+<p>The namespace is “ゆ” and the functions are “く” and “るこ”, with the latter taking a byte array as input and then the resulting output of that function being passed to the former.</p>
+<p>Starting with the first function, there are two XOR operations that occur with what looks like two values from the passed in byte array and then a static XOR key.<br />
+<img class="alignnone size-full wp-image-42936" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6.png" alt="agenttesla_6" width="974" height="281" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6-900x260.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6-300x87.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6-768x222.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_6-370x107.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>Looking at this function deeper, it uses the last value in the byte array as one of the 3 XOR keys, then adjusts the array in size and begins the decoding loop. Starting at the first byte, it will take this number as the second XOR key and increment it each iteration. The final XOR key is pulled from the GetBytes call on the long string of kanji.</p>
+<p>Before going any further though, can you spot the issue with the function above? It works and successfully decodes the byte array but there is a flaw in codes logic that threw me for a loop when trying to implement the code in Python.</p>
+<p>If you manually XOR those values together (129 [first byte] ^ 214 [last byte] ^ 12375 [first kanji]), the resulting output isn’t what gets returned within the debugger. In fact, it’s not even close which left me scratching my head for a while.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0103200519540" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+129^214^12375 = 12288 (0x3000)</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0103200519540-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0103200519540-1"><span class="crayon-cn">129</span><span class="crayon-o">^</span><span class="crayon-cn">214</span><span class="crayon-o">^</span><span class="crayon-cn">12375</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-cn">12288</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-cn">0x3000</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0001 seconds] -->
+<p>Instead, what we end up with is 104 (0x68). It’s clearly wrong though and I assumed I was missing something in what appeared to be a relatively straight forward, par for the course, decoding function. If I XOR the know good result with the two values from the byte array, I end up with 63 (0x3F), otherwise known as “?”.</p>
+<p>What’s happening is that the GetBytes call is set to use the default system encoding, which in my case is Windows-1252, so the bytes fall outside of the acceptable range and all return as 63 (0x3F), regardless of where the index pointer is in the array. Given this, the only two values I ever need to worry about are within the array itself and I can ignore most of this code.</p>
+<p>Below is a small Python script which will decode the strings passed into it.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0105008490675" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+def decode(a):
+	xorkey = a[-1]
+	a = a[0:-1]
+	b = [0] * len(a)
+	num = 0
+	counter = 0
+	maxlength = len(b) - 1
+	while counter &lt;= maxlength:
+		b[len(b) - 1 - counter] = chr(a[counter] ^ xorkey ^ 0x3f)
+		counter += 1
+	return "".join(b)
+
+&gt;&gt;&gt; a = [129,148,157,176,144,129,163,219]
+&gt;&gt;&gt; decode(a)
+'GetType'</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-6">6</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-8">8</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-10">10</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-12">12</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0105008490675-14">14</div><div class="crayon-num" data-line="crayon-5f694cb3b0105008490675-15">15</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0105008490675-1"><span class="crayon-e">def </span><span class="crayon-e">decode</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-2"><span class="crayon-h">	</span><span class="crayon-v">xorkey</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">a</span><span class="crayon-sy">[</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">]</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-3"><span class="crayon-h">	</span><span class="crayon-v">a</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">a</span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-o">:</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-4"><span class="crayon-h">	</span><span class="crayon-v">b</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">*</span><span class="crayon-h"> </span><span class="crayon-e">len</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-5"><span class="crayon-h">	</span><span class="crayon-v">num</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-cn">0</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-6"><span class="crayon-h">	</span><span class="crayon-v">counter</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-cn">0</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-7"><span class="crayon-h">	</span><span class="crayon-v">maxlength</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">len</span><span class="crayon-sy">(</span><span class="crayon-v">b</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-h"> </span><span class="crayon-cn">1</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-8"><span class="crayon-h">	</span><span class="crayon-st">while</span><span class="crayon-h"> </span><span class="crayon-v">counter</span><span class="crayon-h"> </span><span class="crayon-o">&lt;=</span><span class="crayon-h"> </span><span class="crayon-v">maxlength</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-9"><span class="crayon-h">		</span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-e">len</span><span class="crayon-sy">(</span><span class="crayon-v">b</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-h"> </span><span class="crayon-cn">1</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-h"> </span><span class="crayon-v">counter</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">chr</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">[</span><span class="crayon-v">counter</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">^</span><span class="crayon-h"> </span><span class="crayon-v">xorkey</span><span class="crayon-h"> </span><span class="crayon-o">^</span><span class="crayon-h"> </span><span class="crayon-cn">0x3f</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-10"><span class="crayon-h">		</span><span class="crayon-v">counter</span><span class="crayon-h"> </span><span class="crayon-o">+=</span><span class="crayon-h"> </span><span class="crayon-cn">1</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-11"><span class="crayon-h">	</span><span class="crayon-st">return</span><span class="crayon-h"> </span><span class="crayon-s">""</span><span class="crayon-sy">.</span><span class="crayon-e">join</span><span class="crayon-sy">(</span><span class="crayon-v">b</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-12">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-13"><span class="crayon-o">&gt;&gt;&gt;</span><span class="crayon-h"> </span><span class="crayon-v">a</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">129</span><span class="crayon-sy">,</span><span class="crayon-cn">148</span><span class="crayon-sy">,</span><span class="crayon-cn">157</span><span class="crayon-sy">,</span><span class="crayon-cn">176</span><span class="crayon-sy">,</span><span class="crayon-cn">144</span><span class="crayon-sy">,</span><span class="crayon-cn">129</span><span class="crayon-sy">,</span><span class="crayon-cn">163</span><span class="crayon-sy">,</span><span class="crayon-cn">219</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0105008490675-14"><span class="crayon-o">&gt;&gt;&gt;</span><span class="crayon-h"> </span><span class="crayon-e">decode</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0105008490675-15"><span class="crayon-s">'GetType'</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0009 seconds] -->
+<p>As the string successfully decodes with using XOR key 0x3F, it implies it was also encoded with this value initially, so the default code page used by the author when encoding it was also most likely Windows-1252.</p>
+<p>The reason I believe the kanji is more for obfuscation than anything else is because of this and what the XOR key displays, which is nothing but a jumble of random characters without any coherent message.</p>
+<p>This randomness in function and variable names is similar to the techniques they use in later payloads but now with a different character set.</p>
+<p>For the second function, “く” it simply returns a string from the byte array of the previous function.</p>
+<p>Going back to the previously mentioned byte array, it’s quite large and only has one reference inside this code, highlighted below.<br />
+<img class="alignnone size-full wp-image-42960" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7.png" alt="agenttesla_7" width="972" height="101" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7.png 972w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7-900x94.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7-300x31.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7-768x80.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_7-370x38.png 370w" sizes="(max-width: 972px) 100vw, 972px" /></p>
+<p>After the byte array is passed to the decoding function, the output is used as input into a new function, “うむれぐ”, that is responsible for decompressing the data.</p>
+<p><img class="alignnone size-full wp-image-42984" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8.png" alt="agenttesla_8" width="974" height="235" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8-900x217.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8-300x72.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8-768x185.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_8-370x89.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>Once decompressed, the new data is returned in a byte array.</p>
+<p>At this point I copied out the list of integers for the byte array and ran it through the decoding Python function and decompressed the it with the zlib library into the next payload.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0107967352371" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+fh = open("output", "w")
+fh.write(zlib.decompress(decode(a), -15))
+fh.close()</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0107967352371-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0107967352371-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0107967352371-3">3</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0107967352371-1"><span class="crayon-v">fh</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">open</span><span class="crayon-sy">(</span><span class="crayon-s">"output"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"w"</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0107967352371-2"><span class="crayon-v">fh</span><span class="crayon-sy">.</span><span class="crayon-e">write</span><span class="crayon-sy">(</span><span class="crayon-v">zlib</span><span class="crayon-sy">.</span><span class="crayon-e">decompress</span><span class="crayon-sy">(</span><span class="crayon-e">decode</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-cn">15</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0107967352371-3"><span class="crayon-v">fh</span><span class="crayon-sy">.</span><span class="crayon-e">close</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0002 seconds] -->
+<p>Looking at the new file shows that it is a DLL named “rp.dll”.<br />
+<img class="alignnone size-full wp-image-43008" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9.png" alt="agenttesla_9" width="915" height="1092" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9.png 915w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9-900x1074.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9-251x300.png 251w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9-768x917.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9-858x1024.png 858w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_9-370x442.png 370w" sizes="(max-width: 915px) 100vw, 915px" /></p>
+<p>This was also a .NET file and we can load it into dnSpy for further analysis; however, before doing that I’ll go over the final part of the first packer.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0109239136750" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+Dim objectValue As Object = RuntimeHelpers.GetObjectValue(NewLateBinding.LateGet(Nothing,CType(NewLateBinding.LateGet(Nothing, “System.Type”,“GetType”, “System.Reflection.Assembly”, Nothing, Nothing, Nothing), Type), “Load”, BINARY_ARRAY, Nothing, Nothing, Nothing))
+
+Dim objectValue2 As Object = RuntimeHelpers.GetObjectValue(NewLateBinding.LateGet(RuntimeHelpers.GetObjectValue(objectValue), Nothing, "GetType", "とむ暮.とむ暮", Nothing, Nothing, Nothing))
+
+NewLateBinding.LateGet(Nothing, CType(NewLateBinding.LateGet(Nothing, Type.[GetType]("System.Type", "GetType", "System.Activator", Nothing, Nothing, Nothing), Type), "CreateInstance", New Object() { RuntimeHelpers.GetObjectValue(objectValue2) }, Nothing, Nothing, Nothing)</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0109239136750-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0109239136750-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0109239136750-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0109239136750-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b0109239136750-5">5</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0109239136750-1"><span class="crayon-e">Dim </span><span class="crayon-e">objectValue </span><span class="crayon-st">As</span><span class="crayon-h"> </span><span class="crayon-t">Object</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">RuntimeHelpers</span><span class="crayon-sy">.</span><span class="crayon-e">GetObjectValue</span><span class="crayon-sy">(</span><span class="crayon-v">NewLateBinding</span><span class="crayon-sy">.</span><span class="crayon-e">LateGet</span><span class="crayon-sy">(</span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-e">CType</span><span class="crayon-sy">(</span><span class="crayon-v">NewLateBinding</span><span class="crayon-sy">.</span><span class="crayon-e">LateGet</span><span class="crayon-sy">(</span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span>“<span class="crayon-v">System</span><span class="crayon-sy">.</span><span class="crayon-i">Type</span>”<span class="crayon-sy">,</span>“<span class="crayon-i">GetType</span>”<span class="crayon-sy">,</span><span class="crayon-h"> </span>“<span class="crayon-v">System</span><span class="crayon-sy">.</span><span class="crayon-v">Reflection</span><span class="crayon-sy">.</span><span class="crayon-i">Assembly</span>”<span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Type</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span>“<span class="crayon-i">Load</span>”<span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">BINARY_ARRAY</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0109239136750-2">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b0109239136750-3"><span class="crayon-e">Dim </span><span class="crayon-e">objectValue2 </span><span class="crayon-st">As</span><span class="crayon-h"> </span><span class="crayon-t">Object</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">RuntimeHelpers</span><span class="crayon-sy">.</span><span class="crayon-e">GetObjectValue</span><span class="crayon-sy">(</span><span class="crayon-v">NewLateBinding</span><span class="crayon-sy">.</span><span class="crayon-e">LateGet</span><span class="crayon-sy">(</span><span class="crayon-v">RuntimeHelpers</span><span class="crayon-sy">.</span><span class="crayon-e">GetObjectValue</span><span class="crayon-sy">(</span><span class="crayon-v">objectValue</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"GetType"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"とむ暮.とむ暮"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0109239136750-4">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b0109239136750-5"><span class="crayon-v">NewLateBinding</span><span class="crayon-sy">.</span><span class="crayon-e">LateGet</span><span class="crayon-sy">(</span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-e">CType</span><span class="crayon-sy">(</span><span class="crayon-v">NewLateBinding</span><span class="crayon-sy">.</span><span class="crayon-e">LateGet</span><span class="crayon-sy">(</span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Type</span><span class="crayon-sy">.</span><span class="crayon-sy">[</span><span class="crayon-v">GetType</span><span class="crayon-sy">]</span><span class="crayon-sy">(</span><span class="crayon-s">"System.Type"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"GetType"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"System.Activator"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Type</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-s">"CreateInstance"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-r">New</span><span class="crayon-h"> </span><span class="crayon-t">Object</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-v">RuntimeHelpers</span><span class="crayon-sy">.</span><span class="crayon-e">GetObjectValue</span><span class="crayon-sy">(</span><span class="crayon-v">objectValue2</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-sy">}</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">Nothing</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0012 seconds] -->
+<p>I’ve cleaned up the encoded strings so you can see what it’s doing but effectively, it takes the DLL assembly, loads it, and calls the main function, “とむ暮.とむ暮”, within it.</p>
+<p>This DLL uses the same byte array string obfuscation as the initial executable.<br />
+<img class="alignnone size-full wp-image-43032" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10.png" alt="agenttesla_10" width="974" height="379" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10-900x350.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10-300x117.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10-768x299.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_10-370x144.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>In the above image, you can see it begins by checking whether the file “\\Products\\WinDecode.exe” exists and then will create the “\\Products\\” directory if it does not. After that it will enumerate processes to kill, delete files, establish itself in the registry for persistence and other characteristics typical of this malware.</p>
+<p><img class="alignnone size-full wp-image-43056" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11.png" alt="agenttesla_11" width="974" height="275" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11-900x254.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11-300x85.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11-768x217.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_11-370x104.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>But, eventually during the execution, you’ll end up at the next part of the unpacking code.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b010b785652333" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+Dim obj2 As Object = とむ暮.れなつ(Me.まこうに(Me.こなき(Me.れな())))
+Dim うひ硯る As うひ硯る = New うひ硯る()
+Return うひ硯る.う("Nothing", String.Empty, CType(obj2, Byte()), True)</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b010b785652333-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010b785652333-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b010b785652333-3">3</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b010b785652333-1"><span class="crayon-e">Dim </span><span class="crayon-e">obj2 </span><span class="crayon-st">As</span><span class="crayon-h"> </span><span class="crayon-t">Object</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span>とむ暮<span class="crayon-sy">.</span>れなつ<span class="crayon-sy">(</span><span class="crayon-v">Me</span><span class="crayon-sy">.</span>まこうに<span class="crayon-sy">(</span><span class="crayon-v">Me</span><span class="crayon-sy">.</span>こなき<span class="crayon-sy">(</span><span class="crayon-v">Me</span><span class="crayon-sy">.</span>れな<span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010b785652333-2"><span class="crayon-i">Dim</span><span class="crayon-h"> </span>うひ硯る<span class="crayon-h"> </span><span class="crayon-st">As</span><span class="crayon-h"> </span>うひ硯る<span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-r">New</span><span class="crayon-h"> </span>うひ硯る<span class="crayon-sy">(</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b010b785652333-3"><span class="crayon-st">Return</span><span class="crayon-h"> </span>うひ硯る<span class="crayon-sy">.</span>う<span class="crayon-sy">(</span><span class="crayon-s">"Nothing"</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-t">String</span><span class="crayon-sy">.</span><span class="crayon-v">Empty</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-e">CType</span><span class="crayon-sy">(</span><span class="crayon-v">obj2</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-t">Byte</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-t">True</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0005 seconds] -->
+<p>The first line calls multiple functions &#8211; starting on the far right is “れな”. This function can be seen below and creates an object from a PNG file in the resources section of the DLL.</p>
+<p><img class="alignnone size-full wp-image-43080" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12.png" alt="agenttesla_12" width="974" height="75" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12-900x69.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12-300x23.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12-768x59.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_12-370x28.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<h2>Picture Time</h2>
+<p>The PNG itself doesn’t visually show anything of note but static.</p>
+<p><img class="alignnone size-full wp-image-43104" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13.png" alt="agenttesla_13" width="975" height="468" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13.png 975w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13-900x432.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13-300x144.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13-768x369.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_13-370x178.png 370w" sizes="(max-width: 975px) 100vw, 975px" /></p>
+<p>The next function “こなき” is a bit more interesting.</p>
+<p><img class="alignnone size-full wp-image-43128" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14.png" alt="agenttesla_14" width="965" height="421" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14.png 965w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14-900x393.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14-300x131.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14-768x335.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_14-370x161.png 370w" sizes="(max-width: 965px) 100vw, 965px" /></p>
+<p>This loads the image as a bitmap and then it will read the pixels in a certain order to build an array from the values for Red, Green, and Blue that get returned.</p>
+<p>For example, if you look at the bottom left of the image (0,192), you will see a dark green with the hex value 0x1AE2C.</p>
+<p><img class="alignnone size-full wp-image-43152" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_15.png" alt="agenttesla_15" width="603" height="529" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_15.png 603w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_15-300x263.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_15-370x325.png 370w" sizes="(max-width: 603px) 100vw, 603px" /></p>
+<p>The first entries in the array would be 0x2C (Blue), 0xAE (Green), 0x1 (Red)</p>
+<p>To unpack this, I once again re-wrote the code in Python and used the Python Imaging Library (PIL) to extract the bytes. This particular image is 192&#215;192 pixels and 24bits per pixel (3 bytes – RGB) and it iterates over each pixel from left to right, bottom to top, for the array of data.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b010d727475846" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+from PIL import Image
+im = Image.open("/Users/pickleRICK/19.png")
+
+def imparse(a):
+	width, height = im.size
+	counter = 0
+	b = [0] * (width * height * 3)
+	for y in range(height - 1, -1, -1):
+		for x in range(0,width):
+			pixel = im.getpixel((x,y))
+			b[counter * 3 + 2] = pixel[0] # R
+			b[counter * 3 + 1] = pixel[1] # G
+			b[counter * 3 + 0] = pixel[2] # B
+			counter += 1
+	while b[-1] == 0:
+		del b[-1]
+	return b</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-6">6</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-8">8</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-10">10</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-12">12</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-14">14</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-15">15</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010d727475846-16">16</div><div class="crayon-num" data-line="crayon-5f694cb3b010d727475846-17">17</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b010d727475846-1"><span class="crayon-e">from </span><span class="crayon-e">PIL </span><span class="crayon-e">import </span><span class="crayon-e">Image</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-2"><span class="crayon-v">im</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">Image</span><span class="crayon-sy">.</span><span class="crayon-e">open</span><span class="crayon-sy">(</span><span class="crayon-s">"/Users/pickleRICK/19.png"</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-3">&nbsp;</div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-4"><span class="crayon-e">def </span><span class="crayon-e">imparse</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-5"><span class="crayon-h">	</span><span class="crayon-v">width</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">height</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">im</span><span class="crayon-sy">.</span><span class="crayon-e">size</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-6"><span class="crayon-e">	</span><span class="crayon-v">counter</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-cn">0</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-7"><span class="crayon-h">	</span><span class="crayon-v">b</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">*</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-e ">width *</span><span class="crayon-h"> </span><span class="crayon-e ">height *</span><span class="crayon-h"> </span><span class="crayon-cn">3</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-8"><span class="crayon-h">	</span><span class="crayon-st">for</span><span class="crayon-h"> </span><span class="crayon-i">y</span><span class="crayon-h"> </span><span class="crayon-st">in</span><span class="crayon-h"> </span><span class="crayon-e">range</span><span class="crayon-sy">(</span><span class="crayon-v">height</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-h"> </span><span class="crayon-cn">1</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-9"><span class="crayon-h">		</span><span class="crayon-st">for</span><span class="crayon-h"> </span><span class="crayon-i">x</span><span class="crayon-h"> </span><span class="crayon-st">in</span><span class="crayon-h"> </span><span class="crayon-e">range</span><span class="crayon-sy">(</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-v">width</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-10"><span class="crayon-h">			</span><span class="crayon-v">pixel</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">im</span><span class="crayon-sy">.</span><span class="crayon-e">getpixel</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-v">x</span><span class="crayon-sy">,</span><span class="crayon-v">y</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-11"><span class="crayon-h">			</span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-e ">counter *</span><span class="crayon-h"> </span><span class="crayon-cn">3</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-cn">2</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">pixel</span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-p"># R</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-12"><span class="crayon-h">			</span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-e ">counter *</span><span class="crayon-h"> </span><span class="crayon-cn">3</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-cn">1</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">pixel</span><span class="crayon-sy">[</span><span class="crayon-cn">1</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-p"># G</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-13"><span class="crayon-h">			</span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-e ">counter *</span><span class="crayon-h"> </span><span class="crayon-cn">3</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-cn">0</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">pixel</span><span class="crayon-sy">[</span><span class="crayon-cn">2</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-p"># B</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-14"><span class="crayon-h">			</span><span class="crayon-v">counter</span><span class="crayon-h"> </span><span class="crayon-o">+=</span><span class="crayon-h"> </span><span class="crayon-cn">1</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-15"><span class="crayon-h">	</span><span class="crayon-st">while</span><span class="crayon-h"> </span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-cn">0</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010d727475846-16"><span class="crayon-h">		</span><span class="crayon-i">del</span><span class="crayon-h"> </span><span class="crayon-v">b</span><span class="crayon-sy">[</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">]</span></div><div class="crayon-line" id="crayon-5f694cb3b010d727475846-17"><span class="crayon-h">	</span><span class="crayon-st">return</span><span class="crayon-h"> </span><span class="crayon-v">b</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0011 seconds] -->
+<p>After it returns, the byte array gets passed to the now familiar decode function and then the deflate function.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b010f032013580" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+&amp;gt;&amp;gt;&amp;gt; dec = imparse(im)
+&amp;gt;&amp;gt;&amp;gt; dec
+[44, 174, 1, 0, 237, 11, 8, 125, 109, 41, 15, …
+
+&amp;gt;&amp;gt;&amp;gt; dec = decode(dec)
+&amp;gt;&amp;gt;&amp;gt; dec
+'\xec\xbd\tx\x1c\xc5\x95\x00\xdcs\xf59#\xa9\xa6G …
+
+&amp;gt;&amp;gt;&amp;gt; dec = zlib.decompress(dec,-15)
+&amp;gt;&amp;gt;&amp;gt; dec
+'MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00 …</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010f032013580-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010f032013580-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010f032013580-6">6</div><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010f032013580-8">8</div><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b010f032013580-10">10</div><div class="crayon-num" data-line="crayon-5f694cb3b010f032013580-11">11</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b010f032013580-1"><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-v">dec</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">imparse</span><span class="crayon-sy">(</span><span class="crayon-v">im</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010f032013580-2"><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-i">dec</span></div><div class="crayon-line" id="crayon-5f694cb3b010f032013580-3"><span class="crayon-sy">[</span><span class="crayon-cn">44</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">174</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">1</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">237</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">11</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">8</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">125</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">109</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">41</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-cn">15</span><span class="crayon-sy">,</span><span class="crayon-h"> </span>…</div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010f032013580-4">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b010f032013580-5"><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-v">dec</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">decode</span><span class="crayon-sy">(</span><span class="crayon-v">dec</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010f032013580-6"><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-i">dec</span></div><div class="crayon-line" id="crayon-5f694cb3b010f032013580-7"><span class="crayon-s">'\xec\xbd\tx\x1c\xc5\x95\x00\xdcs\xf59#\xa9\xa6G …</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010f032013580-8">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b010f032013580-9"><span class="crayon-s">&amp;gt;&amp;gt;&amp;gt; dec = zlib.decompress(dec,-15)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b010f032013580-10"><span class="crayon-s">&amp;gt;&amp;gt;&amp;gt; dec</span></div><div class="crayon-line" id="crayon-5f694cb3b010f032013580-11"><span class="crayon-s">'</span><span class="crayon-v">MZ</span><span class="crayon-sy">\</span><span class="crayon-v">x90</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x03</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x04</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">x00</span><span class="crayon-sy">\</span><span class="crayon-v">xff</span><span class="crayon-sy">\</span><span class="crayon-v">xff</span><span class="crayon-sy">\</span><span class="crayon-i">x00</span><span class="crayon-h"> </span>…</div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0008 seconds] -->
+<p>As you can see, we have the MZ header and the next binary.</p>
+<p>Within the DLL are additional functions which handle executing the new payload and I’ve gone ahead and decoded some of the native API’s they use to show how they carry out activity.<br />
+<img class="alignnone size-full wp-image-43296" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21.png" alt="AgentTesla21" width="974" height="76" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21-900x70.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21-300x23.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21-768x60.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/AgentTesla21-370x29.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<h2>The final payload</h2>
+<p>Arrival of the last binary – another .NET application called “RII9DKFR5LC4Y669MLOA2C50SFLPHZBN61CZ160Z.exe”. If you read any of the posts mentioned earlier on the analysis of AgentTesla, then this will look familiar.</p>
+<p><img class="alignnone size-full wp-image-43176" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16.png" alt="agenttesla_16" width="774" height="1350" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16.png 774w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16-172x300.png 172w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16-768x1340.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16-587x1024.png 587w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_16-370x645.png 370w" sizes="(max-width: 774px) 100vw, 774px" /></p>
+<p>Function and variable names are encoded with Unicode values in the range of 0x200B-0x200E. Strings are decrypted by, in this sample, function “KMBHFDXSELJYYLVK\u3002”.</p>
+<p><img class="alignnone size-full wp-image-43200" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17.png" alt="agenttesla_17" width="974" height="510" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17-900x471.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17-300x157.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17-768x402.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_17-370x194.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<p>This function uses a hardcoded password and salt to derive a key from the SHA1 hashing algorithm as implemented by Microsoft (modified PBKDF1). Afterwards, it uses the key and hardcoded IV to decrypt the string with AES-CBC.</p>
+<p><img class="alignnone size-full wp-image-43224" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18.png" alt="agenttesla_18" width="975" height="488" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18.png 975w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18-900x450.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18-300x150.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18-768x384.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_18-370x185.png 370w" sizes="(max-width: 975px) 100vw, 975px" /></p>
+<p>A quick Google for that IV shows hundreds of results for it, with most revolving around an encryption example that was used as the base for this function – it even copies the examples variable names.</p>
+<p>What I found interesting here is that none of these values ever change sample to sample. Even going back to the samples in the write-ups on AgentTesla from over 6 months ago, I was able to decrypt their base64 strings listed in the blog. This confirms the same values are in use and likely hard coded into the builder for AgentTesla.</p>
+<p>Given that everything is static then, it’s fairly trivial to extract all of the base64 encoded strings, decrypt them, and look for interesting IoC’s.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0111944789922" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+from Crypto.Cipher import AES
+def stringdecrypt(a):
+	string = base64.b64decode(a)
+	iv = "@1B2c3D4e5F6g7H8"
+	key = "\x34\x88\x6D\x5B\x09\x7A\x94\x19\x78\xD0\xE3\x8b\x1b\x5c\xa3\x29\x60\x74\x6a\x5e\x5d\x64\x87\x11\xb1\x2c\x67\xaa\x5b\x3a\x8e\xbf" #to 6a/5e for first iteration
+	cleartext = AES.new(key[0:32], AES.MODE_CBC, iv).decrypt(string)
+	return cleartext
+
+fh = open("extractedb64")
+content = fh.readlines()
+fh.close()
+for i in content:
+	try:
+		dec = stringdecrypt(i)
+		print "%s | %s" % (i.strip(),dec.strip())
+	except:
+		pass</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-6">6</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-8">8</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-10">10</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-12">12</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-14">14</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-15">15</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0111944789922-16">16</div><div class="crayon-num" data-line="crayon-5f694cb3b0111944789922-17">17</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0111944789922-1"><span class="crayon-e">from </span><span class="crayon-v">Crypto</span><span class="crayon-sy">.</span><span class="crayon-e">Cipher </span><span class="crayon-e">import </span><span class="crayon-e">AES</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-2"><span class="crayon-e">def </span><span class="crayon-e">stringdecrypt</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-3"><span class="crayon-h">	</span><span class="crayon-t">string</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">base64</span><span class="crayon-sy">.</span><span class="crayon-e">b64decode</span><span class="crayon-sy">(</span><span class="crayon-v">a</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-4"><span class="crayon-h">	</span><span class="crayon-v">iv</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"@1B2c3D4e5F6g7H8"</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-5"><span class="crayon-h">	</span><span class="crayon-v">key</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"\x34\x88\x6D\x5B\x09\x7A\x94\x19\x78\xD0\xE3\x8b\x1b\x5c\xa3\x29\x60\x74\x6a\x5e\x5d\x64\x87\x11\xb1\x2c\x67\xaa\x5b\x3a\x8e\xbf"</span><span class="crayon-h"> </span><span class="crayon-p">#to 6a/5e for first iteration</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-6"><span class="crayon-h">	</span><span class="crayon-v">cleartext</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">AES</span><span class="crayon-sy">.</span><span class="crayon-e">new</span><span class="crayon-sy">(</span><span class="crayon-v">key</span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-o">:</span><span class="crayon-cn">32</span><span class="crayon-sy">]</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">AES</span><span class="crayon-sy">.</span><span class="crayon-v">MODE_CBC</span><span class="crayon-sy">,</span><span class="crayon-h"> </span><span class="crayon-v">iv</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">decrypt</span><span class="crayon-sy">(</span><span class="crayon-t">string</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-7"><span class="crayon-h">	</span><span class="crayon-st">return</span><span class="crayon-h"> </span><span class="crayon-e">cleartext</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-8">&nbsp;</div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-9"><span class="crayon-v">fh</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">open</span><span class="crayon-sy">(</span><span class="crayon-s">"extractedb64"</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-10"><span class="crayon-v">content</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">fh</span><span class="crayon-sy">.</span><span class="crayon-e">readlines</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-11"><span class="crayon-v">fh</span><span class="crayon-sy">.</span><span class="crayon-e">close</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-12"><span class="crayon-st">for</span><span class="crayon-h"> </span><span class="crayon-i">i</span><span class="crayon-h"> </span><span class="crayon-st">in</span><span class="crayon-h"> </span><span class="crayon-v">content</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-13"><span class="crayon-h">	</span><span class="crayon-st">try</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-14"><span class="crayon-h">		</span><span class="crayon-v">dec</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">stringdecrypt</span><span class="crayon-sy">(</span><span class="crayon-v">i</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-15"><span class="crayon-h">		</span><span class="crayon-i">print</span><span class="crayon-h"> </span><span class="crayon-s">"%s | %s"</span><span class="crayon-h"> </span><span class="crayon-o">%</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-v">i</span><span class="crayon-sy">.</span><span class="crayon-e">strip</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-v">dec</span><span class="crayon-sy">.</span><span class="crayon-e">strip</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0111944789922-16"><span class="crayon-h">	</span><span class="crayon-v">except</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f694cb3b0111944789922-17"><span class="crayon-h">		</span><span class="crayon-v">pass</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0009 seconds] -->
+<p>What we end up with is a long list of values like the below.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0113954139787" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+cWUeT8dJU4KfzxUEgGflzQ== | temp
+y9/s0/2Soj9dWZ7YCF9viw== | \des_date.txt
+hQ1zQ5Cg31OSE+BZ2Os36w== | 2017-08-25
+cWUeT8dJU4KfzxUEgGflzQ== | temp
+y9/s0/2Soj9dWZ7YCF9viw== | \des_date.txt
+1IhffSZWWBl13XPDs8n3myYCTMqLedaSKEkL/imL258= | dd.MM.yyyy HH:mm:ss
+cWUeT8dJU4KfzxUEgGflzQ== | temp
+aXsej6rp5uxy+3ym08w3iA== | ApplicationData
+haLsi+cj0yodiuWmM+o4Wg== | appdata
+AnV66gJ6ewY8YTWIByRSMA== | Temp
+cWUeT8dJU4KfzxUEgGflzQ== | temp
+zYMGsY8aSA781gMxSStsC9UAfia6hLdLRxgBeS3NtD0= | \Java\JavaUpdtr.exe
+cWUeT8dJU4KfzxUEgGflzQ== | temp
+y9/s0/2Soj9dWZ7YCF9viw== | \des_date.txt
+Akq+/Qobe3bW+jdjmv5oI6h1rNqdq+rlANdh6Ef29KelgAp0y6gsCspLDS+k+xmNC9TpnFhgwZyL///RhoSWxQ== | Software\Microsoft\Windows NT\CurrentVersion\Windows
+aZG83zDiQxysOvFJFc8qmg== | Load
+8mFIzTz8+GxS3SBdy62qeA== | JavaUpdtr
+IMqa7/uMjEFhAZrJPRn9Gw== | False
+qQj4VB+mzRT8iDf7llcE6Q== | xyz
+hyNN5z+7qAsS695lDXLuHg== | True
+…
+82ZGUDSQrPCv8v1Hf+HpRA== | &amp;lt;/span&amp;gt;
+BJsW0oB1ieLYwE8A0Yu6OlLBTcrh0varR+ibOkyOCrk= | mylogbox4h@gmail.com
+2qbrW8tf2IZoaPGZlcaKWw== | /log.tmp
+v4EpbnhZTubu6HTjEZ8Gdw== | [SavedLog (
+I/tDnJPWEB6yySAivkY/576ixyY2gOP+bLVbbaRIV8A= | yyyy_MM_dd_HH_mm_ss
+2qbrW8tf2IZoaPGZlcaKWw== | /log.tmp
+Q9Yhy5Uive3G6Gspdid9EQ== | Saved_Log_From_
+eCqe8oqjGUIRwUWqnBrrpA== | /
+q542gy/+wDIUJhH3OGKnNg== | -
+3TzIyOOSC+3lcpPaeTxO6g== | _
+4T5LGk6qEvqUS2xRJLUlww== | .html</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-4">4</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-6">6</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-8">8</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-10">10</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-12">12</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-14">14</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-15">15</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-16">16</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-17">17</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-18">18</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-19">19</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-20">20</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-21">21</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-22">22</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-23">23</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-24">24</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-25">25</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-26">26</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-27">27</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-28">28</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-29">29</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-30">30</div><div class="crayon-num" data-line="crayon-5f694cb3b0113954139787-31">31</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0113954139787-32">32</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0113954139787-1"><span class="crayon-v">cWUeT8dJU4KfzxUEgGflzQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">temp</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-2"><span class="crayon-v">y9</span><span class="crayon-o">/</span><span class="crayon-v">s0</span><span class="crayon-o">/</span><span class="crayon-cn">2Soj9dWZ7YCF9viw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">\</span><span class="crayon-v">des_date</span><span class="crayon-sy">.</span><span class="crayon-e">txt</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-3"><span class="crayon-v">hQ1zQ5Cg31OSE</span><span class="crayon-o">+</span><span class="crayon-v">BZ2Os36w</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-cn">2017</span><span class="crayon-o">-</span><span class="crayon-cn">08</span><span class="crayon-o">-</span><span class="crayon-cn">25</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-4"><span class="crayon-v">cWUeT8dJU4KfzxUEgGflzQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">temp</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-5"><span class="crayon-v">y9</span><span class="crayon-o">/</span><span class="crayon-v">s0</span><span class="crayon-o">/</span><span class="crayon-cn">2Soj9dWZ7YCF9viw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">\</span><span class="crayon-v">des_date</span><span class="crayon-sy">.</span><span class="crayon-i">txt</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-6"><span class="crayon-cn">1IhffSZWWBl13XPDs8n3myYCTMqLedaSKEkL</span><span class="crayon-o">/</span><span class="crayon-v">imL258</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-v">dd</span><span class="crayon-sy">.</span><span class="crayon-v">MM</span><span class="crayon-sy">.</span><span class="crayon-e">yyyy </span><span class="crayon-v">HH</span><span class="crayon-o">:</span><span class="crayon-v">mm</span><span class="crayon-o">:</span><span class="crayon-e">ss</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-7"><span class="crayon-v">cWUeT8dJU4KfzxUEgGflzQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">temp</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-8"><span class="crayon-v">aXsej6rp5uxy</span><span class="crayon-o">+</span><span class="crayon-cn">3ym08w3iA</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">ApplicationData</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-9"><span class="crayon-v">haLsi</span><span class="crayon-o">+</span><span class="crayon-v">cj0yodiuWmM</span><span class="crayon-o">+</span><span class="crayon-v">o4Wg</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">appdata</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-10"><span class="crayon-v">AnV66gJ6ewY8YTWIByRSMA</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">Temp</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-11"><span class="crayon-v">cWUeT8dJU4KfzxUEgGflzQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">temp</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-12"><span class="crayon-v">zYMGsY8aSA781gMxSStsC9UAfia6hLdLRxgBeS3NtD0</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">\</span><span class="crayon-v">Java</span><span class="crayon-sy">\</span><span class="crayon-v">JavaUpdtr</span><span class="crayon-sy">.</span><span class="crayon-e">exe</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-13"><span class="crayon-v">cWUeT8dJU4KfzxUEgGflzQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">temp</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-14"><span class="crayon-v">y9</span><span class="crayon-o">/</span><span class="crayon-v">s0</span><span class="crayon-o">/</span><span class="crayon-cn">2Soj9dWZ7YCF9viw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">\</span><span class="crayon-v">des_date</span><span class="crayon-sy">.</span><span class="crayon-e">txt</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-15"><span class="crayon-v">Akq</span><span class="crayon-o">+</span><span class="crayon-o">/</span><span class="crayon-v">Qobe3bW</span><span class="crayon-o">+</span><span class="crayon-v">jdjmv5oI6h1rNqdq</span><span class="crayon-o">+</span><span class="crayon-v">rlANdh6Ef29KelgAp0y6gsCspLDS</span><span class="crayon-o">+</span><span class="crayon-v">k</span><span class="crayon-o">+</span><span class="crayon-v">xmNC9TpnFhgwZyL</span><span class="crayon-c">///RhoSWxQ== | Software\Microsoft\Windows NT\CurrentVersion\Windows</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-16"><span class="crayon-v">aZG83zDiQxysOvFJFc8qmg</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-i">Load</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-17"><span class="crayon-cn">8mFIzTz8</span><span class="crayon-o">+</span><span class="crayon-v">GxS3SBdy62qeA</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">JavaUpdtr</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-18"><span class="crayon-v">IMqa7</span><span class="crayon-o">/</span><span class="crayon-v">uMjEFhAZrJPRn9Gw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-t">False</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-19"><span class="crayon-v">qQj4VB</span><span class="crayon-o">+</span><span class="crayon-v">mzRT8iDf7llcE6Q</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">xyz</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-20"><span class="crayon-v">hyNN5z</span><span class="crayon-o">+</span><span class="crayon-cn">7qAsS695lDXLuHg</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-t">True</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-21">…</div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-22"><span class="crayon-cn">82ZGUDSQrPCv8v1Hf</span><span class="crayon-o">+</span><span class="crayon-v">HpRA</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-o">&amp;</span><span class="crayon-v">lt</span><span class="crayon-sy">;</span><span class="crayon-o">/</span><span class="crayon-v">span</span><span class="crayon-o">&amp;</span><span class="crayon-v">gt</span><span class="crayon-sy">;</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-23"><span class="crayon-v">BJsW0oB1ieLYwE8A0Yu6OlLBTcrh0varR</span><span class="crayon-o">+</span><span class="crayon-v">ibOkyOCrk</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-v">mylogbox4h</span><span class="crayon-sy">@</span><span class="crayon-v">gmail</span><span class="crayon-sy">.</span><span class="crayon-i">com</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-24"><span class="crayon-cn">2qbrW8tf2IZoaPGZlcaKWw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-o">/</span><span class="crayon-v">log</span><span class="crayon-sy">.</span><span class="crayon-e">tmp</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-25"><span class="crayon-v">v4EpbnhZTubu6HTjEZ8Gdw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-i">SavedLog</span><span class="crayon-h"> </span><span class="crayon-sy">(</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-26"><span class="crayon-v">I</span><span class="crayon-o">/</span><span class="crayon-v">tDnJPWEB6yySAivkY</span><span class="crayon-o">/</span><span class="crayon-cn">576ixyY2gOP</span><span class="crayon-o">+</span><span class="crayon-v">bLVbbaRIV8A</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-v">yyyy_MM_dd_HH_mm</span><span class="crayon-sy">_</span>ss</div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-27"><span class="crayon-cn">2qbrW8tf2IZoaPGZlcaKWw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-o">/</span><span class="crayon-v">log</span><span class="crayon-sy">.</span><span class="crayon-e">tmp</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-28"><span class="crayon-v">Q9Yhy5Uive3G6Gspdid9EQ</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">Saved_Log_From_</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-29"><span class="crayon-v">eCqe8oqjGUIRwUWqnBrrpA</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-o">/</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-30"><span class="crayon-v">q542gy</span><span class="crayon-o">/</span><span class="crayon-o">+</span><span class="crayon-v">wDIUJhH3OGKnNg</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-o">-</span></div><div class="crayon-line" id="crayon-5f694cb3b0113954139787-31"><span class="crayon-cn">3TzIyOOSC</span><span class="crayon-o">+</span><span class="crayon-cn">3lcpPaeTxO6g</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-i">_</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0113954139787-32"><span class="crayon-cn">4T5LGk6qEvqUS2xRJLUlww</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-sy">.</span><span class="crayon-v">html</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0018 seconds] -->
+<p>File names, registry keys, and e-mails to start off hunting with. You can also see where the corresponding base64 is within the code and then use dnSpy to obtain further context on how AgentTesla utilizes these values.</p>
+<p>For example, below is something that stood out as interesting almost immediately.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cb3b0114701396751" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+4nmIR8y7iw8axs2u6GfIQ8f/7fSpMKvqD0ODaew16nI= | mylogbox3h@gmail.com
+5XDX6cForslWY791UzW+zw== | sammy1990
+wf990RzBidRdPMgWIckJ2g== | smtp.gmail.com</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cb3b0114701396751-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cb3b0114701396751-2">2</div><div class="crayon-num" data-line="crayon-5f694cb3b0114701396751-3">3</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cb3b0114701396751-1"><span class="crayon-cn">4nmIR8y7iw8axs2u6GfIQ8f</span><span class="crayon-o">/</span><span class="crayon-cn">7fSpMKvqD0ODaew16nI</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-v">mylogbox3h</span><span class="crayon-sy">@</span><span class="crayon-v">gmail</span><span class="crayon-sy">.</span><span class="crayon-i">com</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cb3b0114701396751-2"><span class="crayon-cn">5XDX6cForslWY791UzW</span><span class="crayon-o">+</span><span class="crayon-v">zw</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-e">sammy1990</span></div><div class="crayon-line" id="crayon-5f694cb3b0114701396751-3"><span class="crayon-v">wf990RzBidRdPMgWIckJ2g</span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-h"> </span><span class="crayon-v">smtp</span><span class="crayon-sy">.</span><span class="crayon-v">gmail</span><span class="crayon-sy">.</span><span class="crayon-v">com</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0002 seconds] -->
+<p>Pivoting to these values in dnSpy will land you in a function that seems responsible for sending the stolen data back to the attacker.<br />
+<img class="alignnone size-full wp-image-43248" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19.png" alt="agenttesla_19" width="974" height="442" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19.png 974w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19-900x408.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19-300x136.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19-768x349.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_19-370x168.png 370w" sizes="(max-width: 974px) 100vw, 974px" /></p>
+<h2>Pivoting on a hunch</h2>
+<p>At this point, I’ve accomplished the goal I set out for – covering the packing techniques used by the current version of AgentTesla, offering some code to automate unpacking and decrypt some configuration data.</p>
+<p>But why stop when you’re ahead?</p>
+<p>I like to Google static values and constants when analyzing malware because you can usually find some interesting stuff – configurations, forums, accounts, panels, etc. When I began searching for the file “one.jpeg.png.exe” I stumbled across a site, “b-f-v[.]info”, which hosts various versions of this keylogger.</p>
+<p><img class="alignnone size-full wp-image-43272" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20.png" alt="agenttesla_20" width="975" height="282" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20.png 975w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20-900x260.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20-300x87.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20-768x222.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/agenttesla_20-370x107.png 370w" sizes="(max-width: 975px) 100vw, 975px" /></p>
+<p>They all function in the same way but the image that displays is related to the first part of the file name. The images are various sizes so the decoding would be different for each; however, the code shown previously will grab the correct Width and Height for building the array.</p>
+<p>Also take note of the dates and when they were modified. The sample covered in this blog was seen on August 29<sup>th</sup>, just two days before these were created – so the person or group behind these appear to be actively creating new versions to send out. I confirmed in these samples we find the same SMTP credentials.</p>
+<h2>Conclusion</h2>
+<p>Hopefully this overview of their packing techniques, along with the scripts to unpack each phase, prove helpful to others when looking at AgentTesla. Given its recent spikes in popularity, it’s likely not going anywhere anytime soon so the more knowledge you have of the threat, the better you can defend yourself.</p>
+<p>You can continue to track this threat through the <a href="https://autofocus.paloaltonetworks.com/">Palo Alto Networks AutoFocus AgentTesla tag</a> and you will find the hashes for all of the files covered in this blog below:</p>
+<h3><strong>Indicators of Compromise</strong></h3>
+<p>Initial PE32</p>
+<p>one.jpeg.png.exe | ca29bd44fc1c4ec031eadf89fb2894bbe646bc0cafb6242a7631f7404ef7d15c</p>
+<p>mypic.jpeg.png.exe | cb0de059cbd5eba8c61c67bedcfa399709e40246039a0457ca6d92697ea516f9</p>
+<p>familyhome.jpeg.png.exe / myhome.jpeg.png.exe | 444e9fbf683e2cff9f1c64808d2e6769c13ed6b29899060d7662d1fe56c3121b</p>
+<p>gift-certificate.pdf.png.exe | 124bb13ede19e56927fe5afc5baf680522586534727babbe1aa1791d116caeeb</p>
+<p>request-for-quotation.pdf.png.exe | dce91ff60c8d843c3e5845061d6f73cfc33e34a5b8347c4d9c468911e29c3ce6</p>
+<h3><strong>DLL’s</strong></h3>
+<p>rp.dll | 3c48c7f16749126a06c2aae58ee165dc72df658df057b1ac591a587367eae4ad</p>
+<p>rp.dll | a5768f1aa364d69e47351c81b1366cc2bfb1b67a0274a56798c2af82ae3525a8</p>
+<h3><strong>Second stage encoded images</strong></h3>
+<p>19.png | e42a0fb66dbf40578484566114e5991cf9cf0aa05b1bd080800a55e1e13bff9e</p>
+<p>72.png | cd64f1990d3895cb7bd69481186d5a2b1b614ee6ac453102683dba8586593c03</p>
+<h3><strong>AgentTesla</strong></h3>
+<p>RII9DKFR5LC4Y669MLOA2C50SFLPHZBN61CZ160Z.exe  | 3e588ec87759dd7f7d34a8382aad1bc91ce4149b5f200d16ad1e9c1929eec8ec</p>
+<p>B92MKZFESR6J7R2PNQ9ZTBA6QN0LIEXTUQEVH3T3.exe  | 8fb72967b67b5a224c0fcfc10ab939999e5dc2e877a511875bd4438bcc2f5494</p>
+          <div class="article__subscribe mb-40 text-gray-400 bg-gray-200 rounded-lg">
+  <h4 class="h3 mb-10 text-black">Get updates from <br class="d-sm-none"> Palo Alto<br class="d-sm-none"> Networks!</h4>
+  <p>Sign up to receive the latest news, cyber threat intelligence and research from us</p>
+  <!-- <form action="https://app-guse4001.marketo.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe"> -->
+  <form action="https://start.paloaltonetworks.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe">
+    <input type="hidden" value="1086" name="formid">
+    <!-- <input type="hidden" value="818-CZC-273" name="munchkinId"> -->
+    <input type="hidden" value="531-OCS-018" name="munchkinId">
+    <input type="hidden" value="2141" name="lpId">
+    <input type="hidden" value="1086" name="formVid">
+    <input type="hidden" name="mkto_optinunit42" value="true">
+    <input type="hidden" name="mkto_opt-in" value="true">
+    <div class="row">
+      <div class="col-sm col-12 mb-sm-0 mb-15">
+        <input type="email" name="Email" placeholder="Email address" class="subscribe-field d-block w-100 px-sm-25 px-15 bg-white">
+        <p class="error-mail d-none mt-15 text-danger" style="color: #dc3545">Please enter your email address!</p>
+      </div>
+      <div class="col-sm-auto col-12">
+          <input type="submit" value="Subscribe" class="btn btn--black btn--sm w-100" disabled="disabled">
+      </div>
+    </div>
+
+    <div class="google-recapth mt-15">
+      <div class="g-recaptcha" data-expired-callback="captchaExpires" data-callback="captchaComplete" data-sitekey="6LfKOrwUAAAAAOwgjxrEcx-pcfwe8OquUw6ommTK"></div>
+      <p class="error-recaptcha d-none mt-15 text-danger" style="color: #dc3545">Please mark, I'm not a robot!</p>
+    </div>
+  </form>
+
+  <div class="font-size-ex-sm col-sm-7 p-0">
+    <p>By submitting this form, you agree to our <a href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a> and acknowledge our <a href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy Statement</a>.</p>
+  </div>
+</div>
+
+<script type="text/javascript" src="https://researchcenter.paloaltonetworks.com/wp-content/plugins/google-analyticator/external-tracking.min.js?ver=6.4.9"></script>
+        </div>
+      </div>
+    </div>
+  </article>
+<footer class="site-footer px-sm-0 px-15">
+  <div class="pt-40">
+    <div class="container pt-sm-30">
+      <div class="row justify-content-lg-center">
+        <div class="col-lg-11 col-12">
+          <div class="row">
+            <div class="col-lg-4 col-sm-3 col-12 order-sm-2">
+              <nav class="footer-socials mb-sm-0 mb-25 text-white text-sm-right">
+                                                <a href="https://twitter.com/Unit42_Intel" target="_blank"><span class="ui ui-4"></span></a>
+                <a href="https://github.com/pan-unit42" target="_blank"><span class="ui ui-5"></span></a>
+              </nav>
+            </div>
+
+            <div class="col-lg-8 col-sm-9 col-12 order-sm-1">
+              <div class="row">
+                <div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Popular Resources</h4><div class="menu-footer-company-phase-container"><ul id="menu-footer-company-phase" class="menu"><li id="menu-item-97096" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97096"><a target="_blank" href="https://www.paloaltonetworks.com/resources">Resource Center</a></li>
+<li id="menu-item-97097" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97097"><a target="_blank" href="https://researchcenter.paloaltonetworks.com/">Blog</a></li>
+<li id="menu-item-97098" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97098"><a target="_blank" href="https://www.paloaltonetworks.com/communities">Communities</a></li>
+<li id="menu-item-97099" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97099"><a target="_blank" href="https://docs.paloaltonetworks.com/">Tech Docs</a></li>
+<li id="menu-item-97100" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-home menu-item-97100"><a href="https://unit42.paloaltonetworks.com/">Unit 42</a></li>
+<li id="menu-item-97101" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97101"><a target="_blank" href="https://www.paloaltonetworks.com/sitemap">Sitemap</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Legal Notices</h4><div class="menu-footer-legal-notices-phase-container"><ul id="menu-footer-legal-notices-phase" class="menu"><li id="menu-item-97093" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97093"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy</a></li>
+<li id="menu-item-97094" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97094"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a></li>
+<li id="menu-item-97095" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97095"><a target="_blank" href="https://www.paloaltonetworks.com/legal">Documents</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Account</h4><div class="menu-footer-trending-topics-phase-container"><ul id="menu-footer-trending-topics-phase" class="menu"><li id="menu-item-97102" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97102"><a href="https://start.paloaltonetworks.com/preference-center">Manage Subscriptions</a></li>
+<li id="menu-item-97103" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97103"><a href="#">&nbsp;</a></li>
+<li id="menu-item-97104" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97104"><a href="https://www.paloaltonetworks.com/security-disclosure">Report a Vulnerability</a></li>
+</ul></div></div>              </div>
+            </div>
+          </div>
+
+          
+            <div class="copyrights py-25 mt-40">
+               <p>© 2020 Palo Alto Networks, Inc. All rights reserved.</p>
+            </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+    <script type="text/javascript">
+	var isProcessing = false; 
+    function alter_ul_post_values(obj,post_id,ul_type){
+	
+		if (isProcessing)    
+		return;  
+		isProcessing = true;   
+		
+		jQuery(obj).find("span").html("..");
+                jQuery.ajax({
+                    type: "POST",
+                    url: "https://unit42.paloaltonetworks.com/wp-content/plugins/like-dislike-counter-for-posts-pages-and-comments/ajax_counter.php",
+                    data: "post_id="+post_id+"&up_type="+ul_type,
+                    success: function(msg){
+                            jQuery(obj).find("span").html(msg);
+                            isProcessing = false; 
+                            jQuery(obj).find('svg').children('path').attr('stroke','#0050FF');
+                            jQuery(obj).removeClass('idc_ul_cont_not_liked idc_ul_cont_not_liked_inner');
+                    }
+ 		});
+	}
+	</script>
+            <script type="text/javascript">
+            (function(){
+                document.addEventListener('DOMContentLoaded', function(){
+                    let wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                    if ( wpp_widgets ) {
+                        for (let i = 0; i < wpp_widgets.length; i++) {
+                            let wpp_widget = wpp_widgets[i];
+                            WordPressPopularPosts.theme(wpp_widget);
+                        }
+                    }
+                });
+            })();
+        </script>
+                <script>
+            var WPPImageObserver = null;
+
+            function wpp_load_img(img) {
+                if ( ! 'imgSrc' in img.dataset || ! img.dataset.imgSrc )
+                    return;
+
+                img.src = img.dataset.imgSrc;
+
+                if ( 'imgSrcset' in img.dataset ) {
+                    img.srcset = img.dataset.imgSrcset;
+                    img.removeAttribute('data-img-srcset');
+                }
+
+                img.classList.remove('wpp-lazyload');
+                img.removeAttribute('data-img-src');
+                img.classList.add('wpp-lazyloaded');
+            }
+
+            function wpp_observe_imgs(){
+                let wpp_images = document.querySelectorAll('img.wpp-lazyload'),
+                    wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                if ( wpp_images.length || wpp_widgets.length ) {
+                    if ( 'IntersectionObserver' in window ) {
+                        WPPImageObserver = new IntersectionObserver(function(entries, observer) {
+                            entries.forEach(function(entry) {
+                                if (entry.isIntersecting) {
+                                    let img = entry.target;
+                                    wpp_load_img(img);
+                                    WPPImageObserver.unobserve(img);
+                                }
+                            });
+                        });
+
+                        if ( wpp_images.length ) {
+                            wpp_images.forEach(function(image) {
+                                WPPImageObserver.observe(image);
+                            });
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var i = 0; i < wpp_widgets.length; i++) {
+                                let wpp_widget_images = wpp_widgets[i].querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widgets[i].shadowRoot ) {
+                                    wpp_widget_images = wpp_widgets[i].shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    wpp_widget_images.forEach(function(image) {
+                                        WPPImageObserver.observe(image);
+                                    });
+                                }
+                            }
+                        }
+                    } /** Fallback for older browsers */
+                    else {
+                        if ( wpp_images.length ) {
+                            for (var i = 0; i < wpp_images.length; i++) {
+                                wpp_load_img(wpp_images[i]);
+                                wpp_images[i].classList.remove('wpp-lazyloaded');
+                            }
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var j = 0; j < wpp_widgets.length; j++) {
+                                let wpp_widget = wpp_widgets[j],
+                                    wpp_widget_images = wpp_widget.querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widget.shadowRoot ) {
+                                    wpp_widget_images = wpp_widget.shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    for (var k = 0; k < wpp_widget_images.length; k++) {
+                                        wpp_load_img(wpp_widget_images[k]);
+                                        wpp_widget_images[k].classList.remove('wpp-lazyloaded');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                wpp_observe_imgs();
+
+                // When an ajaxified WPP widget loads,
+                // Lazy load its images
+                document.addEventListener('wpp-onload', function(){
+                    wpp_observe_imgs();
+                });
+            });
+        </script>
+        <link rel='stylesheet' id='wpdevart_lightbox_front_end_css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/wpdevart_lightbox_front.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpdevart_lightbox_effects-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/effects_lightbox.css?ver=5.4.1' type='text/css' media='all' />
+<script type='text/javascript' src='https://www.google.com/recaptcha/api.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/scripts/main.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/wp-embed.min.js?ver=5.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpdevart_lb_variables = {"eneble_lightbox_content":"enable","overlay_transparency_prancent":"80","popup_background_color":"#000000","popup_loading_image":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/popup_loading.png","popup_initial_width":"350","popup_initial_height":"300","popup_youtube_width":"640","popup_youtube_height":"410","popup_vimeo_width":"500","popup_vimeo_height":"410","popup_max_width":"5000","popup_max_height":"5000","popup_position":"5","popup_fixed_position":"true","popup_outside_margin":"0","popup_border_width":"2","popup_border_color":"#000000","popup_border_radius":"10","control_buttons_show":"true","control_buttons_show_in_content":"false","control_buttons_height":"30","control_buttons_line_bg_color":"#000000","control_button_prev_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev.png","control_button_prev_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev_hover.png","control_button_next_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next.png","control_button_next_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next_hover.png","control_button_download_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download.png","control_button_download_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download_hover.png","control_button_innewwindow_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow.png","control_button_innewwindow_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow_hover.png","control_button_fullwidth_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth.png","control_button_fullwidht_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth_hover.png","control_button_fullwidthrest_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset.png","control_button_fullwidhtrest_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset_hover.png","control_button_close_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close.png","control_button_close_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close_hover.png","information_panel_show":"false","information_panel_show_in_content":"false","information_panel_bg_color":"#000000","information_panel_default_transparency":"100","information_panel_hover_trancparency":"100","information_panel_count_image_after_text":"Image","information_panel_count_image_middle_text":"of","information_panel_count_padding_left":"15","information_panel_count_padding_right":"4","information_panel_count_font_size":"20","information_panel_desc_padding_left":"15","information_panel_desc_padding_right":"4","information_panel_desc_font_size":"20","information_panel_desc_show_if_not":"true","information_panel_text_for_no_caption":"No Caption","information_panel_title_padding_left":"5","information_panel_title_padding_right":"5","information_panel_title_font_size":"15","information_panel_title_show_if_not":"true","information_panel_text_for_no_title":"No Title","information_panel_ordering":"{\"count\":[1,\"count\"],\"title\":[0,\"title\"],\"caption\":[0,\"caption\"]}"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/javascript/wpdevart_lightbox_front.js?ver=1.0'></script>
+          
+  </body>
+</html>

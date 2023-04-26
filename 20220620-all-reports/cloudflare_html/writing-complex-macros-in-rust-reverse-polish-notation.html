@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Writing complex macros in Rust: Reverse Polish Notation</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/writing-complex-macros-in-rust-reverse-polish-notation/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Writing complex macros in Rust: Reverse Polish Notation" />
+    <meta property="og:description" content="Among other interesting features, Rust has a powerful macro system. Unfortunately, even after reading The Book and various tutorials, when it came to trying to implement a macro which involved processing complex lists of different elements, I still struggled to understand how it should be done." />
+    <meta property="og:url" content="https://blog.cloudflare.com/writing-complex-macros-in-rust-reverse-polish-notation/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/01/25057125240_939a41249f_z-1.jpg" />
+    <meta property="article:published_time" content="2018-01-31T12:11:15.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T07:02:45.000Z" />
+    <meta property="article:tag" content="Rust" />
+    <meta property="article:tag" content="Developers" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Polish" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Writing complex macros in Rust: Reverse Polish Notation" />
+    <meta name="twitter:description" content="Among other interesting features, Rust has a powerful macro system. Unfortunately, even after reading The Book and various tutorials, when it came to trying to implement a macro which involved processing complex lists of different elements, I still struggled to understand how it should be done." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/writing-complex-macros-in-rust-reverse-polish-notation/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/01/25057125240_939a41249f_z-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ingvar Stepanyan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Rust, Developers, Programming, Polish" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ingvar Stepanyan",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/rYPVgOqN.jpg",
+        "url": "https://blog.cloudflare.com/author/ingvar-stepanyan/",
+        "sameAs": []
+    },
+    "headline": "Writing complex macros in Rust: Reverse Polish Notation",
+    "url": "https://blog.cloudflare.com/writing-complex-macros-in-rust-reverse-polish-notation/",
+    "datePublished": "2018-01-31T12:11:15.000Z",
+    "dateModified": "2018-08-29T07:02:45.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/01/25057125240_939a41249f_z-1.jpg",
+    "keywords": "Rust, Developers, Programming, Polish",
+    "description": "Among other interesting features, Rust has a powerful macro system. Unfortunately, even after reading The Book and various tutorials, when it came to trying to implement a macro which involved processing complex lists of different elements, I still struggled to understand how it should be done.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-rust tag-developers tag-programming tag-polish sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-rust tag-developers tag-programming tag-polish ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Writing complex macros in Rust: Reverse Polish Notation</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-01-31T12:11:15Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">January 31, 2018 12:11PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ingvar-stepanyan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/rYPVgOqN.jpg" alt="Ingvar Stepanyan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ingvar-stepanyan" class="fw5 f3 no-underline black mr3">Ingvar Stepanyan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>(<em>This is a crosspost of a tutorial <a href="https://rreverser.com/writing-complex-macros-in-rust/">originally published</a> on my personal blog</em>)</p>
+<p>Among other interesting features, Rust has a powerful macro system. Unfortunately, even after reading The Book and various tutorials, when it came to trying to implement a macro which involved processing complex lists of different elements, I still struggled to understand how it should be done, and it took some time till I got to that &quot;ding&quot; moment and started misusing macros for everything :) <em>(ok, not everything as in the i-am-using-macros-because-i-dont-want-to-use-functions-and-specify-types-and-lifetimes everything like I've seen some people do, but anywhere it's actually useful)</em></p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/01/25057125240_939a41249f_z.jpg" alt="Rust with a macro lens"><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/conchur/25057125240/in/photolist-EbdjmG-8NSN1q-qXhueG-YTYnm3-odaneQ-DxCKQA-228jg4t-DU8Axz-XTQfdD-4p6nJk-UKVzbn-YFeKcW-osZ2XM-e6qefx-Tb3a6Q-dCw1zk-Et3kKh-dbAR9x-zHP8TR-a9cqw4-9JQHRy-Et1Ag5-PqFtx1-7x3Ukq-67VJc6-cvoKSo-qH2S9L-zHJAr9-XmCLsL-8AMWXX-ZV2hHh-XGPiHq-ZKpFSB-yqd2P1-23hMiaC-zETYYa-Wj7BVi-PNP4YA-LCNm6c-8AnkrZ-KA7qmt-KjYPxC-SzQsZD-Cxwvqg-GuZ3nn-J4jBaA-TzyjpB-DcYJA1-YQYNA3-My1uu8">image</a> by <a href="https://www.flickr.com/photos/conchur/">Conor Lawless</a></small></p>
+<p>So, here is my take on describing the principles behind writing such macros. It assumes you have read the <a href="https://doc.rust-lang.org/book/first-edition/macros.html">Macros</a> section from The Book and are familiar with basic macros definitions and token types.</p>
+<p>I'll take a <a href="https://en.wikipedia.org/wiki/Reverse_Polish_notation">Reverse Polish Notation</a> as an example for this tutorial. It's interesting because it's simple enough, you might be already familiar with it from school, and yet to implement it statically at compile time, you already need to use a recursive macros approach.</p>
+<p>Reverse Polish Notation (also called postfix notation) uses a stack for all its operations, so that any operand is pushed onto the stack, and any <em>[binary]</em> operator takes two operands from the stack, evaluates the result and puts it back. So an expression like following:</p>
+<pre><code>2 3 + 4 *
+</code></pre>
+<p>translates into:</p>
+<ol>
+<li>Put <code>2</code> onto the stack.</li>
+<li>Put <code>3</code> onto the stack.</li>
+<li>Take two last values from the stack (<code>3</code> and <code>2</code>), apply operator <code>+</code> and put the result (<code>5</code>) back onto the stack.</li>
+<li>Put <code>4</code> onto the stack.</li>
+<li>Take two last values from the stack (<code>4</code> and <code>5</code>), apply operator <code>*</code> (<code>4 * 5</code>) and put the result (<code>20</code>) back onto the stack.</li>
+<li>End of expression, the single value on the stack is the result (<code>20</code>).</li>
+</ol>
+<p>In a more common infix notation, used in math and most modern programming languages, the expression would look like <code>(2 + 3) * 4</code>.</p>
+<p>So let's write a macro that would evaluate RPN at compile-time by converting it into an infix notation that Rust understands.</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  // TODO
+}
+
+println!(&quot;{}&quot;, rpn!(2 3 + 4 *)); // 20
+</code></pre>
+<p>Let's start with pushing numbers onto the stack.</p>
+<p>Macros currently don't allow matching literals, and <code>expr</code> won't work for us because it can accidentally match sequence like <code>2 + 3 ...</code> instead of taking just a single number, so we'll resort to <code>tt</code> - a generic token matcher that matches only one token tree (whether it's a primitive token like literal/identifier/lifetime/etc. or a <code>()</code>/<code>[]</code>/<code>{}</code>-parenthesized expression containing more tokens):</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ($num:tt) =&gt; {
+    // TODO
+  };
+}
+</code></pre>
+<p>Now, we'll need a variable for the stack.</p>
+<p>Macros can't use real variables, because we want this stack to exist only at compile time. So, instead, the trick is to have a separate token sequence that can be passed around, and so used as kind of an accumulator.</p>
+<p>In our case, let's represent it as a comma-separated sequence of <code>expr</code> (since we will be using it not only for simple numbers but also for intermediate infix expressions) and wrap it into brackets to separate from the rest of the input:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ([ $($stack:expr),* ] $num:tt) =&gt; {
+    // TODO
+  };
+}
+</code></pre>
+<p>Now, a token sequence is not really a variable - you can't modify it in-place and do something afterwards. Instead, you can create a new copy of this token sequence with necessary modifications, and recursively call same macro again.</p>
+<p>If you are coming from functional language background or worked with any library providing immutable data before, both of these approaches - mutating data by creating a modified copy and processing lists with a recursion - are likely already familiar to you:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ([ $($stack:expr),* ] $num:tt) =&gt; {
+    rpn!([ $num $(, $stack)* ])
+  };
+}
+</code></pre>
+<p>Now, obviously, the case with just a single number is rather unlikely and not very interesting to us, so we'll need to match anything else after that number as a sequence of zero or more <code>tt</code> tokens, which can be passed to next invocation of our macro for further matching and processing:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ([ $($stack:expr),* ] $num:tt $($rest:tt)*) =&gt; {
+      rpn!([ $num $(, $stack)* ] $($rest)*)
+  };
+}
+</code></pre>
+<p>At this point we're still missing operator support. How do we match operators?</p>
+<p>If our RPN would be a sequence of tokens that we would want to process in an exactly same way, we could simply use a list like <code>$($token:tt)*</code>. Unfortunately, that wouldn't give us an ability to go through list and either push an operand or apply an operator depending on each token.</p>
+<p>The Book says that &quot;macro system does not deal with parse ambiguity at all&quot;, and that's true for a single macros branch - we can't match a sequence of numbers followed by an operator like <code>$($num:tt)* +</code> because <code>+</code> is also a valid token and could be matched by the <code>tt</code> group, but this is where recursive macros helps again.</p>
+<p>If you have different branches in your macro definition, Rust will try them one by one, so we can put our operator branches before the numeric one and, this way, avoid any conflict:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ([ $($stack:expr),* ] + $($rest:tt)*) =&gt; {
+    // TODO
+  };
+  
+  ([ $($stack:expr),* ] - $($rest:tt)*) =&gt; {
+    // TODO
+  };
+  
+  ([ $($stack:expr),* ] * $($rest:tt)*) =&gt; {
+    // TODO
+  };
+  
+  ([ $($stack:expr),* ] / $($rest:tt)*) =&gt; {
+    // TODO
+  };
+
+  ([ $($stack:expr),* ] $num:tt $($rest:tt)*) =&gt; {
+    rpn!([ $num $(, $stack)* ] $($rest)*)
+  };
+}
+</code></pre>
+<p>As I said earlier, operators are applied to the last two numbers on the stack, so we'll need to match them separately, &quot;evaluate&quot; the result (construct a regular infix expression) and put it back:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  ([ $b:expr, $a:expr $(, $stack:expr)* ] + $($rest:tt)*) =&gt; {
+    rpn!([ $a + $b $(, $stack)* ] $($rest)*)
+  };
+
+  ([ $b:expr, $a:expr $(, $stack:expr)* ] - $($rest:tt)*) =&gt; {
+    rpn!([ $a - $b $(, $stack)* ] $($rest)*)
+  };
+
+  ([ $b:expr, $a:expr $(, $stack:expr)* ] * $($rest:tt)*) =&gt; {
+    rpn!([ $a * $b $(,$stack)* ] $($rest)*)
+  };
+
+  ([ $b:expr, $a:expr $(, $stack:expr)* ] / $($rest:tt)*) =&gt; {
+    rpn!([ $a / $b $(,$stack)* ] $($rest)*)
+  };
+
+  ([ $($stack:expr),* ] $num:tt $($rest:tt)*) =&gt; {
+    rpn!([ $num $(, $stack)* ] $($rest)*)
+  };
+}
+</code></pre>
+<p>I'm not really fan of such obvious repetitions, but, just like with literals, there is no special token type to match operators.</p>
+<p>What we can do, however, is add a helper that would be responsible for the evaluation, and delegate any explicit operator branch to it.</p>
+<p>In macros, you can't really use an external helper, but the only thing you can be sure about is that your macros is already in scope, so the usual trick is to have a branch in the same macro &quot;marked&quot; with some unique token sequence, and call it recursively like we did in regular branches.</p>
+<p>Let's use <code>@op</code> as such marker, and accept any operator via <code>tt</code> inside it (<code>tt</code> would be unambiguous in such context because we'll be passing only operators to this helper).</p>
+<p>And the stack does not need to be expanded in each separate branch anymore - since we wrapped it into <code>[]</code> brackets earlier, it can be matched as any another token tree (<code>tt</code>), and then passed into our helper:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  (@op [ $b:expr, $a:expr $(, $stack:expr)* ] $op:tt $($rest:tt)*) =&gt; {
+    rpn!([ $a $op $b $(, $stack)* ] $($rest)*)
+  };
+
+  ($stack:tt + $($rest:tt)*) =&gt; {
+    rpn!(@op $stack + $($rest)*)
+  };
+  
+  ($stack:tt - $($rest:tt)*) =&gt; {
+    rpn!(@op $stack - $($rest)*)
+  };
+
+  ($stack:tt * $($rest:tt)*) =&gt; {
+    rpn!(@op $stack * $($rest)*)
+  };
+  
+  ($stack:tt / $($rest:tt)*) =&gt; {
+    rpn!(@op $stack / $($rest)*)
+  };
+
+  ([ $($stack:expr),* ] $num:tt $($rest:tt)*) =&gt; {
+    rpn!([ $num $(, $stack)* ] $($rest)*)
+  };
+}
+</code></pre>
+<p>Now any tokens are processed by corresponding branches, and we need to just handle final case when stack contains a single item, and no more tokens are left:</p>
+<pre><code class="language-rust">macro_rules! rpn {
+  // ...
+  
+  ([ $result:expr ]) =&gt; {
+    $result
+  };
+}
+</code></pre>
+<p>At this point, if you invoke this macro with an empty stack and RPN expression, it will already produce a correct result:</p>
+<p><a href="https://play.rust-lang.org/?gist=cd56f6d7335e2d27c05e7fa89545b2cd&amp;version=stable">Playground</a></p>
+<pre><code class="language-rust">println!(&quot;{}&quot;, rpn!([] 2 3 + 4 *)); // 20
+</code></pre>
+<p>However, our stack is an implementation detail and we really wouldn't want every consumer to pass an empty stack in, so let's add another catch-all branch in the end that would serve as an entry point and add <code>[]</code> automatically:</p>
+<p><a href="https://play.rust-lang.org/?gist=d94abc0e20aa5c7f689706af06fd1923&amp;version=stable">Playground</a></p>
+<pre><code class="language-rust">macro_rules! rpn {
+  // ...
+
+  ($($tokens:tt)*) =&gt; {
+    rpn!([] $($tokens)*)
+  };
+}
+
+println!(&quot;{}&quot;, rpn!(2 3 + 4 *)); // 20
+</code></pre>
+<p>Our macro even works for more complex expressions, like the one <a href="https://en.wikipedia.org/wiki/Reverse_Polish_notation#Example">from Wikipedia page about RPN</a>!</p>
+<pre><code class="language-rust">println!(&quot;{}&quot;, rpn!(15 7 1 1 + - / 3 * 2 1 1 + + -)); // 5
+</code></pre>
+<h3 id="errorhandling">Error handling</h3>
+<p>Now everything seems to work smoothly for correct RPN expressions, but for a macros to be production-ready we need to be sure that it can handle invalid input as well, with a reasonable error message.</p>
+<p>First, let's try to insert another number in the middle and see what happens:</p>
+<pre><code class="language-rust">println!(&quot;{}&quot;, rpn!(2 3 7 + 4 *));
+</code></pre>
+<p>Output:</p>
+<pre><code>error[E0277]: the trait bound `[{integer}; 2]: std::fmt::Display` is not satisfied
+  --&gt; src/main.rs:36:20
+   |
+36 |     println!(&quot;{}&quot;, rpn!(2 3 7 + 4 *));
+   |                    ^^^^^^^^^^^^^^^^^ `[{integer}; 2]` cannot be formatted with the default formatter; try using `:?` instead if you are using a format string
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `[{integer}; 2]`
+   = note: required by `std::fmt::Display::fmt`
+</code></pre>
+<p>Okay, that definitely doesn't look helpful as it doesn't provide any information relevant to the actual mistake in the expression.</p>
+<p>In order to figure out what happened, we will need to debug our macros. For that, we'll use a <a href="https://doc.rust-lang.org/unstable-book/language-features/trace-macros.html"><code>trace_macros</code></a> feature (and, like for any other optional compiler feature, you'll need a nightly version of Rust). We don't want to trace <code>println!</code> call, so we'll separate our RPN calculation to a variable:</p>
+<p><a href="https://play.rust-lang.org/?gist=610bc0c241aacda3d30a916f89b244cd&amp;version=nightly">Playground</a></p>
+<pre><code class="language-rust">#![feature(trace_macros)]
+
+macro_rules! rpn { /* ... */ }
+
+fn main() {
+  trace_macros!(true);
+  let e = rpn!(2 3 7 + 4 *);
+  trace_macros!(false);
+  println!(&quot;{}&quot;, e);
+}
+</code></pre>
+<p>In the output we'll now see how our macro is being recursively evaluated step by step:</p>
+<pre><code>note: trace_macro
+  --&gt; src/main.rs:39:13
+   |
+39 |     let e = rpn!(2 3 7 + 4 *);
+   |             ^^^^^^^^^^^^^^^^^
+   |
+   = note: expanding `rpn! { 2 3 7 + 4 * }`
+   = note: to `rpn ! ( [  ] 2 3 7 + 4 * )`
+   = note: expanding `rpn! { [  ] 2 3 7 + 4 * }`
+   = note: to `rpn ! ( [ 2 ] 3 7 + 4 * )`
+   = note: expanding `rpn! { [ 2 ] 3 7 + 4 * }`
+   = note: to `rpn ! ( [ 3 , 2 ] 7 + 4 * )`
+   = note: expanding `rpn! { [ 3 , 2 ] 7 + 4 * }`
+   = note: to `rpn ! ( [ 7 , 3 , 2 ] + 4 * )`
+   = note: expanding `rpn! { [ 7 , 3 , 2 ] + 4 * }`
+   = note: to `rpn ! ( @ op [ 7 , 3 , 2 ] + 4 * )`
+   = note: expanding `rpn! { @ op [ 7 , 3 , 2 ] + 4 * }`
+   = note: to `rpn ! ( [ 3 + 7 , 2 ] 4 * )`
+   = note: expanding `rpn! { [ 3 + 7 , 2 ] 4 * }`
+   = note: to `rpn ! ( [ 4 , 3 + 7 , 2 ] * )`
+   = note: expanding `rpn! { [ 4 , 3 + 7 , 2 ] * }`
+   = note: to `rpn ! ( @ op [ 4 , 3 + 7 , 2 ] * )`
+   = note: expanding `rpn! { @ op [ 4 , 3 + 7 , 2 ] * }`
+   = note: to `rpn ! ( [ 3 + 7 * 4 , 2 ] )`
+   = note: expanding `rpn! { [ 3 + 7 * 4 , 2 ] }`
+   = note: to `rpn ! ( [  ] [ 3 + 7 * 4 , 2 ] )`
+   = note: expanding `rpn! { [  ] [ 3 + 7 * 4 , 2 ] }`
+   = note: to `rpn ! ( [ [ 3 + 7 * 4 , 2 ] ] )`
+   = note: expanding `rpn! { [ [ 3 + 7 * 4 , 2 ] ] }`
+   = note: to `[(3 + 7) * 4, 2]`
+</code></pre>
+<p>If we carefully look through the trace, we'll notice that the problem originates in these steps:</p>
+<pre><code>   = note: expanding `rpn! { [ 3 + 7 * 4 , 2 ] }`
+   = note: to `rpn ! ( [  ] [ 3 + 7 * 4 , 2 ] )`
+</code></pre>
+<p>Since <code>[ 3 + 7 * 4 , 2 ]</code> was not matched by <code>([$result:expr]) =&gt; ...</code> branch as a final expression, it was caught by our final catch-all <code>($($tokens:tt)*) =&gt; ...</code> branch instead, prepended with an empty stack <code>[]</code> and then the original <code>[ 3 + 7 * 4 , 2 ]</code> was matched by generic <code>$num:tt</code> and pushed onto the stack as a single final value.</p>
+<p>In order to prevent this from happening, let's insert another branch between these last two that would match any stack.</p>
+<p>It would be hit only when we ran out of tokens, but stack didn't have exactly one final value, so we can treat it as a compile error and produce a more helpful error message using a built-in <a href="https://doc.rust-lang.org/std/macro.compile_error.html"><code>compile_error!</code></a> macro.</p>
+<p>Note that we can't use <code>format!</code> in this context since it uses runtime APIs to format a string, and instead we'll have to limit ourselves to built-in <code>concat!</code> and <code>stringify!</code> macros to format a message:</p>
+<p><a href="https://play.rust-lang.org/?gist=e56be9422387bcae54aab3b8405a11e7&amp;version=stable">Playground</a></p>
+<pre><code class="language-rust">macro_rules! rpn {
+  // ...
+
+  ([ $result:expr ]) =&gt; {
+    $result
+  };
+
+  ([ $($stack:expr),* ]) =&gt; {
+    compile_error!(concat!(
+      &quot;Could not find final value for the expression, perhaps you missed an operator? Final stack: &quot;,
+      stringify!([ $($stack),* ])
+    ))
+  };
+
+  ($($tokens:tt)*) =&gt; {
+    rpn!([] $($tokens)*)
+  };
+}
+</code></pre>
+<p>The error message is now more meaningful and contains at least some details about current state of evaluation:</p>
+<pre><code>error: Could not find final value for the expression, perhaps you missed an operator? Final stack: [ (3 + 7) * 4 , 2 ]
+  --&gt; src/main.rs:31:9
+   |
+31 |         compile_error!(concat!(&quot;Could not find final value for the expression, perhaps you missed an operator? Final stack: &quot;, stringify!([$($stack),*])))
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+40 |     println!(&quot;{}&quot;, rpn!(2 3 7 + 4 *));
+   |                    ----------------- in this macro invocation
+</code></pre>
+<p>But what if, instead, we miss some number?</p>
+<p><a href="https://play.rust-lang.org/?gist=ce40630b8c1aa610c46b94557fdc9905&amp;version=stable">Playground</a></p>
+<pre><code class="language-rust">println!(&quot;{}&quot;, rpn!(2 3 + *));
+</code></pre>
+<p>Unfortunately, this one is still not too helpful:</p>
+<pre><code>error: expected expression, found `@`
+  --&gt; src/main.rs:15:14
+   |
+15 |         rpn!(@op $stack * $($rest)*)
+   |              ^
+...
+40 |     println!(&quot;{}&quot;, rpn!(2 3 + *));
+   |                    ------------- in this macro invocation
+</code></pre>
+<p>If you try to use <code>trace_macros</code>, even it won't expand the stack here for some reason, but, luckily, it's relatively clear what's going on - <code>@op</code> has very specific conditions as to what should be matched (it expects at least two values on the stack), and, when it can't, <code>@</code> gets matched by the same way-too-greedy <code>$num:tt</code> and pushed onto the stack.</p>
+<p>To avoid this, again, we'll add another branch to match anything starting with <code>@op</code> that wasn't matched already, and produce a compile error:</p>
+<p><a href="https://play.rust-lang.org/?gist=8729a8f3c96fa58ed62d35804c48782d&amp;version=stable">Playground</a></p>
+<pre><code class="language-rust">macro_rules! rpn {
+  (@op [ $b:expr, $a:expr $(, $stack:expr)* ] $op:tt $($rest:tt)*) =&gt; {
+    rpn!([ $a $op $b $(, $stack)* ] $($rest)*)
+  };
+
+  (@op $stack:tt $op:tt $($rest:tt)*) =&gt; {
+    compile_error!(concat!(
+      &quot;Could not apply operator `&quot;,
+      stringify!($op),
+      &quot;` to the current stack: &quot;,
+      stringify!($stack)
+    ))
+  };
+
+  // ...
+}
+</code></pre>
+<p>Let's try again:</p>
+<pre><code>error: Could not apply operator `*` to the current stack: [ 2 + 3 ]
+  --&gt; src/main.rs:9:9
+   |
+9  |         compile_error!(concat!(&quot;Could not apply operator &quot;, stringify!($op), &quot; to current stack: &quot;, stringify!($stack)))
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+46 |     println!(&quot;{}&quot;, rpn!(2 3 + *));
+   |                    ------------- in this macro invocation
+</code></pre>
+<p>Much better! Now our macro can evaluate any RPN expression at compile-time, and gracefully handles most common mistakes, so let's call it a day and say it's production-ready :)</p>
+<p>There are many more small improvements we could add, but I'd like to leave them outside this demonstration tutorial.</p>
+<p>Feel free to let me know if this has been useful and/or what topics you'd like to see better covered <a href="https://twitter.com/RReverser">on Twitter</a>!</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/rust/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Rust</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/polish/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Polish</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-29T08:00:00Z">November 29, 2019 8:00AM</p>
+        <a href="/html-parsing-2/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A History of HTML Parsing at Cloudflare: Part 2</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The second blog post in the series on HTML rewriters picks up the story in 2017 after the launch of the Cloudflare edge compute platform Cloudflare Workers. It became clear that the developers using workers wanted the same HTML rewriting capabilities that we used internally,...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/ivan-nikulin/" class="fw5 f2 black no-underline">Ivan Nikulin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-sites/" class="no-underline f1 fw2 blue3 underline-hover">Workers Sites</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-28T08:44:00Z">November 28, 2019 8:44AM</p>
+        <a href="/html-parsing-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A History of HTML Parsing at Cloudflare: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">To coincide with the launch of streaming HTML rewriting functionality for Cloudflare Workers we are open sourcing the Rust HTML rewriter (LOL  HTML) used to back the Workers HTMLRewriter API. We also thought it was about time to review the history of HTML rewriting at Cloudflare....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/ingvar-stepanyan/" class="fw5 f2 black no-underline">Ingvar Stepanyan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-sites/" class="no-underline f1 fw2 blue3 underline-hover">Workers Sites</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-03-27T13:43:27Z">March 27, 2019 1:43PM</p>
+        <a href="/boringtun-userspace-wireguard-rust/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">BoringTun, a userspace WireGuard implementation in Rust</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we are happy to release the source code of a project we’ve been working on for the past few months. It is called BoringTun, and is a userspace implementation of the WireGuard® protocol written in Rust....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vlad-krasnov/" class="fw5 f2 black no-underline">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-03-04T16:00:00Z">March 04, 2019 4:00PM</p>
+        <a href="/building-fast-interpreters-in-rust/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Building fast interpreters in Rust</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In the previous post we described the Firewall Rules architecture and how the different components are integrated together. We created a configurable Rust library for writing and executing Wireshark®-like filters in different parts of our stack written in Go, Lua, C, C++ and JavaScript Workers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ingvar-stepanyan/" class="fw5 f2 black no-underline">Ingvar Stepanyan</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ipv4/" class="no-underline f1 fw2 blue3 underline-hover">IPv4</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

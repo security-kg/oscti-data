@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Conntrack turns a blind eye to dropped SYNs</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="We have been dealing with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/conntrack-turns-a-blind-eye-to-dropped-syns/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Conntrack turns a blind eye to dropped SYNs" />
+    <meta property="og:description" content="We have been dealing with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers." />
+    <meta property="og:url" content="https://blog.cloudflare.com/conntrack-turns-a-blind-eye-to-dropped-syns/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/03/facebook-link-image.jpeg" />
+    <meta property="article:published_time" content="2021-03-04T12:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-03-04T12:00:00.000Z" />
+    <meta property="article:tag" content="Conntrack" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Network" />
+    <meta property="article:tag" content="Kernel" />
+    <meta property="article:tag" content="Tracing" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Conntrack turns a blind eye to dropped SYNs" />
+    <meta name="twitter:description" content="We have been dealing with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/conntrack-turns-a-blind-eye-to-dropped-syns/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/03/twitter-shared-link.jpeg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Jakub Sitnicki" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Conntrack, Linux, Network, Kernel, Tracing" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Jakub Sitnicki",
+        "image": "https://blog.cloudflare.com/content/images/2019/05/4_300698554542850065.jpg",
+        "url": "https://blog.cloudflare.com/author/jakub/",
+        "sameAs": []
+    },
+    "headline": "Conntrack turns a blind eye to dropped SYNs",
+    "url": "https://blog.cloudflare.com/conntrack-turns-a-blind-eye-to-dropped-syns/",
+    "datePublished": "2021-03-04T12:00:00.000Z",
+    "dateModified": "2021-03-04T12:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/03/image2.jpg",
+    "keywords": "Conntrack, Linux, Network, Kernel, Tracing",
+    "description": "We have been dealing with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-conntrack tag-linux tag-network tag-kernel tag-tracing sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-conntrack tag-linux tag-network tag-kernel tag-tracing ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Conntrack turns a blind eye to dropped SYNs</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-03-04T12:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 04, 2021 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/jakub/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2019/05/4_300698554542850065.jpg" alt="Jakub Sitnicki" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/jakub" class="fw5 f3 no-underline black mr3">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <h2 id="intro">Intro</h2><p>We have been working with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers.</p><p>One such question popped up while writing <a href="https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/">the previous blog post on conntrack</a>:</p><blockquote>“Why are there no entries in the conntrack table for SYN packets dropped by the firewall?”</blockquote><p>Ready for a deep dive into the network stack? Let’s find out.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://lh5.googleusercontent.com/tqbla_C4bF9esDdiQKx-12wXVI3xKv6IDUklAgB0zu6G4KiC3ziZeCJkSgUWechnpaCnFBL6XY_glt1HNaXDqURrRm6ttta7ciHiG8vidp7x6Th0eQUqXQF4Ure1QsnrAlK36qQ35f66ztX1VA" class="kg-image"><figcaption><a href="https://pixabay.com/photos/female-diver-sea-scuba-diving-4829158/"><em>Image</em></a><em> by </em><a href="https://pixabay.com/users/chulmin1700-15022416/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=image&amp;utm_content=4829158"><em>chulmin park</em></a><em> from </em><a href="https://pixabay.com/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=image&amp;utm_content=4829158"><em>Pixabay</em></a></figcaption></figure><p>We already know from <a href="https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/">last time</a> that conntrack is in charge of tracking incoming and outgoing network traffic. By running conntrack -L we can inspect existing network flows, or as conntrack calls them, connections.</p><p>So if we spin up a <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2021-03-conntrack-syn-drop/Vagrantfile">toy VM</a>, <em>connect</em> to it over SSH, and inspect the contents of the conntrack table, we will see…</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">$ vagrant init fedora/33-cloud-base
+$ vagrant up
+…
+$ vagrant ssh
+Last login: Sun Jan 31 15:08:02 2021 from 192.168.122.1
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a3d5c2c4d1c2cdd7e3c0d78ed5ce">[email&#160;protected]</a> ~]$ sudo conntrack -L
+conntrack v1.4.5 (conntrack-tools): 0 flow entries have been shown.
+</code></pre>
+<!--kg-card-end: markdown--><p>… nothing!</p><p>Even though the conntrack kernel module is loaded:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5224333520333c261231267f243f">[email&#160;protected]</a> ~]$ lsmod | grep '^nf_conntrack\b'
+nf_conntrack          163840  1 nf_conntrack_netlink
+</code></pre>
+<!--kg-card-end: markdown--><p>Hold on a minute. Why is the SSH connection to the VM not listed in conntrack entries? SSH is working. With each keystroke we are sending packets to the VM. But conntrack doesn’t register it.</p><p>Isn’t conntrack an integral part of the network stack that sees every packet passing through it? 🤔</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/03/image1-5.png" class="kg-image"><figcaption>Based on an <a href="https://commons.wikimedia.org/wiki/File:Netfilter-packet-flow.svg"><em>image</em></a><em> by </em><a href="https://commons.wikimedia.org/wiki/User_talk:Jengelh"><em>Jan Engelhardt</em></a><em> CC BY-SA 3.0</em></figcaption></figure><p>Clearly everything we learned about conntrack last time is not the whole story.</p><h2 id="calling-into-conntrack">Calling into conntrack</h2><p>Our little experiment with SSH’ing into a VM begs the question — how does conntrack actually get notified about network packets passing through the stack?</p><p>We can walk <a href="https://blog.packagecloud.io/eng/2016/06/22/monitoring-tuning-linux-networking-stack-receiving-data/">the receive path step by step</a> and we won’t find any direct calls into the conntrack code in either the IPv4 or IPv6 stack. Conntrack does not interface with the network stack directly.</p><p>Instead, it relies on the Netfilter framework, and its set of hooks baked into in the stack:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">int ip_rcv(struct sk_buff *skb, struct net_device *dev, …)
+{
+    …
+    return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
+               net, NULL, skb, dev, NULL,
+               ip_rcv_finish);
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Netfilter users, like conntrack, can register callbacks with it. Netfilter will then run all registered callbacks when its hook processes a network packet.</p><p>For the INET family, that is IPv4 and IPv6, there are five Netfilter hooks  to choose from:</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/03/image5-1.png" class="kg-image"><figcaption>Based on <a href="https://thermalcircle.de/doku.php?id=blog:linux:nftables_packet_flow_netfilter_hooks_detail"><em>Nftables - Packet flow and Netfilter hooks in detail</em></a><em>, </em><a href="https://thermalcircle.de/"><em>thermalcircle.de</em></a><em>, </em><a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en"><em>CC BY-SA 4.0</em></a></figcaption></figure><p>Which ones does conntrack use? We will get to that in a moment.</p><p>First, let’s focus on the trigger. What makes conntrack register its callbacks with Netfilter?</p><p>The SSH connection doesn’t show up in the conntrack table just because the module is loaded. We already saw that. This means that conntrack doesn’t register its callbacks with Netfilter at module load time.</p><p>Or at least, it doesn't do it by <em>default</em>. Since Linux v5.1 (May 2019) the conntrack module has the <a href="https://github.com/torvalds/linux/commit/ba3fbe663635ae7b33a2d972c5d2def036258e42">enable_hooks parameter</a>, which causes conntrack to register its callbacks on load:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dcaabdbbaebdb2a89cbfa8f1aab1">[email&#160;protected]</a> ~]$ modinfo nf_conntrack
+…
+parm:           enable_hooks:Always enable conntrack hooks (bool)
+</code></pre>
+<!--kg-card-end: markdown--><p>Going back to our toy VM, let’s try to reload the conntrack module with enable_hooks set:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b2c4d3d5c0d3dcc6f2d1c69fc4df">[email&#160;protected]</a> ~]$ sudo rmmod nf_conntrack_netlink nf_conntrack
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2d5b4c4a5f4c43596d4e59005b40">[email&#160;protected]</a> ~]$ sudo modprobe nf_conntrack enable_hooks=1
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="eb9d8a8c998a859fab889fc69d86">[email&#160;protected]</a> ~]$ sudo conntrack -L
+tcp      6 431999 ESTABLISHED src=192.168.122.204 dst=192.168.122.1 sport=22 dport=34858 src=192.168.122.1 dst=192.168.122.204 sport=34858 dport=22 [ASSURED] mark=0 secctx=system_u:object_r:unlabeled_t:s0 use=1
+conntrack v1.4.5 (conntrack-tools): 1 flow entries have been shown.
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e690878194878892a68592cb908b">[email&#160;protected]</a> ~]$
+</code></pre>
+<!--kg-card-end: markdown--><p>Nice! The conntrack table now contains an entry for our SSH session.</p><p>The Netfilter hook notified conntrack about SSH session packets passing through the stack.</p><p>Now that we know how conntrack gets called, we can go back to our question — can we observe a TCP SYN packet dropped by the firewall with conntrack?</p><h2 id="listing-netfilter-hooks">Listing Netfilter hooks</h2><p>That is easy to check:</p><!--kg-card-begin: markdown--><ol>
+<li>Add a rule to drop anything coming to port tcp/2570<sup>2</sup></li>
+</ol>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="85f3e4e2f7e4ebf1c5e6f1a8f3e8">[email&#160;protected]</a> ~]$ sudo iptables -t filter -A INPUT -p tcp --dport 2570 -j DROP
+</code></pre>
+<!--kg-card-end: markdown--><p>2) Connect to the VM on port tcp/2570 from the outside</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">host $ nc -w 1 -z 192.168.122.204 2570
+</code></pre>
+<!--kg-card-end: markdown--><p>3) List conntrack table entries</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c1b7a0a6b3a0afb581a2b5ecb7ac">[email&#160;protected]</a> ~]$ sudo conntrack -L
+tcp      6 431999 ESTABLISHED src=192.168.122.204 dst=192.168.122.1 sport=22 dport=34858 src=192.168.122.1 dst=192.168.122.204 sport=34858 dport=22 [ASSURED] mark=0 secctx=system_u:object_r:unlabeled_t:s0 use=1
+conntrack v1.4.5 (conntrack-tools): 1 flow entries have been shown.
+</code></pre>
+<!--kg-card-end: markdown--><p>No new entries. Conntrack didn’t record a new flow for the dropped SYN.</p><p>But did it process the SYN packet? To answer that we have to find out which callbacks conntrack registered with Netfilter.</p><p>Netfilter keeps track of callbacks registered for each hook in instances of <code>struct nf_hook_entries</code>. We can reach these objects through the Netfilter state (<code>struct netns_nf</code>), which lives inside network namespace (<code>struct net</code>).</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">struct netns_nf {
+    …
+    struct nf_hook_entries __rcu *hooks_ipv4[NF_INET_NUMHOOKS];
+    struct nf_hook_entries __rcu *hooks_ipv6[NF_INET_NUMHOOKS];
+    …
+}
+</code></pre>
+<!--kg-card-end: markdown--><p><code>struct nf_hook_entries</code>, if you look at its <a href="https://elixir.bootlin.com/linux/v5.10.14/source/include/linux/netfilter.h#L101">definition</a>, is a bit of an exotic construct. A glance at how the object size is calculated during its <a href="https://elixir.bootlin.com/linux/v5.10.14/source/net/netfilter/core.c#L50">allocation</a> gives a hint about its memory layout:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">    struct nf_hook_entries *e;
+    size_t alloc = sizeof(*e) +
+               sizeof(struct nf_hook_entry) * num +
+               sizeof(struct nf_hook_ops *) * num +
+               sizeof(struct nf_hook_entries_rcu_head);
+</code></pre>
+<!--kg-card-end: markdown--><p>It’s an element count, followed by two arrays glued together, and some <a href="https://en.wikipedia.org/wiki/Read-copy-update">RCU</a>-related state which we’re going to ignore. The two arrays have the same size, but hold different kinds of values.</p><p>We can walk the second array, holding pointers to struct nf_hook_ops, to discover the registered callbacks and their priority. Priority determines the invocation order.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image3-3.png" class="kg-image"></figure><p>With <a href="https://github.com/osandov/drgn">drgn</a>, a programmable C debugger tailored for the Linux kernel, we can locate the Netfilter state in kernel memory, and walk its contents relatively easily. Given we know what we are looking for.</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="27514640554649536744530a514a">[email&#160;protected]</a> ~]$ sudo drgn
+drgn 0.0.8 (using Python 3.9.1, without libkdumpfile)
+…
+&gt;&gt;&gt; pre_routing_hook = prog['init_net'].nf.hooks_ipv4[0]
+&gt;&gt;&gt; for i in range(0, pre_routing_hook.num_hook_entries):
+...     pre_routing_hook.hooks[i].hook
+...
+(nf_hookfn *)ipv4_conntrack_defrag+0x0 = 0xffffffffc092c000
+(nf_hookfn *)ipv4_conntrack_in+0x0 = 0xffffffffc093f290
+&gt;&gt;&gt;
+</code></pre>
+<!--kg-card-end: markdown--><p>Neat! We have a way to access Netfilter state.</p><p>Let’s take it to the next level and list all registered callbacks for each Netfilter hook (using <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2021-03-conntrack-syn-drop/tools/list-nf-hooks">less than 100 lines of Python</a>):</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ddabbcbaafbcb3a99dbea9f0abb0">[email&#160;protected]</a> ~]$ sudo /vagrant/tools/list-nf-hooks
+🪝 ipv4 PRE_ROUTING
+       -400 → ipv4_conntrack_defrag     ☜ conntrack callback
+       -300 → iptable_raw_hook
+       -200 → ipv4_conntrack_in         ☜ conntrack callback
+       -150 → iptable_mangle_hook
+       -100 → nf_nat_ipv4_in
+
+🪝 ipv4 LOCAL_IN
+       -150 → iptable_mangle_hook
+          0 → iptable_filter_hook
+         50 → iptable_security_hook
+        100 → nf_nat_ipv4_fn
+ 2147483647 → ipv4_confirm
+…
+</code></pre>
+<!--kg-card-end: markdown--><p>The output from our script shows that conntrack has two callbacks registered with the <code>PRE_ROUTING</code> hook - <code>ipv4_conntrack_defrag</code> and <code>ipv4_conntrack_in</code>. But are they being called?</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/03/image4-3.png" class="kg-image"><figcaption>Based on <a href="https://thermalcircle.de/doku.php?id=blog:linux:nftables_packet_flow_netfilter_hooks_detail"><em>Netfilter PRE_ROUTING hook</em></a><em>, </em><a href="https://thermalcircle.de/"><em>thermalcircle.de</em></a><em>, </em><a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en"><em>CC BY-SA 4.0</em></a></figcaption></figure><h2 id="tracing-conntrack-callbacks">Tracing conntrack callbacks</h2><p>We expect that when the Netfilter <code>PRE_ROUTING</code> hook processes a TCP SYN packet, it will invoke <code>ipv4_conntrack_defrag</code> and then <code>ipv4_conntrack_in</code> callbacks.</p><p>To confirm it we will put to use the tracing powers of <a href="https://ebpf.io/">BPF 🐝</a>. BPF programs can run on entry to functions. These kinds of programs are known as BPF kprobes. In our case we will attach BPF kprobes to conntrack callbacks.</p><p>Usually, when working with BPF, we would write the BPF program in C and use <code>clang -target bpf</code> to compile it. However, for tracing it will be much easier to use <a href="https://bpftrace.org/">bpftrace</a>. With bpftrace we can write <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2021-03-conntrack-syn-drop/tools/trace-conntrack-prerouting.bt">our BPF kprobe program</a> in a <a href="https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md">high-level language</a> inspired by <a href="https://en.wikipedia.org/wiki/AWK">AWK</a>:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">kprobe:ipv4_conntrack_defrag,
+kprobe:ipv4_conntrack_in
+{
+    $skb = (struct sk_buff *)arg1;
+    $iph = (struct iphdr *)($skb-&gt;head + $skb-&gt;network_header);
+    $th = (struct tcphdr *)($skb-&gt;head + $skb-&gt;transport_header);
+
+    if ($iph-&gt;protocol == 6 /* IPPROTO_TCP */ &amp;&amp;
+        $th-&gt;dest == 2570 /* htons(2570) */ &amp;&amp;
+        $th-&gt;syn == 1) {
+        time(&quot;%H:%M:%S &quot;);
+        printf(&quot;%s:%u &gt; %s:%u tcp syn %s\n&quot;,
+               ntop($iph-&gt;saddr),
+               (uint16)($th-&gt;source &lt;&lt; 8) | ($th-&gt;source &gt;&gt; 8),
+               ntop($iph-&gt;daddr),
+               (uint16)($th-&gt;dest &lt;&lt; 8) | ($th-&gt;dest &gt;&gt; 8),
+               func);
+    }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>What does this program do? It is roughly an equivalent of a tcpdump filter:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">dst port 2570 and tcp[tcpflags] &amp; tcp-syn != 0
+</code></pre>
+<!--kg-card-end: markdown--><p>But only for packets passing through conntrack <code>PRE_ROUTING</code> callbacks.</p><p>(If you haven’t used bpftrace, it comes with an excellent <a href="https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md">reference guide</a> and gives you the ability to explore kernel data types on the fly with <code>bpftrace -lv 'struct iphdr'</code>.)</p><p>Let’s run the tracing program while we connect to the VM from the outside (<code>nc -z 192.168.122.204 2570</code>):</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2355424451424d576340570e554e">[email&#160;protected]</a> ~]$ sudo bpftrace /vagrant/tools/trace-conntrack-prerouting.bt
+Attaching 3 probes...
+Tracing conntrack prerouting callbacks... Hit Ctrl-C to quit
+13:22:56 192.168.122.1:33254 &gt; 192.168.122.204:2570 tcp syn ipv4_conntrack_defrag
+13:22:56 192.168.122.1:33254 &gt; 192.168.122.204:2570 tcp syn ipv4_conntrack_in
+^C
+
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0177606673606f754162752c776c">[email&#160;protected]</a> ~]$
+</code></pre>
+<!--kg-card-end: markdown--><p>Conntrack callbacks have processed the TCP SYN packet destined to tcp/2570.</p><p>But if conntrack saw the packet, why is there no corresponding flow entry in the conntrack table?</p><h2 id="going-down-the-rabbit-hole">Going down the rabbit hole</h2><p>What actually happens inside the conntrack <code>PRE_ROUTING</code> callbacks?</p><p>To find out, we can trace the call chain that starts on entry to the conntrack callback. The <code>function_graph</code> tracer built into the <a href="https://lwn.net/Articles/365835/">Ftrace</a> framework is perfect for this task.</p><p>But because all incoming traffic goes through the <code>PRE_ROUTING</code> hook, including our SSH connection, our trace will be polluted with events from SSH traffic. To avoid that, let’s switch from SSH access to a serial console.</p><p>When using <a href="https://github.com/vagrant-libvirt/vagrant-libvirt">libvirt</a> as the Vagrant provider, you can connect to the serial console with <code>virsh</code>:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">host $ virsh -c qemu:///session list
+ Id   Name                State
+-----------------------------------
+ 1    conntrack_default   running
+
+host $ virsh -c qemu:///session console conntrack_default
+Once connected to the console and logged into the VM, we can record the call chain using the trace-cmd wrapper for Ftrace:
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="07716660756669734764732a716a">[email&#160;protected]</a> ~]$ sudo trace-cmd start -p function_graph -g ipv4_conntrack_defrag -g ipv4_conntrack_in
+  plugin 'function_graph'
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7305121401121d073310075e051e">[email&#160;protected]</a> ~]$ # … connect from the host with `nc -z 192.168.122.204 2570` …
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="47312620352629330724336a312a">[email&#160;protected]</a> ~]$ sudo trace-cmd stop
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="daacbbbda8bbb4ae9ab9aef7acb7">[email&#160;protected]</a> ~]$ sudo cat /sys/kernel/debug/tracing/trace
+# tracer: function_graph
+#
+# CPU  DURATION                  FUNCTION CALLS
+# |     |   |                     |   |   |   |
+ 1)   1.219 us    |  finish_task_switch();
+ 1)   3.532 us    |  ipv4_conntrack_defrag [nf_defrag_ipv4]();
+ 1)               |  ipv4_conntrack_in [nf_conntrack]() {
+ 1)               |    nf_conntrack_in [nf_conntrack]() {
+ 1)   0.573 us    |      get_l4proto [nf_conntrack]();
+ 1)               |      nf_ct_get_tuple [nf_conntrack]() {
+ 1)   0.487 us    |        nf_ct_get_tuple_ports [nf_conntrack]();
+ 1)   1.564 us    |      }
+ 1)   0.820 us    |      hash_conntrack_raw [nf_conntrack]();
+ 1)   1.255 us    |      __nf_conntrack_find_get [nf_conntrack]();
+ 1)               |      init_conntrack.constprop.0 [nf_conntrack]() {  ❷
+ 1)   0.427 us    |        nf_ct_invert_tuple [nf_conntrack]();
+ 1)               |        __nf_conntrack_alloc [nf_conntrack]() {      ❶
+                             … 
+ 1)   3.680 us    |        }
+                           … 
+ 1) + 15.847 us   |      }
+                         … 
+ 1) + 34.595 us   |    }
+ 1) + 35.742 us   |  }
+ …
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5b2d3a3c293a352f1b382f762d36">[email&#160;protected]</a> ~]$
+</code></pre>
+<!--kg-card-end: markdown--><p>What catches our attention here is the allocation, <a href="https://elixir.bootlin.com/linux/v5.10.14/source/net/netfilter/nf_conntrack_core.c#L1471">__nf_conntrack_alloc()</a> (❶), inside <code>init_conntrack() (❷). __nf_conntrack_alloc()</code> creates a <a href="https://elixir.bootlin.com/linux/v5.10.14/source/include/net/netfilter/nf_conntrack.h#L58">struct nf_conn</a> object which represents a tracked connection.</p><!--kg-card-begin: markdown--><p>This object is not created in vain. <a href="https://elixir.bootlin.com/linux/v5.10.14/source/net/netfilter/nf_conntrack_core.c#L1633">A glance</a> at <code>init_conntrack()</code> <a href="https://elixir.bootlin.com/linux/v5.10.14/source/net/netfilter/nf_conntrack_core.c#L1633">source</a> shows that it is pushed onto a list of unconfirmed connections<sup>3</sup>.</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image6-1.png" class="kg-image"></figure><p>What does it mean that a connection is unconfirmed? As <a href="https://manpages.debian.org/buster/conntrack/conntrack.8.en.html">conntrack(8) man page</a> explains:</p><!--kg-card-begin: markdown--><pre><code>unconfirmed:
+       This table shows new entries, that are not yet inserted into the
+       conntrack table. These entries are attached to packets that  are
+       traversing  the  stack, but did not reach the confirmation point
+       at the postrouting hook.
+</code></pre>
+<!--kg-card-end: markdown--><p>Perhaps we have been looking for our flow in the wrong table? Does the unconfirmed table have a record for our dropped TCP SYN?</p><h2 id="pulling-the-rabbit-out-of-the-hat">Pulling the rabbit out of the hat</h2><p>I have bad news…</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6c1a0d0b1e0d02182c0f18411a01">[email&#160;protected]</a> ~]$ sudo conntrack -L unconfirmed
+conntrack v1.4.5 (conntrack-tools): 0 flow entries have been shown.
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4f392e283d2e213b0f2c3b623922">[email&#160;protected]</a> ~]$
+</code></pre>
+<!--kg-card-end: markdown--><p>The flow is not present in the unconfirmed table. We have to dig deeper.</p><p>Let’s for a moment assume that a <code>struct nf_conn</code> object was added to the <code>unconfirmed</code> list. If the list is now empty, then the object must have been removed from the list before we inspected its contents.</p><p>Has an entry been removed from the <code>unconfirmed</code> table? What function removes entries from the <code>unconfirmed</code> table?</p><p>It turns out that <code>nf_ct_add_to_unconfirmed_list()</code> which <code>init_conntrack()</code> invokes, has its opposite defined just right beneath it - <code>nf_ct_del_from_dying_or_unconfirmed_list()</code>.</p><p>It is worth a shot to check if this function is being called, and if so, from where. For that we can again use a BPF tracing program, attached to function entry. However, this time our program will record a kernel stack trace:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">kprobe:nf_ct_del_from_dying_or_unconfirmed_list { @[kstack()] = count(); exit(); }
+</code></pre>
+<!--kg-card-end: markdown--><p>With <code>bpftrace</code> running our one-liner, we connect to the VM from the host with <code>nc</code> as before:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a1d7c0c6d3c0cfd5e1c2d58cd7cc">[email&#160;protected]</a> ~]$ sudo bpftrace -e 'kprobe:nf_ct_del_from_dying_or_unconfirmed_list { @[kstack()] = count(); exit(); }'
+Attaching 1 probe...
+
+@[
+    nf_ct_del_from_dying_or_unconfirmed_list+1 ❹
+    destroy_conntrack+78
+    nf_conntrack_destroy+26
+    skb_release_head_state+78
+    kfree_skb+50 ❸
+    nf_hook_slow+143 ❷
+    ip_local_deliver+152 ❶
+    ip_sublist_rcv_finish+87
+    ip_sublist_rcv+387
+    ip_list_rcv+293
+    __netif_receive_skb_list_core+658
+    netif_receive_skb_list_internal+444
+    napi_complete_done+111
+    …
+]: 1
+
+[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7a0c1b1d081b140e3a190e570c17">[email&#160;protected]</a> ~]$
+</code></pre>
+<!--kg-card-end: markdown--><p>Bingo. The conntrack delete function was called, and the captured stack trace shows that on local delivery path (❶), where <code>LOCAL_IN</code> Netfilter hook runs (❷), the packet is destroyed (❸). Conntrack must be getting called when <a href="https://elixir.bootlin.com/linux/v5.10.14/source/include/linux/skbuff.h#L713">sk_buff</a> (the packet and its metadata) is destroyed. This causes conntrack to remove the unconfirmed flow entry (❹).</p><p>It makes sense. After all we have a <code>DROP</code> rule in the <code>filter/INPUT</code> chain. And that <code>iptables -j DROP</code> rule has a significant side effect. It cleans up an entry in the conntrack <code>unconfirmed</code> table!</p><p>This explains why we can’t observe the flow in the <code>unconfirmed</code> table. It lives for only a very short period of time.</p><p>Not convinced? You don’t have to take my word for it. I will prove it with a dirty trick!</p><h2 id="making-the-rabbit-disappear-or-actually-appear">Making the rabbit disappear, or actually appear</h2><p>If you recall the output from <code>list-nf-hooks</code> that we’ve seen earlier, there is another conntrack callback there - <code>ipv4_confirm</code>, which I have ignored:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">[<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4d3b2c2a3f2c23390d2e39603b20">[email&#160;protected]</a> ~]$ sudo /vagrant/tools/list-nf-hooks
+…
+🪝 ipv4 LOCAL_IN
+       -150 → iptable_mangle_hook
+          0 → iptable_filter_hook
+         50 → iptable_security_hook
+        100 → nf_nat_ipv4_fn
+ 2147483647 → ipv4_confirm              ☜ another conntrack callback
+… 
+</code></pre>
+<!--kg-card-end: markdown--><p><code>ipv4_confirm</code> is “the confirmation point” mentioned in the <a href="https://manpages.debian.org/buster/conntrack/conntrack.8.en.html">conntrack(8) man page</a>. When a flow gets confirmed, it is moved from the <code>unconfirmed</code> table to the main <code>conntrack</code> table.</p><p>The callback is registered with a “weird” priority – 2,147,483,647. It’s the maximum positive value of a 32-bit signed integer can hold, and at the same time, the lowest possible priority a callback can have.</p><p>This ensures that the <code>ipv4_confirm</code> callback runs last. We want the flows to graduate from the <code>unconfirmed</code> table to the main <code>conntrack</code> table only once we know the corresponding packet has made it through the firewall.</p><p>Luckily for us, it is possible to have more than one callback registered with the same priority. In such cases, the order of registration matters. We can put that to use. Just for educational purposes.</p><p>Good old <code>iptables</code> won’t be of much help here. Its Netfilter callbacks have hard-coded priorities which we can’t change. But <code>nftables</code>, the <code>iptables</code> <a href="https://developers.redhat.com/blog/2016/10/28/what-comes-after-iptables-its-successor-of-course-nftables/">successor</a>, is much more flexible in this regard. With <code>nftables</code> we can create a rule chain with arbitrary priority.</p><p>So this time, let’s use nftables to install a filter rule to drop traffic to port tcp/2570. The trick, though, is to register our chain before conntrack registers itself. This way our filter will run <em>last</em>.</p><p>First, delete the tcp/2570 drop rule in iptables and unregister conntrack.</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">vm # iptables -t filter -F
+vm # rmmod nf_conntrack_netlink nf_conntrack
+</code></pre>
+<!--kg-card-end: markdown--><p>Then add tcp/2570 drop rule in <code>nftables</code>, with lowest possible priority.</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">vm # nft add table ip my_table
+vm # nft add chain ip my_table my_input { type filter hook input priority 2147483647 \; }
+vm # nft add rule ip my_table my_input tcp dport 2570 counter drop
+vm # nft -a list ruleset
+table ip my_table { # handle 1
+        chain my_input { # handle 1
+                type filter hook input priority 2147483647; policy accept;
+                tcp dport 2570 counter packets 0 bytes 0 drop # handle 4
+        }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Finally, re-register conntrack hooks.</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">vm # modprobe nf_conntrack enable_hooks=1
+</code></pre>
+<!--kg-card-end: markdown--><p>The registered callbacks for the <code>LOCAL_IN</code> hook now look like this:</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">vm # /vagrant/tools/list-nf-hooks
+…
+🪝 ipv4 LOCAL_IN
+       -150 → iptable_mangle_hook
+          0 → iptable_filter_hook
+         50 → iptable_security_hook
+        100 → nf_nat_ipv4_fn
+ 2147483647 → ipv4_confirm, nft_do_chain_ipv4
+…
+</code></pre>
+<!--kg-card-end: markdown--><p>What happens if we connect to port tcp/2570 now?</p><!--kg-card-begin: markdown--><pre><code class="language-ssh">vm # conntrack -L
+tcp      6 115 SYN_SENT src=192.168.122.1 dst=192.168.122.204 sport=54868 dport=2570 [UNREPLIED] src=192.168.122.204 dst=192.168.122.1 sport=2570 dport=54868 mark=0 secctx=system_u:object_r:unlabeled_t:s0 use=1
+conntrack v1.4.5 (conntrack-tools): 1 flow entries have been shown.
+</code></pre>
+<!--kg-card-end: markdown--><p>We have fooled conntrack 💥</p><p>Conntrack promoted the flow from the <code>unconfirmed</code> to the main <code>conntrack</code> table despite the fact that the firewall dropped the packet. We can observe it.</p><h2 id="outro">Outro</h2><!--kg-card-begin: markdown--><p>Conntrack processes every received packet<sup>4</sup> and creates a flow for it. A flow entry is always created even if the packet is dropped shortly after. The flow might never be promoted to the main conntrack table and can be short lived.</p>
+<!--kg-card-end: markdown--><p>However, this blog post is not really about conntrack. Its internals have been covered by <a href="https://www.usenix.org/publications/login/june-2006-volume-31-number-3/netfilters-connection-tracking-system">magazines</a>, <a href="https://www.semanticscholar.org/paper/Netfilter-Connection-Tracking-and-NAT-Boye/3f3c09dbc2a13c4840bb4a148753bb528493b607">papers</a>, <a href="https://books.google.pl/books?id=RpsQAwAAQBAJ&amp;lpg=PP1&amp;pg=PA253#v=onepage&amp;q&amp;f=false">books</a>, and on other blogs long before. We probably could have learned elsewhere all that has been shown here.</p><p>For us, conntrack was really just an excuse to demonstrate various ways to discover the inner workings of the Linux network stack. As good as any other.</p><p>Today we have powerful introspection tools like <a href="https://github.com/osandov/drgn">drgn</a>, <a href="https://bpftrace.org/">bpftrace</a>, or <a href="https://lwn.net/Articles/365835/">Ftrace</a>, and a <a href="https://elixir.bootlin.com/">cross referencer</a> to plow through the source code, at our fingertips. They help us look under the hood of a live operating system and gradually deepen our understanding of its workings.</p><p>I have to warn you, though. Once you start digging into the kernel, it is hard to stop…</p><!--kg-card-begin: markdown--><p>...........<br>
+<sup>1</sup>Actually since <a href="https://kernelnewbies.org/Linux_5.10#Networking">Linux v5.10</a> (Dec 2020) there is an additional Netfilter hook for the INET family named <code>NF_INET_INGRESS</code>. The new hook type allows users to attach nftables chains to the Traffic Control ingress hook.<br>
+<sup>2</sup>Why did I pick this port number? Because 2570 = 0x0a0a. As we will see later, this saves us the trouble of converting between the network byte order and the host byte order.<br>
+<sup>3</sup>To be precise, there are multiple lists of unconfirmed connections. One per each CPU. This is a common pattern in the kernel. Whenever we want to prevent CPUs from contending for access to a shared state, we give each CPU a private instance of the state.<br>
+<sup>4</sup>Unless we explicitly exclude it from being tracked with <code>iptables -j NOTRACK</code>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/conntrack/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Conntrack</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/network/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Network</a>
+        <a href="/tag/kernel/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Kernel</a>
+        <a href="/tag/tracing/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Tracing</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-04-06T12:00:00+01:00">April 06, 2020 12:00PM</p>
+        <a href="/conntrack-tales-one-thousand-and-one-flows/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Conntrack tales - one thousand and one flows</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We were wondering - can we just enable Linux "conntrack"? How does it actually work? I volunteered to help the team understand the dark corners of the Linux's "conntrack" stateful firewall subsystem....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/conntrack/" class="no-underline f1 fw2 blue3 underline-hover">Conntrack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

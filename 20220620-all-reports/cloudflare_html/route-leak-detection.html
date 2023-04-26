@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=52482e6a1c" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=52482e6a1c"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Today, we&#x27;re excited to announce Route Leak Detection, a new network alerting feature that tells customers when a prefix they own that is onboarded to Cloudflare is being leaked. Route Leak Detection helps protect your routes on the Internet: it tells you when your traffic is going places it’s not supposed to go, which is an indicator of a possible attack and reduces time to mitigate leaks by arming you with timely information." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/route-leak-detection/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection" />
+    <meta property="og:description" content="Today, we&#x27;re excited to announce Route Leak Detection, a new network alerting feature that tells customers when a prefix they own that is onboarded to Cloudflare is being leaked." />
+    <meta property="og:url" content="https://blog.cloudflare.com/route-leak-detection/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/03/Protecting-Cloudflare-Customers-from-BGP-Insecurity-with-Route-Leak-Detection-OG-1.png" />
+    <meta property="article:published_time" content="2021-03-25T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-03-25T13:00:00.000Z" />
+    <meta property="article:tag" content="Security Week" />
+    <meta property="article:tag" content="BGP" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="RPKI" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection" />
+    <meta name="twitter:description" content="Today, we&#x27;re excited to announce Route Leak Detection, a new network alerting feature that tells customers when a prefix they own that is onboarded to Cloudflare is being leaked." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/route-leak-detection/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/03/Protecting-Cloudflare-Customers-from-BGP-Insecurity-with-Route-Leak-Detection-OG.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="David Tuber" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Security Week, BGP, Security, RPKI" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@tubes__" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "David Tuber",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/07/kutiya-face.png",
+            "width": 983,
+            "height": 1049
+        },
+        "url": "https://blog.cloudflare.com/author/tubes/",
+        "sameAs": [
+            "https://twitter.com/tubes__"
+        ]
+    },
+    "headline": "Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection",
+    "url": "https://blog.cloudflare.com/route-leak-detection/",
+    "datePublished": "2021-03-25T13:00:00.000Z",
+    "dateModified": "2021-03-25T13:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/03/image6-16.png",
+    "keywords": "Security Week, BGP, Security, RPKI",
+    "description": "Today, we&#x27;re excited to announce Route Leak Detection, a new network alerting feature that tells customers when a prefix they own that is onboarded to Cloudflare is being leaked.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-security-week tag-bgp tag-security tag-rpki tag-hash-blog-452 sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=52482e6a1c" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=52482e6a1c" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-security-week tag-bgp tag-security tag-rpki tag-hash-blog-452 ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-03-25T13:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 25, 2021 1:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/tubes/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/07/kutiya-face.png" alt="David Tuber" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/tubes" class="fw5 f3 no-underline black mr3">David Tuber</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image6-17.png" class="kg-image" alt="Protecting Cloudflare Customers from BGP Insecurity with Route Leak Detection"></figure><p>Border Gateway Protocol (BGP) route leaks and hijacks can ruin your day — BGP is <a href="https://blog.cloudflare.com/is-bgp-safe-yet-rpki-routing-security-initiative/">insecure by design</a>, and incorrect routing information spreading across the Internet can be incredibly disruptive and dangerous to the normal functioning of customer networks, and the Internet at large. Today, we're excited to announce Route Leak Detection, a new network alerting feature that tells customers when a prefix they own that is onboarded to Cloudflare is being leaked, i.e., advertised by an unauthorized party. Route Leak Detection helps protect your routes on the Internet: it tells you when your traffic is going places it’s not supposed to go, which is an indicator of a possible attack, and reduces time to mitigate leaks by arming you with timely information.</p><p>In this blog, we will explain what route leaks are, how Cloudflare Route Leak Detection works, and what we are doing to help protect the Internet from route leaks.</p><h2 id="what-are-route-leaks-and-why-should-i-care">What are route leaks and why should I care?</h2><p>A route leak occurs when a network on the Internet tells the rest of the world to route traffic through their network, when the traffic isn’t supposed to go there normally. <a href="https://blog.cloudflare.com/how-verizon-and-a-bgp-optimizer-knocked-large-parts-of-the-internet-offline-today/">A great example</a> of this and the impact it can cause was an incident in June 2019, where a small ISP in Pennsylvania started advertising routes for part of the Internet including Cloudflare, Amazon, and Linode. A significant portion of traffic destined for those networks was incorrectly routed to the network, leaking Cloudflare, Amazon, and Linode’s prefixes, and causing congestion and unreachable network errors for end users. Route leaks tend to happen because of a misconfigured peering session or customer router, a software bug in a customer or third party router, a man-in-the-middle attack, or a malicious customer or third party.</p><p>Some route leaks are innocuous. But some route leaks can be malicious, and can have very real security impact. An attacker can advertise specific routes for the express purpose of directing users to their network to do things like <a href="https://blog.cloudflare.com/bgp-leaks-and-crypto-currencies/">steal cryptocurrencies</a> and other important data, or attempt to issue SSL/TLS certificates that can be used to impersonate domains. By advertising more specific routes, an attacker can trick you into accessing a site that you don’t intend to, and if it looks exactly like the site you expect, you may unwittingly enter in personal data and be at risk for an attack. Here’s a diagram representing traffic without a route leak:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image4-32.png" class="kg-image" alt="Here’s a diagram representing traffic without a route leak"></figure><p>And here’s traffic after a route leak:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image5-30.png" class="kg-image" alt="And here’s traffic after a route leak"></figure><p>So in addition to making users unhappy because a lot of Internet traffic is going through paths that can’t handle it, route leaks can have very real data leak implications.</p><p>Cloudflare’s Route Leak Detection allows you to get notified quickly when your routes are leaking so that you know when a potential attack is happening.</p><h2 id="how-does-cloudflare-route-leak-detection-protect-my-network">How does Cloudflare Route Leak Detection protect my network?</h2><h3 id="how-to-configure-route-leak-detection">How to configure Route Leak Detection</h3><p>In order to configure Route Leak Detection, you must be a Cloudflare customer who has <a href="https://developers.cloudflare.com/byoip/">“brought your own IP” (BYOIP)</a> addresses—this includes Magic Transit (L3), Spectrum (L4), and WAF (L7) customers. Only prefixes advertised by Cloudflare qualify for Route Leak Detection.</p><p>Configuring Route Leak Detection can be done by setting up a message in the Notifications tab in your account.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image7.gif" class="kg-image" alt="Configuring Route Leak Detection can be done by setting up a message in the Notifications tab in your account."></figure><p>Cloudflare will then begin monitoring all of your onboarded prefixes for leaks and hijacks and will send you alerts when they occur via <a href="https://support.cloudflare.com/hc/en-us/articles/360047358211-Connecting-PagerDuty-to-Cloudflare">email or specialized on call tools like PagerDuty</a>.</p><p>Cloudflare’s alert notification system supports webhooks, email, and PagerDuty, so your teams are kept up to date across their desired medium with changes in network routes and so that they can respond and take corrective action when necessary.</p><h3 id="an-example-attack-scenario">An example attack scenario</h3><p>A malicious party attempting to use routes to gain access to customer data starts advertising a subnet of onboarded prefixes for one of our Magic Transit customers. This attack, if not found and remediated quickly, could have serious impact on the customer. When the attacker begins to advertise the prefix without the customer’s knowledge, BGP updates and route changes start occurring rapidly in the global routing table—typically within 60 seconds.</p><p>Let’s walk through how a customer might deploy Route Leak Detection. Customer Acme Corp. owns the IP prefix 203.0.113.0/24. Acme has onboarded 203.0.113.0/24 to Cloudflare, and Cloudflare tells the rest of the Internet that this prefix is reachable through Cloudflare’s network.</p><p>Once Acme has enabled Route Leak Detection, Cloudflare continuously monitors routing information on the Internet for 203.0.113.0/24. Our goal is to detect leaks within five minutes of the erroneous routing information propagating on the Internet.</p><p>Let’s go back to the attack scenario. A malicious party attempting to attack Acme’s network hijacks the advertisement for 203.0.113.0/24, diverting legitimate users from the intended network path to Acme (though Cloudflare’s network) and instead to a facsimile of Acme’s network intended to capture information from unwitting users.</p><p>Because Acme has enabled Route Leak Detection, an alert is sent to Acme’s administrators.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image1-41.png" class="kg-image" alt="Because Acme has enabled Route Leak Detection, an alert is sent to Acme’s administrators."></figure><p>The alert includes all of the ASNs that are seeing the prefix being advertised by the potentially malicious party. Acme is able to warn their users that they may be at risk of a data exfiltration attack and they should be on the lookout for suspicious behavior.</p><p>Acme is also able to quickly contact the service providers listed in the alert to stop honoring the smaller routes. Currently, the process of mitigating a route leak is a highly manual process, requiring contacting service providers directly using contact information published in <a href="https://www.peeringdb.com/">public databases</a>. In the future, we plan to build features to automate this outreach and mitigation process to further drive down time to mitigation for route leak events that may impact our customers.</p><h2 id="how-does-cloudflare-detect-route-leaks">How does Cloudflare detect route leaks?</h2><p>Cloudflare uses several sources of routing data to create a synthesis of how the Internet sees routes to our BYOIP customers. Cloudflare then watches these views to track any sudden changes that occur on the Internet. If we can correlate those changes to actions we have taken, then we know the change is benign and it’s business as usual. However, if we haven’t made any changes, we quickly take action to tell you that your routes and your users may be at risk.</p><h3 id="cloudflare-s-outside-in-ingestion-pipeline">Cloudflare’s outside-in ingestion pipeline</h3><p>Cloudflare’s main source of data is from externally maintained repositories such as <a href="https://ris-live.ripe.net/">RIPE’s RIS feed</a>, <a href="http://www.routeviews.org/">RouteViews</a>, and <a href="https://bgpstream.caida.org/data#!caida-bmp">Caida’s public BMP feed</a>. It is important to use multiple external views of the Internet routing table to be as accurate as possible when making inferences about the state of the Internet. Cloudflare makes API calls to those sources to ingest data and analyze changes in BGP routes. These feeds allow us to ingest routing data for the whole Internet. Cloudflare filters all of that down to your prefixes that you have previously onboarded to Cloudflare.</p><p>Once this data is ingested and filtered, Cloudflare begins cross-referencing updates to the global routing table with metrics that indicate possible hijacks, such as the number of ASNs that directly see your routes, the number of BGP updates that occur over short periods of time, and how many subnets are being advertised. If the number of ASNs that directly see your routes or the number of updates change drastically, it could mean that your prefixes are being leaked. If a subnet of the prefixes you are advertising are seeing drastic amounts of change in the global routing table, it’s likely that your prefixes are being leaked somewhere.</p><p>Cloudflare already has this configured on our own prefixes today. Here’s an example of what we see when our system determines that something is wrong:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image2-35.png" class="kg-image" alt="Cloudflare already has this configured on our own prefixes today. Here’s an example of what we see when our system determines that something is wrong:"></figure><p>Cloudflare owns the prefix range 2606:4700:50::/44, as it is a subnet of one of the ranges <a href="https://www.cloudflare.com/ips/">listed on our site here</a>. For a period of an hour, we noticed that someone tried to advertise a subnet of that range to 38 other networks. Fortunately, because we have <a href="https://blog.cloudflare.com/rpki-details/">deployed RPKI</a>, we know that most networks will reject rather than honor these route advertisements from attackers.</p><h2 id="what-can-i-do-to-prevent-route-leaks-in-the-future">What can I do to prevent route leaks in the future?</h2><p>The best way to prevent route leaks is to deploy <a href="https://blog.cloudflare.com/rpki-details/">RPKI</a> in your network, and urge your Internet providers to do so as well. RPKI allows you and your providers to sign routes that you advertise to the Internet, so that no one else can steal them. If someone is advertising your RPKI routes, any providers that support RPKI will not forward those routes to other customers, ensuring that the attempted leak is contained as close to the attacker as possible.</p><p>Cloudflare’s <a href="https://isbgpsafeyet.com/">continued advocacy</a> for RPKI has yielded fruits in the past three months alone. Providers such as Amazon, Google, Telstra, Cogent, and even Netflix have started supporting RPKI and are filtering and dropping invalid prefixes. In fact, over 50% of the top Internet providers now support RPKI in some fashion:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image3-33.png" class="kg-image" alt="In fact, over 50% of the top Internet providers now support RPKI in some fashion:"></figure><p>Cloudflare’s Route Leak Detection combined with more providers implementing RPKI are helping to ensure that data loss and downtime from route leaks become a thing of the past. If you’re a Cloudflare Magic Transit or BYOIP customer, try configuring a route leak alert in your dash today. If you’re not a Magic Transit or BYOIP customer, reach out to our <a href="https://www.cloudflare.com/en-gb/plans/enterprise/contact/">sales team</a> to get started in the process to keep your network safe — even the routes.</p>
+            </div>
+        </section>
+
+        <a href="/tag/security-week/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security Week</a>
+        <a href="/tag/bgp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">BGP</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/rpki/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">RPKI</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-25T13:01:00Z">March 25, 2021 1:01PM</p>
+        <a href="/introducing-page-shield/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Page Shield: Protect User Data In-Browser</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We're excited to introduce Page Shield, a client-side security product customers can use to detect attacks in end-user browsers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/justin-zhou/" class="fw5 f2 black no-underline">Justin Zhou</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/security-week/" class="no-underline f1 fw2 blue3 underline-hover">Security Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/page-shield/" class="no-underline f1 fw2 blue3 underline-hover">Page Shield</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/device-security/" class="no-underline f1 fw2 blue3 underline-hover">Device Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-24T13:01:00Z">March 24, 2021 1:01PM</p>
+        <a href="/data-loss-prevention/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Announcing Cloudflare’s Data Loss Prevention platform</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today, we’re excited to announce that your team can use Cloudflare’s network to build Zero Trust controls over the data in your enterprise - wherever it lives and however it moves....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sam/" class="fw5 f2 black no-underline">Sam Rhea</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/security-week/" class="no-underline f1 fw2 blue3 underline-hover">Security Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-loss-prevention/" class="no-underline f1 fw2 blue3 underline-hover">Data Loss Prevention</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/zero-trust/" class="no-underline f1 fw2 blue3 underline-hover">Zero Trust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/secure-web-gateway/" class="no-underline f1 fw2 blue3 underline-hover">Secure Web Gateway</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/access/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Access</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-24T13:00:00Z">March 24, 2021 1:00PM</p>
+        <a href="/data-exfiltration-prevention/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Using Cloudflare for Data Loss Prevention</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The increased use of cloud-based SaaS providers to store and access sensitive data introduces a swath of security risks as management of these resources can be unwieldy. The risk of data loss can be managed by using Cloudflare Access, API Shield, and Browser Isolation....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/misha/" class="fw5 f2 black no-underline">Misha Yalavarthy</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/security-week/" class="no-underline f1 fw2 blue3 underline-hover">Security Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-one/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare One</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-loss-prevention/" class="no-underline f1 fw2 blue3 underline-hover">Data Loss Prevention</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-exfiltration/" class="no-underline f1 fw2 blue3 underline-hover">Data Exfiltration</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-24T13:00:00Z">March 24, 2021 1:00PM</p>
+        <a href="/protecting-apis-from-abuse-and-data-exfiltration/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Protecting your APIs from abuse and data exfiltration</h2>
+        </a>
+
+        <p class="gray1 lh-copy">API Shield is growing with new functionalities: Schema Validation generally available, Managed IP List, more controls to manage certificates, and Data Loss Prevention....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/daniele/" class="fw5 f2 black no-underline">Daniele Molteni</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/security-week/" class="no-underline f1 fw2 blue3 underline-hover">Security Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api-shield/" class="no-underline f1 fw2 blue3 underline-hover">API Shield</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/lists/" class="no-underline f1 fw2 blue3 underline-hover">Lists</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dlp/" class="no-underline f1 fw2 blue3 underline-hover">DLP</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=52482e6a1c"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

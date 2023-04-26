@@ -1,0 +1,1671 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+
+<script>
+    var companyDetails6Sense = localStorage.getItem('_6senseCompanyDetails');
+
+    if(null != companyDetails6Sense || companyDetails6Sense != "" || companyDetails6Sense != undefined){
+		var jsonVal = JSON.parse(companyDetails6Sense);
+
+        var companyRevenueRange = jsonVal.company.revenue_range;
+        var companyCountry = jsonVal.company.country;
+        var companyIndustry = jsonVal.company.industry;
+        var companyName = jsonVal.company.name;
+        var companyRegion = jsonVal.company.region;
+        var companyDomain = jsonVal.company.domain;
+    	var segments = JSON.stringify(jsonVal.segments);
+    	
+        window.dataLayer=window.dataLayer ||[];
+        window.dataLayer.push({
+                "company_industry" : companyIndustry,
+                "company_name" : companyName,
+                "company_revenue" : companyRevenueRange,
+                "company_country" : companyCountry,
+                "company_region" : companyRegion,
+            	"company_domain" : companyDomain,
+            	"segments" : segments
+        });
+    }
+
+</script>
+
+<style>.async-hide { opacity: 0 !important} </style>
+<script>(function(a,s,y,n,c,h,i,d,e){s.className+=' '+y;h.start=1*new Date;
+h.end=i=function(){s.className=s.className.replace(RegExp(' ?'+y),'')};
+(a[n]=a[n]||[]).hide=h;setTimeout(function(){i();h.end=null},c);h.timeout=c;
+})(window,document.documentElement,'async-hide','dataLayer',4000,
+{"GTM-5ZX7QTZ":true});</script>
+
+<title>Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach | FireEye Inc</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="alternate" type="application/atom+xml" title="Atom Feed for &#39;Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach&#39;" href="/content/fireeye-www/en_US/blog/threat-research/2020/08/bypassing-masslogger-anti-analysis-man-in-the-middle-approach/_jcr_content.feed">
+<link rel="canonical" href="https://www.fireeye.com/blog/threat-research/2020/08/bypassing-masslogger-anti-analysis-man-in-the-middle-approach.html">
+<meta name="language" content="en">
+<meta name="locale" content="en_US">
+<meta http-equiv="cleartype" content="on">
+<meta name="HandheldFriendly" content="True">
+<meta name="MobileOptimized" content="320">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="We discuss and share a tool we used to analyze MassLogger, a fairly new credential stealer that employs a sophisticated technique to hinder static analysis.
+">
+
+<meta itemprop="name" content="Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach">
+<meta itemprop="description" content="We discuss and share a tool we used to analyze MassLogger, a fairly new credential stealer that employs a sophisticated technique to hinder static analysis.
+">
+<meta itemprop="image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta name="twitter:site" content="@FireEye">
+<meta name="twitter:title" content="Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach">
+<meta name="twitter:description" content="We discuss and share a tool we used to analyze MassLogger, a fairly new credential stealer that employs a sophisticated technique to hinder static analysis.
+">
+<meta name="twitter:creator" content="@FireEye">
+<meta name="twitter:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta property="og:title" content="Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.fireeye.com/blog/threat-research/2020/08/bypassing-masslogger-anti-analysis-man-in-the-middle-approach.html">
+<meta property="og:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+<meta property="og:description" content="We discuss and share a tool we used to analyze MassLogger, a fairly new credential stealer that employs a sophisticated technique to hinder static analysis.
+">
+<meta property="og:site_name" content="FireEye">
+<meta property="fb:admins" content="45127269202">
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery.min.js"></script>
+
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MVGC8KK');</script>
+
+
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite/csrf.min.js"></script>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_nav.min.js"></script>
+<script type="text/javascript">
+var cookiesOK = $.cookie("ec-privacy");
+var fdc =fdc || {};
+var onAccept = function () {
+	$.cookie("ec-privacy", "accept", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var onDecline = function () {
+	$.cookie("ec-privacy", "decline", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var ipLocation = (function () {
+	var banner ="#cookie-privacy-banner";
+
+	/* Show the privacy notification banner. */
+	var showBanner = function (banner) {
+		jQuery(banner).show();
+	};
+
+	/* Suppress the privacy notification banner. */
+	var hideBanner = function (banner) {
+		jQuery(banner).hide();
+	};
+
+	/* These are the country codes for the countries subject to EC privacy laws.
+	 * We will check to see if a visitor is coming from one of these countries.
+	 * If they are, we display a privacy notification banner. If not, we
+	 * do nothing. */
+	var countries = {
+		"AT": true,"BE": true,"BG": true,"HR": true,"CY": true,"CZ": true,"DK": true,
+		"EE": true,"FI": true,"FR": true,"DE": true,"GR": true,"HU": true,"IE": true,
+		"IT": true,"LV": true,"LT": true,"LU": true,"MT": true,"NL": true,"PL": true,
+		"PT": true,"RO": true,"SK": true,"SI": true,"ES": true,"SE": true,"GB": true
+	};
+	var defaultSite = "US";
+
+	var onSuccess = function (geoipResponse) {
+		fdc.geoipresponse=geoipResponse;
+		/* There's no guarantee that a successful response object
+		 * has any particular property, so we need to code defensively. */
+		if (!geoipResponse.country.iso_code) {
+			hideBanner(banner);
+			return;
+		}
+		//
+		if (location.host.indexOf("stage") >= 0 && geoipResponse.country.iso_code === "SG") {
+            geoipResponse.country.iso_code = "ES"
+        }
+		/* ISO country codes are in upper case. */
+		var code = geoipResponse.country.iso_code;
+			
+		
+		if ((countries[code]) && (cookiesOK == undefined)) {
+			showBanner(banner);
+		}
+		else {
+			hideBanner(banner);
+		}
+	};
+
+	/* We don't really care what the error is. */
+	var onError = function (error) {
+		hideBanner(banner);
+	};
+
+	return function () {
+		geoip2.country( onSuccess, onError );
+	};
+}());
+ipLocation();
+</script>
+<div class="htmlpassthru_836d htmlpassthru">
+
+<script type="text/javascript">
+    if (!String.prototype.includes) {
+        String.prototype.includes = function() {
+            return String.prototype.indexOf.apply(this, arguments) !== -1;
+        };
+    }
+var userAgent = navigator.userAgent,
+gomezAgent = userAgent.includes("GomezAgent"),
+prtgAgent = userAgent.includes("PRTG Network Monitor");
+
+if (gomezAgent || prtgAgent) {
+    cookiesOK = "decline";
+}
+
+if (cookiesOK != "decline") {
+    // Google Analytics was here. Now it's in Tealium and GTM.
+}
+// Temporary patch for AA issue.
+if(typeof _satellite == "undefined") {
+    _satellite = {};
+    _satellite.track = function(){};
+}
+</script>
+<style>
+@media ( max-width : 959px) {
+    .g04 .megamenu .n03-sub_table .n03-sub_cell, .g04 .megamenu .separator {
+        display: block;
+    }
+    .g04 .megamenu .n03_list-item-sub>.megamenu-cta {
+        padding: 0;
+    }
+    .g04 .megamenu .n03-sub_cell.n03-sub_cell-utility {
+        padding: 11px 0 11px 10px;
+    }
+}
+
+@media ( min-width : 48em) {
+    .cta-bar .n01 .n01_cell {
+        width: auto;
+    }
+}
+
+/* styles for the CTA bar test */
+.n01.n01v1 .n01_cell {
+    background-color: #222;
+    border: 1px solid #444;
+}
+
+.n01.n01v1 .n01_cell .ficon, .n01.n01v1 .n01_cell .n01_label, .n01.n01v1 .n01_text
+    {
+    color: #fff;
+}
+
+@media ( min-width : 48em) {
+    .n01.n01v1 .n01_cell {
+        background-color: transparent;
+        border: none;
+    }
+    .n01.n01v1 .n01_link {
+        background-color: #222;
+        border: 1px solid #444;
+        border-right: 0;
+    }
+}
+/* fix for new footer */
+.g03v1 .g03-s-i:after {
+    left: -3px;
+}
+/* fix for tables */
+span.nowrap {
+    white-space: nowrap;
+}
+/* fix for blog cta */
+.blog-cta {
+    border: 1px solid #dadadb;
+    background-color: #ebebed;
+    margin-bottom: 10px;
+    line-height: 0;
+}
+</style>
+<link rel="stylesheet" type="text/css" href="https://cloud.typography.com/6746836/6977592/css/fonts.css" />
+<link rel="stylesheet" type="text/css" href="/content/dam/fireeye-www/fw/css/patch.css?v=1" />
+<script type="text/javascript">
+var addthis_config = addthis_config||{};
+    addthis_config.data_track_clickback = false;
+var addthis_share = {
+   url: window.location.href
+};
+</script>
+<style>
+/* fix for IE */
+.uc-he01v1 .uc-he01_container .background {
+    max-height: 470px;
+    position: absolute;
+}
+.uc-he01v2 .uc-he01_container .background {
+    position: absolute;
+}
+@media (max-width: 48em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 320px;
+    }
+}
+@media (min-width: 54em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 600px;
+    }
+}
+</style>
+<style>
+/* Update the images used in the Table component. */
+.c09v1 .tablesorter-default .header, .c09v1 .tablesorter-default .tablesorter-header {
+background-position-x: calc(100% - 4px);
+background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjc2NDE0RUUyNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjc2NDE0RUUzNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkY2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI1MDA2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz567IGQAAAApklEQVR42mL8//8/A0kApAELlgJiG2xyTDjMcQFiayDmRJfApkEbiJWgiq2J0eCCxLYBYkF8GjAUAIEvLg2C2JwAdZ42Ng022DyJ7kwmJFOM8YS+INRABkZSI45sDSAnxRFQuweIj8D8cA+Iz+JR/B6kGD2UQALf8ZiOEawgU45iUQyy/SqumD4C1YgMNhNKS3vwGYBNw1WoM75jdSKpGYjkiAMIMAAPu279CuYueAAAAABJRU5ErkJggg==)
+}
+.c09v1 .tablesorter-default thead .headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerAsc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEY5Njc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZBNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0Rjc2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0Rjg2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5TuQesAAAAp0lEQVR42mL8//8/A0kApAELNgbicmxyuDTsBuJ3QCxIjIbQ/wjQQYyGu/9RgRI+DeX/McFuXBqUoO7GBkKxaZj5Hze4i67B5T9hAA5mRlIjjmwNSkAcR0DtHiA+wgTl3APis3gUvwcpBjGYkARBAt/xmM6ArgFkylEsikG2X8WmAWbLezSxzcgcJnzWYzMAm4arUGd8x+pEHPlBCohtsMmRHHEAAQYAbP+KkOIl8zUAAAAASUVORK5CYII=)}
+.c09v1 .tablesorter-default thead .headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerDesc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEZENjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZFNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkI2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0RkM2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6nOhWUAAAAqElEQVR42mL8//8/AymACYe4FBDbkKLBBYitgZiTGA3aQKwEVWxNjAYXJDbIWYL4NGAoAAJfXBoEsTkB6jxtbBpssHkS3ZlMSKYY4wl+QVgwM1Ir4ghqALnxPwFcDlYJchIUz/yPG9yFqUPWoATE73BoCMWmAYTLsSjejawGXQMD1HpkoERIQyiS4g50eWwaGKDOAPlHEF2OBUdwV0CD+j26BMkxDRBgALvSCpUQlZEGAAAAAElFTkSuQmCC)}
+.c09v1 .tablesorter-default thead .sorter-false {
+    background-image: none;
+}
+@media (max-width: 41.9125em){
+    .c09.c09v1.has-data-label tr>:not(:first-child):before {
+        width: auto; min-width: 35%;
+    }
+}
+</style>
+<script>
+$(document).ready(function(){
+    if(typeof(ipLocation) !== "undefined" && typeof fdc.geoipResponse === "undefined"){ipLocation();}
+    if(typeof fdc.geoipResponse !== "undefined"){showCountryNotification(fdc.geoipResponse);}
+    if(typeof fdc.geoipResponse !== "undefined" && typeof fdc.geoipResponse.country !== "undefined" && fdc.geoipResponse.country.is_in_european_union && ($.cookie("ec-privacy") == undefined)){jQuery("#cookie-privacy-banner").show();}
+});
+function showCountryNotification(geoipResponse) {
+	if (!geoipResponse.country || !geoipResponse.country.iso_code) {
+        return;
+    }
+	var code = geoipResponse.country.iso_code,
+	    langIndex = code === "FR" ? 2 : code === "DE" ? 3 : code === "JP" ? 4 : code === "KR" ? 5 : 1;
+	if (langIndex > 1) {
+		$('.c08_modal.lang').addClass("is-open");
+		$('.c08_modal.lang .col:nth-child(' + (langIndex - 1) + ')').show();
+		$('.c08_modal.lang, .c08_modal.lang [data-behavior="dismiss-c08"]').click(function(){
+		    $.cookie("country-notification", "decline", { path: "/", expires: 365 });
+		    closec08();
+		});
+		$('.c08_modal.lang .c08').click(function(e){
+		    e.stopPropagation();
+		});
+		if (($.cookie("country-notification") === "decline") || $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href").indexOf(".html") < 0) {
+		    closec08();
+		} else {
+		    $(".c08_modal.lang .btn").eq(langIndex - 2).attr("href", $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href"));
+		}
+	}
+}
+</script>
+<script>    
+     var _6SenseJsonObj = localStorage.getItem('_6senseCompanyDetails'),
+         _6SenseTime = localStorage.getItem('_6senseCompanyDetails-timestamp'),
+         isJsonStale = _6SenseTime === null ? true : Date.now() - parseInt(_6SenseTime) > 86400000; // 86400000 = 1 day in ms
+     
+     window._6si = window._6si || [];
+     window._6si.push(['enableEventTracking', true]);
+     window._6si.push(['setToken', '1322340356018696d853e0ac6f7ce3a2']);
+     window._6si.push(['setEndpoint', 'b.6sc.co']);
+     if(_6SenseJsonObj === null || isJsonStale){
+       window._6si.push(['enableCompanyDetails', true]);
+       window._6si.push(['setEpsilonKey', '325d6d60e24c7cfc3a782839d85ce08c8d3bb27c']);
+       localStorage.setItem('_6senseCompanyDetails-timestamp', Date.now());
+     }  
+    (function () {
+          var gd = document.createElement('script');
+      gd.type = 'text/javascript';
+      gd.async = true;
+      gd.src = '//j.6sc.co/6si.min.js';
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(gd, s);
+     })();
+</script>
+<script>
+    var jsonObj;
+
+    function targetPageParams() { 
+        jsonObj = localStorage.getItem('_6senseCompanyDetails');
+        if(jsonObj) {
+        	var jsonVal = JSON.parse(jsonObj);
+            return { 
+                "companyRevenueRange": jsonVal.company.revenue_range, 
+                "companyCountry": jsonVal.company.country, 
+                "companyIndustry": jsonVal.company.industry,
+                "companyName": jsonVal.company.name,
+                "companyRegion": jsonVal.company.region,
+                "companyDomain": jsonVal.company.domain,
+                "segments": JSON.stringify(jsonVal.segments)
+            }; 
+        }
+     }; 
+</script>
+<script>
+$(document).ready(function(){
+    $(".loadmore").on("click", function(){$(".list.parbase").addClass("no-max-height");});
+    // Don't show title text for textures.
+    $(".texture img").attr("title", "");
+});
+</script>
+<style>
+.no-max-height .c11v9 h4{
+    max-height: none !important;
+}
+.g04 #header-search .search-field_submit:after {
+    font-size: 9px;
+}
+.c11v8.hideLinkText .btn {
+    display: inline-block;
+}
+/* CTA fix */
+.g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+    padding: 0;
+    margin: 0 0 0 10px;
+    max-width: 1210px;
+}
+.g04 .megamenu-tab .has-inner-cta .col-wrap {
+    padding: 40px 0;
+}
+.g04 .n03-sub_container[data-columns="1"] .megamenu-cta {
+    width: 50%;
+}
+.g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+    width: 33.9%;
+}
+.g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell {
+    width: calc(50% - 60px);
+}
+.g04 .n03-sub_container[data-columns="3"] .megamenu-cta {
+    width: 25%;
+}
+.g04 .n03-sub_container[data-columns="4"] .megamenu-cta {
+    width: 20%;
+}
+.g04 .megamenu-cta h5 {
+    line-height: 1.4;
+}
+html .g04 header .megamenu-cta h5 {
+    font-weight: 500;
+    font-size: 15px;
+    color: #44474d;
+}
+html .g04 header .megamenu-cta p {
+    font-weight: 300;
+    color: #44474d;
+}
+.g04 .n03-sub_table > .megamenu-cta {
+    background: none;
+    padding: 0;
+}
+.g04 .megamenu-cta .n03_utility {
+    border: none;
+    height: 100%;
+}
+.g04 .megamenu-cta .n03_utility_cell {
+    display: block;
+    width: auto;
+    margin-left: 30px;
+}
+/* Un/re-comment to add/remove in the line to the left of the CTA in the megamenu. */
+.g04 .n03-sub_table .col-wrap:not(:last-child) .separator.disabled {
+    border-right-color: #ebebed;
+}
+
+/* Put a grid over the texture from a neighboring grid. */
+.force {
+    z-index: 15;
+    position: relative;
+}
+/* Remove the gradient above the tiles on blog pages and reduce the space there. */
+.iparsys + .l_container>div.gradient-top {
+    background-image: none;
+}
+.iparsys + .l_container>.gradient-top>div>.g {
+    padding: 0;
+}
+@media (min-width: 35em) {
+    .entries .highlightFirst .c11v9 .c11-image-div {
+        border-left: 1px solid #dadadb;
+        border-right: 1px solid #dadadb;
+    }
+}
+@media (max-width: 1024px) {
+    .uc-he01v2 .panel .asset .image img {
+        max-height: 200px;
+	max-width: 300px;
+    }
+}
+/* mobile view for MegaMenu CTA. */
+@media (max-width: 1024px) {
+    .g04 .megamenu-tab.open .n03_list-item-sub.has-inner-cta {
+        padding-bottom: 0;
+    }
+    .g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell,
+    .g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+        width: 100%;
+        display: block;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+        margin: 0;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container .col-wrap {
+        padding: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell {
+        margin-left: 15px;
+        margin-right: 22px;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(1) {
+        padding-bottom: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(2) {
+        padding-top: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell h5,
+    .g04 .megamenu-cta .n03_utility_cell p {
+        font-size: 12px;
+    }
+    .content-2-par .megamenus .n03-sub_table .megamenu-cta {
+        border-radius: 0;
+    }
+}
+/* Training pages side design. */
+  .training-side-box {background: url('/content/dam/fireeye-www/brand/homepage-banner-images/hpb-bg-testimonial-red.jpg') left no-repeat; background-size: cover; padding:30px; border: 1px solid #dadadb; margin-bottom: 20px;}
+  .training-side-text {color: #ffffff;}
+  .training-side-text a:hover {color: #ffffff; text-decoration: underline;}
+
+/* Avoid column breaks in ordered lists. */
+  .c00 ol > li {page-break-inside: avoid; margin-bottom: 15px;}
+
+/* Safari needs this on html to stop side scrolling, not just on the body. */
+html {overflow-x:hidden;}
+/* Make sure the footer is above a texture that precedes it. */
+#g03-footer {z-index: 725;}
+/* Allow border for linked images. */
+.border>a>img {border: 1px solid #dadadb;}
+/* Allows for easy scrollable text boxes on blog pages right in the Blog Text component. */
+table.limitedHeight td {
+    height: 350px;
+    display: block;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding-bottom: 0;
+}
+/* Fix for edge case in Safari where page title in breadcrumbs wraps when the title is just the right length. */
+.g02_list_item:last-child span {
+    min-width: 360px;
+    display: block;
+}
+</style></div>
+
+<link rel="stylesheet" href="/etc/designs/fireeye-www/clientlibs_fw-2019.min.css" type="text/css">
+<link rel="stylesheet" href="/etc/clientlibs/fireeye-blog/clientlibs_base.min.css" type="text/css">
+<link rel="icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+<link rel="shortcut icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" data-redesign="redesign-2019"><script type="text/javascript">window.Granite = window.Granite || {}; window.Granite.csrf = true;</script>
+
+
+<div class="clientcontext parbase"><script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/utils.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/jquery.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/shared.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/lodash/modern.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/cq/personalization/clientlib/personalization/kernel.min.js"></script>
+<script type="text/javascript">
+    $CQ(function() {
+        CQ_Analytics.SegmentMgr.loadSegments("\/etc\/segmentation");
+        CQ_Analytics.ClientContextUtils.init("\/etc\/clientcontext\/default", "\/content\/fireeye\u002Dwww\/en_US\/blog\/threat\u002Dresearch\/2020\/08\/bypassing\u002Dmasslogger\u002Danti\u002Danalysis\u002Dman\u002Din\u002Dthe\u002Dmiddle\u002Dapproach");
+
+        
+    });
+</script>
+</div>
+
+
+<div class="masthead_v2 masthead-v2">
+<div class="g04 masthead g04v1">
+
+
+<div class="bottom-bar">
+<div class="tab">
+<span class="ficon ficon-warning"></span>
+<p><a class="contact_bar" href="/company/incident-response.html">Report an Incident</a></p>
+</div>
+<div class="tab">
+<span class="ficon ficon-phone2"></span>
+<p><a class="contact_bar" href="/company/contact-us.html">Contact Us</a></p>
+</div>
+</div>
+<div class="cta-bar">
+<div class="content-well">
+<ul>
+<li>
+<a class="contact_bar" href="/company/contact-us.html">
+<span class="g04_label">Contact Us</span><span class="g04_icon"><span class="ficon ficon-phone3"></span></span>
+</a>
+</li>
+<li style="display: none;" id="liveagent_button_online_573a00000008kP3">
+<a class="contact_bar" href="javascript://Chat" onclick="liveagent.startChat('573a00000008kP3')">
+<span class="g04_label">Chat with an Expert</span><span class="g04_icon"><span class="ficon ficon-chat"></span></span>
+</a>
+</li>
+<li class="red">
+<a class="contact_bar" href="/company/incident-response.html">
+<span class="g04_label">Report an Incident</span><span class="g04_icon"><span class="ficon ficon-incident"></span></span>
+</a>
+</li>
+</ul>
+</div>
+</div>
+
+<script type="text/javascript">
+    if (!window._laq) { window._laq = []; }
+    window._laq.push(function(){
+    	liveagent.showWhenOnline('573a00000008kP3', document.getElementById('liveagent_button_online_573a00000008kP3'));
+    });
+</script>
+<script type="text/javascript" src="https://c.la2c2.salesforceliveagent.com/content/g/js/34.0/deployment.js"></script>
+<script type="text/javascript">
+    liveagent.init("https://d.la2c2.salesforceliveagent.com/chat", "572a0000000H8aJ", "00D3000000063LS");
+</script><header role="banner" itemscope itemtype="http://schema.org/WPHeader">
+<div class="language-and-search"> <div class="search">
+<div class="content-searchbox searchbox">
+<a class="g01_options-option option-search" href="#header-search" data-for="q" data-behavior="showHeaderMenu focusField">Search</a>
+<div class="option-menu option-menu_search" id="header-search">
+<form method="get" action="/search.html">
+<fieldset class="search-field" title="Search FireEye.com">
+<label class="search-field_label" for="q">Search FireEye.com</label>
+<input class="input-text search-field_text" type="text" name="q" id="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-locale="en_US" placeholder="Search FireEye.com">
+<div id="searchboxsuggestions"></div>
+<button class="btn btn-secondary search-field_submit" type="submit">Go</button>
+</fieldset>
+</form>
+</div>
+</div>
+</div>
+</div>
+<div class="logo-and-megamenu">
+<div class="logo" itemscope itemtype="https://schema.org/Brand">
+<a href="https://www.fireeye.com"><img src="/content/dam/fireeye-www/fw/images/fe-logo-color.svg" alt="FireEye" itemprop="logo" class="fireeye" /></a>
+</div>
+<nav class="megamenu">
+<ul><li class="megamenu-tab" data-curry="/blog.html" data-link="/products.html">
+<h4 class="megamenu-title">
+<a href="/products.html" itemprop="url" class="MegaMenus">Products</a>
+</h4>
+<div class="content-0-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Enterprise Security</h4><ul><li itemprop="url"><a href="/products/helix.html" itemprop="name" class="MegaMenus">Helix Security Platform</a></li>
+<li itemprop="url"><a href="/products/network-security.html" itemprop="name" class="MegaMenus">Network Security and Forensics</a></li>
+<li itemprop="url"><a href="/products/endpoint-security.html" itemprop="name" class="MegaMenus">Endpoint Security</a></li>
+<li itemprop="url"><a href="/products/email-security.html" itemprop="name" class="MegaMenus">Email Security</a></li>
+<li itemprop="url"><a href="/products/cloudvisory.html" itemprop="name" class="MegaMenus">Cloudvisory</a></li>
+<li itemprop="url"><a href="/products/detection-on-demand.html" itemprop="name" class="MegaMenus">Detection On Demand</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Security For:</h4><ul><li itemprop="url"><a href="/products/cloud-security.html" itemprop="name" class="MegaMenus">Cloud</a></li>
+<li itemprop="url"><a href="/products/financial-services.html" itemprop="name" class="MegaMenus">Financial Services</a></li>
+<li itemprop="url"><a href="/products/government.html" itemprop="name" class="MegaMenus">Government</a></li>
+<li itemprop="url"><a href="/products/healthcare.html" itemprop="name" class="MegaMenus">Healthcare</a></li>
+<li itemprop="url"><a href="/products/industrial-systems-and-critical-infrastructure-security.html" itemprop="name" class="MegaMenus">Industrial Control Systems</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  @media (max-width: 1024px) {
+    .megamenu-tab .parsys .megamenus .megamenu-cta {
+      display: none;
+    }
+  }
+  .content-0-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-customers.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 0 60px;
+    border: 0 solid #ffffff;
+  }
+  .content-0-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Customer Stories</h5>
+<p>Explore some of the companies who are succeeding with&nbsp;FireEye.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-2E5799 compact" href="/customers.html" id="learn-more-intel">Read the Stories</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="view-all-bar">
+<a href="/products.html" class="MegaMenus">
+VIEW ALL PRODUCTS</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/mandiant.html">
+<h4 class="megamenu-title">
+<a href="/mandiant.html" itemprop="url" class="MegaMenus">Mandiant Solutions</a>
+</h4>
+<div class="content-1-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<ul><li itemprop="url"><a href="/mandiant/threat-intelligence.html" itemprop="name" class="MegaMenus">Threat Intelligence</a></li>
+<li itemprop="url"><a href="/mandiant/security-validation.html" itemprop="name" class="MegaMenus">Security Validation</a></li>
+<li itemprop="url"><a href="/mandiant/managed-detection-and-response.html" itemprop="name" class="MegaMenus">Managed Defense</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<ul><li itemprop="url"><a href="/mandiant/incident-response.html" itemprop="name" class="MegaMenus">Incident Response</a></li>
+<li itemprop="url"><a href="/mandiant/cyber-security-consulting.html" itemprop="name" class="MegaMenus">Cyber Security Consulting</a></li>
+<li itemprop="url"><a href="/mandiant/expertise-on-demand.html" itemprop="name" class="MegaMenus">Expertise On Demand</a></li>
+<li itemprop="url"><a href="/services/training.html" itemprop="name" class="MegaMenus">Cyber Security Training</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-1-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-mandiant.jpg) center no-repeat;
+    background-size: cover;
+    background-position: bottom;
+    border-radius: 60px 0 0 60px;
+    border: 0 solid #ffffff;}
+  .content-1-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Mandiant Advantage</h5>
+<p>The new standard in threat intelligence.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-B2282D expand" href="/mandiant/advantage.html">Learn More</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="view-all-bar">
+<a href="/mandiant.html" class="MegaMenus">
+VIEW ALL Mandiant Solutions</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/customers.html">
+<h4 class="megamenu-title">
+<a href="/company/customers.html" itemprop="url" class="MegaMenus">Customers</a>
+</h4>
+<div class="content-2-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Customers</h4><ul><li itemprop="url"><a href="/customers.html" itemprop="name" class="MegaMenus">Customer Stories</a></li>
+<li itemprop="url"><a href="/company/customers.html" itemprop="name" class="MegaMenus">Customer Success</a></li>
+<li itemprop="url"><a href="https://fireeyecommunity.force.com/CustomerCommunity/s/" target="_blank" itemprop="name" class="MegaMenus">Customer Portal</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Get Support</h4><ul><li itemprop="url"><a href="/support/contacts.html" itemprop="name" class="MegaMenus">Contact Support</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Find Answers</h4><ul><li itemprop="url"><a href="/support/programs.html" itemprop="name" class="MegaMenus">Support Programs</a></li>
+<li itemprop="url"><a href="/support/notices.html" itemprop="name" class="MegaMenus">Support Notices</a></li>
+<li itemprop="url"><a href="/support/products.html" itemprop="name" class="MegaMenus">Supported Products</a></li>
+<li itemprop="url"><a href="https://community.fireeye.com/s/support-community" target="_blank" itemprop="name" class="MegaMenus">Communities</a></li>
+<li itemprop="url"><a href="https://docs.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">Documentation Portal</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-2-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-support.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-2-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Support</h5>
+<p>A global network of support experts available 24x7. We offer simple and flexible support programs to maximize the value of your FireEye products and services.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-2E5799 compact" href="/support.html">Get Support</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/partners.html">
+<h4 class="megamenu-title">
+<a href="/partners.html" itemprop="url" class="MegaMenus">Partners</a>
+</h4>
+<div class="content-3-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Partners</h4><ul><li itemprop="url"><a href="/partners.html" itemprop="name" class="MegaMenus">Partners Overview</a></li>
+<li itemprop="url"><a href="/partners/resellers.html" itemprop="name" class="MegaMenus">FireEye Affinity Resellers</a></li>
+<li itemprop="url"><a href="/partners/strategic-technology-partners.html" itemprop="name" class="MegaMenus">Technology Partners</a></li>
+<li itemprop="url"><a href="/partners/strategic-technology-partners/cyber-risk-insurance.html" itemprop="name" class="MegaMenus">Cyber Risk Partners</a></li>
+<li itemprop="url"><a href="/partners/global-solution-providers.html" itemprop="name" class="MegaMenus">Global Solution Providers</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Partner Resources</h4><ul><li itemprop="url"><a href="https://partners.fireeye.com/directory/" target="_blank" itemprop="name" class="MegaMenus">Partner Locator</a></li>
+<li itemprop="url"><a href="http://training.fireeye.com/" target="_blank" itemprop="name" class="MegaMenus">Partner Education Center</a></li>
+<li itemprop="url"><a href="/support.html" itemprop="name" class="MegaMenus">Support</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Partnering with FireEye</h4><ul><li itemprop="url"><a href="https://www2.fireeye.com/Partner-Request-LP-New.html" target="_blank" itemprop="name" class="MegaMenus">Become a Partner</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-3-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-partners.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-3-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Partner Portal</h5>
+<p>Access for our registered Partners to help you be successful with FireEye.
+Collateral, deal registration, request for funds, training, enablement, and more.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-F99B1C compact mm-cta" href="https://partners.fireeye.com/" target="_blank">Partner Portal</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/current-threats.html">
+<h4 class="megamenu-title">
+<a href="/current-threats.html" itemprop="url" class="MegaMenus">Resources</a>
+</h4>
+<div class="content-4-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub " id="mandiant-mega-menu">
+<div class="n03-sub_container" data-columns="3">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Intelligence Briefings and Bulletins</h4><ul><li itemprop="url"><a href="/current-threats/annual-threat-report.html" itemprop="name" class="MegaMenus">Annual Threat Reports</a></li>
+<li itemprop="url"><a href="/current-threats/threat-intelligence-reports.html" itemprop="name" class="MegaMenus">Threat Intelligence Reports</a></li>
+<li itemprop="url"><a href="/current-threats/reports-by-industry.html" itemprop="name" class="MegaMenus">Threat Intelligence Reports by Industry</a></li>
+<li itemprop="url"><a href="/current-threats/apt-groups.html" itemprop="name" class="MegaMenus">APT Groups</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Blogs</h4><ul><li itemprop="url"><a href="/blog.html" itemprop="name" class="MegaMenus">Read the FireEye Blogs</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Cyber Security</h4><ul><li itemprop="url"><a href="/current-threats/what-is-cyber-security.html" itemprop="name" class="MegaMenus">What is Cyber Security?</a></li>
+<li itemprop="url"><a href="/campaigns/clarity-in-the-cloud.html" itemprop="name" class="MegaMenus">Clarity in the Cloud</a></li>
+<li itemprop="url"><a href="/campaigns/security-effectiveness.html" itemprop="name" class="MegaMenus">Security Effectiveness and Validation</a></li>
+<li itemprop="url"><a href="https://vision.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">The Vision – Digital Magazine</a></li>
+<li itemprop="url"><a href="/company/webinars.html" itemprop="name" class="MegaMenus">Webinars</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Free Tools & Apps</h4><ul><li itemprop="url"><a href="/services/freeware.html" itemprop="name" class="MegaMenus">Free Software Downloads</a></li>
+<li itemprop="url"><a href="https://fireeye.market" target="_blank" itemprop="name" class="MegaMenus">FireEye Market</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Training</h4><ul><li itemprop="url"><a href="/services/training.html" itemprop="name" class="MegaMenus">Education and Training</a></li>
+</ul></div>
+</div>
+</div><div class="separator disabled"></div></div></div>
+</div>
+<div class="view-all-bar">
+<a href="/current-threats.html" class="MegaMenus">
+VIEW ALL RESOURCES</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/company.html">
+<h4 class="megamenu-title">
+<a href="/company.html" itemprop="url" class="MegaMenus">Company</a>
+</h4>
+<div class="content-5-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">About Us</h4><ul><li itemprop="url"><a href="/company.html" itemprop="name" class="MegaMenus">Why FireEye?</a></li>
+<li itemprop="url"><a href="/company/awards.html" itemprop="name" class="MegaMenus">Awards and Honors</a></li>
+<li itemprop="url"><a href="/company/leadership.html" itemprop="name" class="MegaMenus">Leadership</a></li>
+<li itemprop="url"><a href="/company/board-of-directors.html" itemprop="name" class="MegaMenus">Board of Directors</a></li>
+<li itemprop="url"><a href="http://investors.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">Investor Relations</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Contact</h4><ul><li itemprop="url"><a href="/company/contact-us.html" itemprop="name" class="MegaMenus">Contact FireEye</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>.g04 .megamenu-list a{padding-right:38px;line-height:1.358;padding-bottom:2px}@media (min-width:60em){.g04 .n03-sub_container{padding-bottom:23px}}@media(min-width:64em) and (max-width:64.5em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:14px}}@media (min-width:68em) and (max-width:69em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:30px}}</style></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">News and Events</h4><ul><li itemprop="url"><a href="/company/newsroom.html" itemprop="name" class="MegaMenus">Newsroom</a></li>
+<li itemprop="url"><a href="/company/press-releases.html" itemprop="name" class="MegaMenus">Press Releases</a></li>
+<li itemprop="url"><a href="/company/events.html" itemprop="name" class="MegaMenus">Events</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Careers</h4><ul><li itemprop="url"><a href="/company/jobs.html" itemprop="name" class="MegaMenus">Job Opportunities</a></li>
+<li itemprop="url"><a href="/company/jobs/internships.html" itemprop="name" class="MegaMenus">Internships</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-5-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-vision.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-5-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>The Vision</h5>
+<p>Read our digital magazine providing expert-authored stories, information, unique insights, and advice on cyber security.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-B2282D compact" href="https://vision.fireeye.com/" target="_blank">Get Your Copy</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li></ul>
+</nav>
+</div>
+<span class="burger ficon ficon-menu"></span>
+</header>
+</div>
+</div>
+
+
+<div id="cookie-privacy-banner" style="display:none;">
+<div class="l_container">
+<div class="g">
+<div class="g-u-1">
+<div class="g-content">
+<div class="cookie-banner">
+<p class="cookie-text">
+To give you the best possible experience, this site uses cookies.&nbsp; Find out more on <a href='/company/privacy.html' target='_blank'>how we use cookies</a>.<button type="button" class="cookie-button highlighted" onclick='javascript:onAccept();'>Accept</button>
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="breadcrumbs breadcrumb">
+<div class="l_container is-full">
+<div class="g02 g02v0" id="g02-breadcrumbs">
+<div class="g02_container">
+<div class="g02_content">
+<ul class="list-inline g02_list" itemscope itemtype="http://schema.org/BreadcrumbList">
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/"><span itemprop="name">Home</span></a><meta itemprop="position" content="1" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog.html"><span itemprop="name">FireEye Blogs</span></a><meta itemprop="position" content="2" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog/threat-research.html"><span itemprop="name">Threat Research</span></a><meta itemprop="position" content="3" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><span itemprop="name">Bypassing MassLogger Anti-Analysis — a Man-in-the-...<meta itemprop="position" content="6" /></span>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<main class="l_main" role="main">
+<div class="l_container">
+<div class="g g-alt ">
+<div class="g-u-17-24 l_g-u-1">
+<div class="g-content">
+<div class="blog main"><div itemscope itemtype="http://schema.org/BlogPosting">
+<div class="summary entrytextteaser">
+</div>
+<div class="title entrytitle">
+<h2 class="category-name">Threat Research</h2>
+<h1 class="blogpostlanding red" itemprop="headline">Bypassing MassLogger Anti-Analysis — a Man-in-the-Middle Approach</h1>
+<div class="c00 c00v0 entry-meta-block selfClear">
+<time class="entry-date" itemprop="datePublished" content="2020-08-06T19:15:00Z">August 06, 2020</time>
+<span class="sep"> | </span>
+<span class="by-author" itemscope itemptype="http://schema.org/Person">by <a href="/blog/threat-research.html/category/etc/tags/fireeye-blog-authors/nhan-huynh" title="View all entries filed under 'Fireeye - Authors : Nhan Huynh'">Nhan Huynh</a><meta itemprop="author" content="Nhan Huynh" /></span>
+<div class="tags-section">
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/reverse-engineering"> <span class="tagbutton">Reverse Engineering</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/malware-analysis"> <span class="tagbutton">Malware Analysis</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/FLARE"> <span class="tagbutton">FLARE</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/evasion"> <span class="tagbutton">Evasion</span></a><br class="on-mobile" />
+</div>
+</div>
+</div>
+<div class="par parsys"><div class="entrytext section"><div class="c00 c00v0" itemprop="articleBody">
+<p>The FireEye Front Line Applied Research &amp; Expertise (FLARE) Team attempts to always stay on top of the most current and emerging threats. As a member of the FLARE Reverse Engineer team, I recently received a request to analyze a fairly new credential stealer identified as MassLogger. Despite the lack of novel functionalities and features, this sample employs a sophisticated technique that replaces the Microsoft Intermediate Language (MSIL) at run time to hinder static analysis. At the time of this writing, there is only <a href="https://cert-agid.gov.it/wp-content/uploads/2020/06/CERT-AGID_MassLogger-20200609.pdf">one publication</a> discussing the MassLogger obfuscation technique in some detail. Therefore, I decided to share my research and <a adhocenable="false" href="https://github.com/fireeye/jitm">tools to help analyze MassLogger and other malware using a similar technique</a>. Let us take a deep technical dive into the MassLogger credential stealer and the .NET runtime.</p>
+<h4>Triage</h4>
+<p>MassLogger is a .NET credential stealer. It starts with a launcher (<span class="code">6b975fd7e3eb0d30b6dbe71b8004b06de6bba4d0870e165de4bde7ab82154871</span>) that uses simple anti-debugging techniques which can be easily bypassed when identified. This first stage loader eventually XOR-decrypts the second stage assembly which then decrypts, loads and executes the final MassLogger payload (<span class="code">bc07c3090befb5e94624ca4a49ee88b3265a3d1d288f79588be7bb356a0f9fae</span>) named <span class="code">Bin-123.exe</span>. The final payload can be easily extracted and executed independently. Therefore, we will focus exclusively on this final payload where the main anti analysis technique is used.</p>
+<p>Basic static analysis doesn’t reveal anything too exciting. We notice some interesting strings, but they are not enough to give us any hints about the malware’s capabilities. Executing the payload in a controlled environment shows that the sample drops a log file that identifies the malware family, its version, and most importantly some configuration options. A sample log file is described in Figure 1. We can also extract some interesting strings from memory as the sample runs. However, basic dynamic analysis is not sufficient to extract all host-based indicators (HBIs), network-based indicators (NBIs) and complete malware functionality. We must perform a deeper analysis to better understand the sample and its capabilities.</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><p><span class="code">User Name: user<br>
+IP: 127.0.0.1<br>
+Location: United States<br>
+OS: Microsoft Windows 7 Ultimate 32bit<br>
+CPU: Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz<br>
+GPU: VMware SVGA 3D<br>
+AV: NA<br>
+Screen Resolution: 1438x2460<br>
+Current Time: 6/17/2020 1:23:30 PM<br>
+MassLogger Started: 6/17/2020 1:23:21 PM<br>
+Interval: 2 hour<br>
+MassLogger Process: C:\Users\user\Desktop\Bin-123.exe<br>
+MassLogger Melt: false<br>
+MassLogger Exit after delivery: false<br>
+As Administrator: False<br>
+Processes:<br>
+Name:cmd, Title:Administrator: FakeNet-NG - fakenet<br>
+Name:iexplore, Title:FakeNet-NG - Internet Explorer<br>
+Name:dnSpy-x86, Title:dnSpy v6.0.5 (32-bit)<br>
+Name:cmd, Title:Administrator: C:\Windows\System32\cmd.exe<br>
+Name:ProcessHacker, Title:Process Hacker [WIN-R23GG4KO4SD\user]+ (Administrator)</span></p>
+<p><span class="code">### WD Exclusion ###<br>
+Disabled</span></p>
+<p><span class="code">### USB Spread ###<br>
+Disabled</span></p>
+<p><span class="code">### Binder ###<br>
+Disabled</span></p>
+<p><span class="code">### Window Searcher ###<br>
+Disabled</span></p>
+<p><span class="code">### Downloader ###<br>
+Disabled</span></p>
+<p><span class="code">### Bot Killer ###<br>
+Disabled</span></p>
+<p><span class="code">### Search And Upload ###<br>
+Disabled</span></p>
+<p><span class="code">### Telegram Desktop ###<br>
+Not Installed</span></p>
+<p><span class="code">### Pidgin ###<br>
+Not Installed</span></p>
+<p><span class="code">### FileZilla ###<br>
+Not Installed</span></p>
+<p><span class="code">### Discord Tokken ###<br>
+Not Installed</span></p>
+<p><span class="code">### NordVPN ###<br>
+Not Installed</span></p>
+<p><span class="code">### Outlook ###<br>
+Not Installed</span></p>
+<p><span class="code">### FoxMail ###<br>
+Not Installed</span></p>
+<p><span class="code">### Thunderbird ###<br>
+Not Installed</span></p>
+<p><span class="code">### QQ Browser ###<br>
+Not Installed</span></p>
+<p><span class="code">### FireFox ###<br>
+Not Installed</span></p>
+<p><span class="code">### Chromium Recovery ###<br>
+Not Installed</span></p>
+<p><span class="code">### Keylogger And Clipboard ###</span></p>
+<p><span class="code">&nbsp;</span></p>
+<p><span class="code">[20/06/17]&nbsp; [Welcome to Chrome - Google Chrome]<br>
+[ESC]</span></p>
+<p><span class="code">[20/06/17]&nbsp; [Clipboard]<br>
+Vewgbprxvhvjktmyxofjvpzgazqszaoo</span></p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 1: Sample MassLogger log</span></p>
+<h4>Just Decompile It</h4>
+<p>Like many other .NET malwares, MassLogger obfuscates all of its methods names and even the method control flow. We can use <span class="code">de4dot</span> to automatically deobfuscate the MassLogger payload. However, looking at the deobfuscated payload, we quickly identify a major issue: Most of the methods contain almost no logic as shown in Figure 2.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure2.png" alt=""><br>
+<span class="type-XS">Figure 2: dnSpy showing empty methods</span></p>
+<p>Looking at the original MassLogger payload in <span class="code">dnSpy</span>’s Intermediate Language (IL) view confirms that most methods do not contain any logic and simply return nothing. This is obviously not the real malware since we already observed with dynamic analysis that the sample indeed performs malicious activities and logging to a log file. We are left with a few methods, most notably the method with the token <span class="code">0x0600049D</span> called first thing in the main module constructor.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure3.png" alt=""><br>
+<span class="type-XS">Figure 3: dnSpy IL view showing the method's details</span></p>
+<p>Method <span class="code">0x0600049D</span> control flow has been obfuscated into a series of switch statements. We can still somewhat follow the method’s high-level logic with the help of <span class="code">dnSpy</span> as a debugger. However, fully analyzing the method would be very time consuming. Instead, when first analyzing this payload, I chose to quickly scan over the entire module to look for hints. Luckily, I spot a few interesting strings I missed during basic static analysis: <span class="code">clrjit.dll</span>, <span class="code">VirtualAlloc</span>, <span class="code">VirtualProtect</span> and <span class="code">WriteProcessMemory</span> as seen in Figure 4.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure4.png" alt=""><br>
+<span class="type-XS">Figure 4: Interesting strings scattered throughout the module</span></p>
+<p>A quick internet search for “<span class="code">clrjit.dll</span>” and “<span class="code">VirtualProtect</span>” quickly takes us to <a href="https://xoofx.com/blog/2018/04/12/writing-managed-jit-in-csharp-with-coreclr/">a</a> <a href="https://georgeplotnikov.github.io/articles/just-in-time-hooking.html">few</a> <a href="http://antonioparata.blogspot.com/2018/02/analyzing-nasty-net-protection-of.html">publications</a> describing a technique commonly referred to as Just-In-Time Hooking. In essence, JIT Hooking involves installing a hook at the <span class="code">compileMethod()</span> function where the JIT compiler is about to compile the MSIL into assembly (x86, x64, etc). With the hook in place, the malware can easily replace each method body with the real MSIL that contains the original malware logic. To fully understand this process, let’s explore the .NET executable, the .NET methods, and how MSIL turns into x86 or x64 assembly.</p>
+<h4>.NET Executable Methods</h4>
+<p>A .NET executable is just another binary following the Portable Executable (PE) format. There are plenty of resources describing the <a href="https://bytepointer.com/resources/pietrek_peering_inside_pe.htm">PE</a> <a href="https://docs.microsoft.com/en-us/archive/msdn-magazine/2002/february/inside-windows-win32-portable-executable-file-format-in-detail">file</a> <a href="https://docs.microsoft.com/en-us/windows/win32/debug/pe-format?redirectedfrom=MSDN">format</a>, the <a href="https://www.ntcore.com/files/dotnetformat.htm">.NET metadata</a> and the .NET token tables in detail. I recommend our readers to take a quick detour and refresh their memory on those topics before continuing. This post won’t go into further details but will focus on the .NET methods instead.</p>
+<p>Each .NET method in a .NET assembly is identified by a token. In fact, everything in a .NET assembly, whether it’s a module, a class, a method prototype, or a string, is identified by a token. Let’s look at method identified by the token <span class="code">0x0600049D</span>, as shown in Figure 5. The most-significant byte (<span class="code">0x06</span>) tells us that this token is a method token (type <span class="code">0x06</span>) instead of a module token (type <span class="code">0x00</span>), a TypeDef token (type <span class="code">0x02</span>), or a LocalVarSig token (type <span class="code">0x11</span>), for example. The three least significant bytes tell us the ID of the method, in this case it’s <span class="code">0x49D</span> (<span class="code">1181</span> in decimal). This ID is also referred to as the Method ID (MID) or the Row ID of the method.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure5.png" alt=""><br>
+<span class="type-XS">Figure 5: Method details for method 0x0600049D</span></p>
+<p>To find out more information about this method, we look within the tables of the “<span class="code">#~</span>” stream of the .NET metadata streams in the .NET metadata directory as show in Figure 6. We traverse to the entry number <span class="code">1181</span> or <span class="code">0x49D</span> of the Method table to find the method metadata which includes the Relative Virtual Address (RVA) of the method body, various flags, a pointer to the name of the method, a pointer to the method signature, and finally, an pointer to the parameters specification for this method. <b>Please note that the MID starts at 1 instead of 0</b>.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure6.png" alt=""><br>
+<span class="type-XS">Figure 6: Method details from the PE file header</span></p>
+<p>For method <span class="code">0x0600049D</span>, the RVA of the method body is <span class="code">0xB690</span>. This RVA belongs to the <span class="code">.text</span> section whose RVA is <span class="code">0x2000</span>. Therefore, this method body begins at <span class="code">0x9690</span> (<span class="code">0xB690</span> – <span class="code">0x2000</span>) bytes into the <span class="code">.text</span> section. The <span class="code">.text</span> section starts at <span class="code">0x200</span> bytes into the file according to the section header. As a result, we can find the method body at <span class="code">0x9890</span> (<span class="code">0x9690</span> + <span class="code">0x200</span>) bytes offset into the file. We can see the method body in Figure 7.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure7.png" alt=""><br>
+<span class="type-XS">Figure 7: Method 0x0600049D body in a hex editor</span></p>
+<h4>.NET Method Body</h4>
+<p>The .NET method body starts with a method body header, followed by the MSIL bytes. There are two types of .NET methods: a tiny method and a fat method. Looking at the first byte of the method body header, the two least-significant bits tell us if the method is tiny (where the last two bits are <span class="code">10</span>) or fat (where the last two bits are <span class="code">11</span>).</p>
+<p><i>.NET Tiny Method</i></p>
+<p>Let’s look at method <span class="code">0x06000495</span>. Following the same steps described earlier, we check the row number <span class="code">0x495</span> (<span class="code">1173</span> in decimal) of the Method table to find the method body RVA is <span class="code">0x7A7C</span> which translates to <span class="code">0x5C7C</span> as the offset into the file. At this offset, the first byte of the method body is <span class="code">0x0A</span> (<span class="code">0000</span> <span class="code">1010</span> in binary).</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure8.png" alt=""><br>
+<span class="type-XS">Figure 8: Method 0x06000495 metadata and body</span></p>
+<p>Since the two least-significant bits are <span class="code">10</span>, we know that <span class="code">0x06000495</span> is a tiny method. For a tiny method, the method body header is <b>one byte long</b>. The <b>two least-significant bits</b> are <span class="code">10</span> to indicate that this is the tiny method, and the <b>six most-significant bits</b> tell us the size of the MSIL to follow (i.e. how long the MSIL is). In this case, the six most-significant bits are <span class="code">000010</span>, which tells us the method body is two bytes long. The entire method body for <span class="code">0x06000495</span> is <span class="code">0A</span> <span class="code">16</span> <span class="code">2A</span>, followed by a NULL byte, which has been disassembled by <span class="code">dnSpy</span> as shown in Figure 9.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure9.png" alt=""><br>
+<span class="type-XS">Figure 9: Method 0x06000495 in dnSpy IL view</span></p>
+<p><i>.NET Fat Method</i></p>
+<p>Coming back to method <span class="code">0x0600049D</span> (entry number <span class="code">1181</span>) at offset <span class="code">0x9890</span> into the file (RVA <span class="code">0xB690</span>), the first byte of the method body is <span class="code">0x1B</span> (or <span class="code">0001</span> <span class="code">1011</span> in binary). The two least-significant bits are <span class="code">11</span>, indicating that <span class="code">0x0600049D</span> is a fat method. The fat method body header is <b>12-byte long</b> whose structure is beyond the scope of this blog post. The field we really care about is a <b>four-byte field</b> at <b>offset <span class="code">0x04</span> byte</b> into this fat header. This field specifies the length of the MSIL that follows this method body header. For method <span class="code">0x0600049D</span>, the entire method body header is “<span class="code">1B 30 08 00 <b>A8 61 00 00</b> 75 00 00 11</span>” and the length of the MSIL to follow is “<span class="code">A8 61 00 00</span>” or <span class="code">0x61A8</span> (<span class="code">25000</span> in decimal) bytes.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure10.png" alt=""><br>
+<span class="type-XS">Figure 10: Method 0x0600049D body in a hex editor</span></p>
+<h4>JIT Compilation</h4>
+<p>Whether a method is tiny or fat, it does not execute as is. When the .NET runtime needs to execute a method, it follows exactly the process described earlier to find the method body which includes the method body header and the MSIL bytes. If this is the first time the method needs to run, the .NET runtime invokes the Just-In-Time compiler which takes the MSIL bytes and compiles them into x86 or x64 assembly depending on whether the current process is 32- or 64-bit. After some preparation, the JIT compiler eventually calls the <span class="code">compileMethod()</span> function. The entire .NET runtime project is open-sourced and <a href="https://github.com/dotnet/runtime">available on GitHub</a>. We can easily find out that the <span class="code">compileMethod()</span> function has the following prototype (Figure 11):</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><span class="code">CorJitResult __stdcall compileMethod (<br>
+&nbsp; &nbsp; ICorJitInfo&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *comp,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* IN */<br>
+&nbsp; &nbsp; CORINFO_METHOD_INFO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *<b>info</b>,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* IN */<br>
+&nbsp; &nbsp; unsigned /* code:CorJitFlag */&nbsp;&nbsp;&nbsp; flags,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* IN */<br>
+&nbsp; &nbsp; BYTE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **nativeEntry,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* OUT */<br>
+&nbsp; &nbsp; ULONG&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *nativeSizeOfCode&nbsp;&nbsp;&nbsp; /* OUT */<br>
+);</span></td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 11: compileMethod() function protype</span></p>
+<p>Figure 12 shows the <span class="code">CORINFO_METHOD_INFO</span> structure.</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><span class="code">struct CORINFO_METHOD_INFO<br>
+{<br>
+&nbsp; &nbsp; &nbsp; CORINFO_METHOD_HANDLE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ftn;<br>
+&nbsp; &nbsp; &nbsp; CORINFO_MODULE_HANDLE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; scope;<br>
+&nbsp; &nbsp; &nbsp; BYTE *&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>ILCode</b>;<br>
+&nbsp; &nbsp; &nbsp; unsigned&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>ILCodeSize</b>;<br>
+&nbsp; &nbsp; &nbsp; unsigned&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; maxStack;<br>
+&nbsp; &nbsp; &nbsp; unsigned&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; EHcount;<br>
+&nbsp; &nbsp; &nbsp; CorInfoOptions&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; options;<br>
+&nbsp; &nbsp; &nbsp; CorInfoRegionKind&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; regionKind;<br>
+&nbsp; &nbsp; &nbsp; CORINFO_SIG_INFO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;args;<br>
+&nbsp; &nbsp; &nbsp; CORINFO_SIG_INFO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; locals;<br>
+};</span></td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 12: CORINFO_METHOD_INFO structure</span></p>
+<p>The <span class="code">ILCode</span> is a pointer to the MSIL of the method to compile, and the <span class="code">ILCodeSize</span> tells us how long the MSIL is. The return value of <span class="code">compileMethod()</span> is an error code indicating success or failure. In case of success, the <span class="code">nativeEntry</span> pointer is populated with the address of the executable memory region containing the x86 or the x64 instruction that is compiled from the MSIL.</p>
+<h4>MassLogger JIT Hooking</h4>
+<p>Let’s come back to MassLogger. As soon as the main module initialization runs, it first decrypts MSIL of the other methods. It then installs a hook to execute its own version of <span class="code">compileMethod()</span> (method <span class="code">0x06000499</span>). This method replaces the <span class="code">ILCode</span> and <span class="code">ILCodeSize</span> fields of the info argument to the original <span class="code">compileMethod()</span> with the real malware’s MSIL bytes.</p>
+<p>In addition to replacing the MSIL bytes, MassLogger also patches the method body header at module initialization time. As seen from Figure 13, the method body header of method <span class="code">0x060003DD</span> on disk (at file offset 0x3CE0) is different from the header in memory (at RVA <span class="code">0x5AE0</span>). The only two things remaining quite consistent are the least significant two bits indicating whether the method is tiny or fat. To successfully defeat this anti-analysis technique, we must recover the real MSIL bytes as well as the correct method body headers.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure13.png" alt=""><br>
+<span class="type-XS">Figure 13: Same method body with different headers when resting on disk vs. loaded in memory</span></p>
+<h4>Defeating JIT Method Body Replacement With JITM</h4>
+<p>To automatically recover the MSIL and the method body header, one possible approach suggested by another FLARE team member is to install our own hook at <span class="code">compileMethod()</span> function before loading and allowing the MassLogger module constructor to run.&nbsp; There are <a href="https://georgeplotnikov.github.io/articles/just-in-time-hooking.html">multiple</a> <a href="https://ntcore.com/files/netint_injection.htm">tutorials</a> and <a href="https://xoofx.com/blog/2018/04/12/writing-managed-jit-in-csharp-with-coreclr/">open-sourced</a> <a href="https://github.com/maddnias/SJITHook">projects</a> on hooking <span class="code">compileMethod()</span> using both managed hooks (the new <span class="code">compileMethod()</span> is a managed method written in C#) and native hooks (the new <span class="code">compileMethod()</span> is native and written in C or C++). However, due to the unique way MassLogger hooks <span class="code">compileMethod()</span>, we cannot use the vtable hooking technique implemented by many of the aforementioned projects. Therefore, I’d like to share the following project: <a href="https://github.com/fireeye/jitm">JITM</a>, which is designed use inline hooking implemented by <a href="https://github.com/stevemk14ebr/PolyHook_2_0">PolyHook</a> library. JITM comes with a wrapper for <span class="code">compileMethod()</span> which logs all the method body headers and MSIL bytes to a JSON file before calling the original <span class="code">compileMethod()</span>.</p>
+<p>In addition to the hook, <span class="code">JITM</span> also includes a .NET loader. This loader first loads the native hook DLL (<span class="code">jitmhook.dll</span>) and installs the hook. The loader then loads the MassLogger payload and executes its entry point. This causes MassLogger’s module initialization code to execute and install its own hook, but hooking <span class="code">jitmhook.dll</span> code instead of the original <span class="code">compileMethod()</span>. An alternative approach to executing MassLogger’s entry point is to call the <span class="code">RuntimeHelpers.PrepareMethod()</span> API to force the JIT compiler to run on all methods. This approach is better because it avoids running the malware, and it potentially can recover methods not called in the sample’s natural code path. However, additional work is required to force all methods to be compiled properly.</p>
+<p>To load and recover MassLogger methods, first run the following command (Figure 14):</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><span class="code">jitm.exe <b>Bin-123.exe</b> [optional_timeout]</span></td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 14: Command to run jitm</span></p>
+<p>Once the timeout expires, you should see the files <span class="code">jitm.log</span> and <span class="code">jitm.json</span> created in the current directory. <span class="code">jitm.json</span> contains the method tokens, method body headers and MSIL bytes of all methods recovered from <span class="code">Bin-123.exe</span>. The only thing left to do is to rebuild the .NET metadata so we can perform static analysis.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure15.png" alt=""><br>
+<span class="type-XS">Figure 15: Sample jitm.json</span></p>
+<h4>Rebuilding the Assembly</h4>
+<p>Since the decrypted method body headers and MSIL bytes may not fit in the original .NET assembly properly, the easiest thing to do is to add a new section and a section header to MassLogger. There are <a href="https://reverseengineering.stackexchange.com/questions/15045/adding-a-new-pe-section-for-a-code-cave">plenty</a> of <a href="https://reverseengineering.stackexchange.com/questions/8390/python-adding-a-asection-to-a-pe-file">resources</a> on <a href="https://reverseengineering.stackexchange.com/questions/13995/adding-section-to-pe-binary-using-stud-pe">how to</a> <a href="http://www.rohitab.com/discuss/topic/41466-add-a-new-pe-section-code-inside-of-it/">add a PE section header and data</a>, none of which is trivial or easy to automate. Therefore, <span class="code">JITM</span> also include the following Python 2.7 helper script to automate this process: <span class="code">Scripts\addsection.py</span>.</p>
+<p>With the method body header and MSIL of each method added to a new PE section as shown in Figure 16, we can easily parse the .NET metadata and fix each method’s RVA to point to the correct method body within the new section. Unfortunately, I did not find any Python library to easily parse the .NET metadata and the MethodDef table. Therefore, <span class="code">JITM</span> also includes a partially implemented .NET metadata parser: <span class="code">Script\pydnet.py</span>. This script uses <span class="code">pefile</span> and <span class="code">vivisect</span> modules and parses the PE file up to the <span class="code">Method</span> table to extract all methods and their associated RVAs.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure16.png" alt=""><br>
+<span class="type-XS">Figure 16: Bin-123.exe before and after adding an additional section named FLARE</span></p>
+<p>Finally, to tie everything together, <span class="code">JITM</span> provides <span class="code">Script\fix_assembly.py</span> to perform the following tasks:</p>
+<ol>
+<li>Write the method body header and MSIL of each method recovered in <span class="code">jitm.json</span> into a temporary binary file named “<span class="code">section.bin</span>” while at the same time remember the associated method token and the offset into <span class="code">section.bin</span>.</li>
+<li>Use <span class="code">addsection.py</span> to add <span class="code">section.bin</span> into <span class="code">Bin-123.exe</span> and save the data into a new file, e.g. <span class="code">Bin-123.fixed.exe</span>.</li>
+<li>Use <span class="code">pydnet.py</span> to parse <span class="code">Bin-123.fixed.exe</span> and update the RVA field of each method entry in the MethodDef table to point to the correct RVA into the new section.</li>
+</ol>
+<p>The final result is a partially reconstructed .NET assembly. Although additional work is necessary to get this assembly to run correctly, it is good enough to perform static analysis to understand the malware’s high-level functionalities.</p>
+<p>Let’s look at the reconstructed method <span class="code">0x0600043E</span> that implements the decryption logic for the malware configuration. Compared to the original MSIL, the reconstructed MSIL now shows that the malware uses <span class="code">AES-256</span> in <span class="code">CBC</span> mode with <span class="code">PKCS7</span> padding. With a combination of dynamic analysis and static analysis, we can also easily identify the key to be “<span class="code">Vewgbprxvhvjktmyxofjvpzgazqszaoo</span>” and the IV to be part of the <span class="code">Base64</span>-encoded buffer passed in as its argument.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/masslogger/figure17.png" alt=""><br>
+<span class="type-XS">Figure 17: Method 0x0600043 before and after fixing the assembly</span></p>
+<p>Armed with that knowledge, we can write a simple tool to decrypt the malware configuration and recover all HBIs and NBIs (Figure 18).</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp;<span class="code"> &nbsp;BinderBytes: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; BinderName: Mzvmy_Nyrrd<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; BinderOnce: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; DownloaderFilename: Hrebxs<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DownloaderOnce: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;DownloaderUrl: Vrwus<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EmailAddress: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="cbaabbbbada4a2a78ba4bebfa7a4a4a0e5a8a4a6">[email&#160;protected]</a><br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EmailClient: smtp.outlook.com<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EmailEnable: true<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EmailPass: services000<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EmailPort: 587<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EmailSendTo: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="65041515030a0c09250a1011090a0a0e4b060a08">[email&#160;protected]</a><br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EmailSsl: True<br>
+&nbsp; &nbsp; &nbsp; &nbsp; EnableAntiDebugger: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; EnableAntiHoneypot: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp;EnableAntiSandboxie: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableAntiVMware: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableBinder: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableBotKiller: false&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br>
+&nbsp; &nbsp; &nbsp;EnableBrowserRecovery: true<br>
+EnableDeleteZoneIdentifier: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableDownloader: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableForceUac: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableInstall: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableKeylogger: true<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableMemoryScan: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableMutex: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EnableScreenshot: false<br>
+&nbsp; &nbsp; &nbsp;EnableSearchAndUpload: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableSpreadUsb: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;EnableWDExclusion: false<br>
+&nbsp; &nbsp; &nbsp; EnableWindowSearcher: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;ExectionDelay: 6<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;ExitAfterDelivery: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;FtpEnable: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;FtpHost: ftp://127.0.0.1<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;FtpPass:<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;FtpPort: 21<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;FtpUser: Foo<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;InstallFile: Pkkbdphw<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;InstallFolder: %AppData%<br>
+&nbsp; &nbsp; &nbsp; &nbsp;InstallSecondFolder: Eqrzwmf<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Key:<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Mutex: Ysjqh<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PanelEnable: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PanelHost: http://example.com/panel/upload.php<br>
+&nbsp;SearchAndUploadExtensions: .jpeg, .txt, .docx, .doc,<br>
+&nbsp; SearchAndUploadSizeLimit: 500000<br>
+&nbsp; &nbsp; SearchAndUploadZipSize: 5000000<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; SelfDestruct: false<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;SendingInterval: 2<br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Version: MassLogger v1.3.4.0<br>
+&nbsp; &nbsp; WindowSearcherKeywords: youtube, facebook, amazon,</span></td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 18: Decrypted configuration</span></p>
+<h4>Conclusion</h4>
+<p>Using a JIT compiler hook to replace the MSIL is a powerful technique that makes static analysis almost impossible. Although this technique is not new, I haven’t seen many .NET malwares making use of it, let alone trying to implement their own adaptation instead of using widely available protectors like ConfuserEx. Hopefully, with this blog post and <span class="code"><a adhocenable="false" href="https://github.com/fireeye/jitm">JITM</a></span>, analysts will now have the tools and knowledge to defeat MassLogger or any future variants that use a similar technique.</p>
+<p>If this is the type of work that excites you; and, if you thrive to push the state of the art when it comes to malware analysis and reverse engineering, the Front Line Applied Research and Expertise (FLARE) team may be a good place for you. The FLARE team faces fun and exciting challenges on a daily basis; and we are constantly looking for more team members to tackle these challenges head on. Check out <a href="https://www.fireeye.com/company/jobs.html">FireEye’s career page</a> to see if any of our opportunities would be a good fit for you.</p>
+<h4>Contributors (Listed Alphabetically)</h4>
+<ul>
+<li>Tyler Dean (<a href="https://twitter.com/spresec">@spresec</a>): Technical review of the post</li>
+<li>Michael Durakovich: Technical review of the post</li>
+<li>Stephen Eckels (<a href="https://github.com/stevemk14ebr/">@stevemk14ebr</a>): Help with porting JITM to use PolyHook</li>
+<li>Jon Erickson (<a href="https://github.com/evil-e">@evil-e</a>): Technical review of the post</li>
+<li>Moritz Raabe (<a href="https://twitter.com/m_r_tz?lang=en">@m_r_tz</a>): Technical review of the post</li>
+</ul>
+</div>
+<div class="clear-all"></div></div>
+</div>
+<div class="par prevnextbutton">
+<div class="prevnext">
+<div class="button">
+<a id="leftBtnId" class="btn btn-B2282D" href="#"><span>Previous</span> <span>Post</span></a>
+</div>
+<div class="button">
+<a id="rightBtnId" class="btn btn-B2282D" href="#"><span>Next</span> <span>Post</span></a>
+</div>
+</div>
+<input type="hidden" value="/content/fireeye-www/en_US/blog/threat-research" id="categoryPathVal" name="categoryPath" />
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    $(document).ready(function(){
+
+         var prevenextHtml = $('.prevnext').html();	
+         var categoryPathVal = $("#categoryPathVal").val();
+            var blogsDetails;
+        
+            if(undefined == blogsDetails){
+                    blogsDetails = [];
+            }
+        
+        
+            if(undefined != prevenextHtml){
+                if(blogsDetails.length <= 0){
+                     $.ajax({
+                        type: "GET",
+                        url: "/bin/www-blogs/read-blogentries",
+                        dataType: "json",
+                        data: { categoryPath: categoryPathVal} ,
+                        async: false,
+                        success : function(data) {
+                            var totalFoundRes = data.blogs.length;
+                            blogsDetails = data.blogs;
+                            var currentPagePath = window.location.pathname;
+                            currentPagePath = currentPagePath.split(".")[0]
+                            console.log("currentPagePath :: "+currentPagePath);
+        
+                            for (var i = 0; i < blogsDetails.length; i++) {
+                                var currentItrPath = blogsDetails[i].path;
+        
+                                if (currentItrPath.indexOf(currentPagePath) > -1) {
+                                    console.log(blogsDetails[i-1]);
+                                    console.log(blogsDetails[i+1]);
+
+                                    if(undefined != blogsDetails[i-1] ){
+										var prevPagePath = blogsDetails[i-1].path;
+                                        $("#leftBtnId").attr("href",prevPagePath+".html");
+                                        $("#leftBtnId").show();
+                                    }else{
+										$("#leftBtnId").hide();
+                                    }
+                                    if(undefined != blogsDetails[i+1] ){
+										var nextPagePath = blogsDetails[i+1].path;  
+                                    	$("#rightBtnId").attr("href",nextPagePath+".html");
+                                        $("#rightBtnId").show();
+                                    }else{
+										$("#rightBtnId").hide();
+                                    }
+                                }
+                            }
+        
+                        },
+                        error : function(response){
+                            console.log("Error: while connecting to servlet.");
+                        }
+                    });
+                 }else{
+                     alert("Blogs from global object :: "+blogsDetails);
+                 }
+            }else{
+                alert("prevenextHtml :: "+prevenextHtml);
+            }
+    });
+</script></div>
+</div></div>
+</div>
+</div>
+<div id="sidebar" class="g-u-7-24 l_g-u-1 blog-sidebar">
+<div class="g-content">
+<div class="sidebar reuse-blog-resources">
+<div class="blog-resources">
+<div class="grid-33-left parsys"><div class="rightrail section">
+<div class="blog-right-rail">
+<div class="bottom-bar"><div class="tab">
+<span class="ficon ficon-star"></span>
+<p>Promotion</p></div><div class="tab">
+<span class="ficon ficon-checkbox-checked"></span>
+<p>Subscribe</p></div>
+<div class="tab">
+<span class="ficon ficon-share"></span>
+<p>Share</p></div>
+<div class="tab">
+<span class="ficon ficon-history2"></span>
+<p>Recent</p></div>
+<div class="tab">
+<span class="ficon ficon-feed"></span>
+<p>RSS</p></div>
+</div><div class="section cta">
+<div id="cq-image-jsp-/content/fireeye-www/site-content/en_US/blog-right-threat-research/jcr:content/grid-33-left/rightrail/image"><a href="/mandiant/advantage.html"><img src="/content/dam/fireeye-www/services/images/bnr-mandiant-advantage-v3-315x315.png" alt="bnr-mandiant-advantage-v3-315x315" title="bnr-mandiant-advantage-v3-315x315" class="cq-dd-image"></a></div></div><div class="section email">
+<script src="https://www2.fireeye.com/js/forms2/js/forms2.min.js"></script>
+<div id="mktoWrapper_3353" class="a08 bg-f2f2f2"><div class="c00 c00v0"><h3>Email Updates</h3><p>Information and insight on today's advanced threats from FireEye.</p></div><form id="mktoForm_3353"></form> <script type="text/javascript">
+		if(typeof digitalData=="undefined"){digitalData={}}
+        //alert(https://www2.fireeye.com+":"+848-DID-242)
+        //alert("false");
+		MktoForms2.loadForm("https://www2.fireeye.com", "848-DID-242", 3353,
+		function(form) {
+			
+            if(typeof fdc.blog.initCheckboxes === "function") {
+                fdc.blog.initCheckboxes(form);
+            } 
+			digitalData.form = {id: form.getId(),name: document.title,url: window.location.href};
+			//if(typeof marketoFormViewTealiumEvent !== "undefined" && typeof utag!=="undefined"){marketoFormViewTealiumEvent(form);}
+			if(typeof marketoFormViewGtmEvent !== "undefined") {
+				marketoFormViewGtmEvent(form);
+			}
+			form.onSubmit(function(values){
+                //Check if GA fields are present
+                if(($("input[name='GACLIENTID__c']").length>0)&&($("input[name='GAUSERID__c']").length>0)&&($("input[name='GATRACKID__c']").length>0)&&(typeof ga!=="undefined"))
+                {
+                      ga(function(){ 
+                          //Get tracking ID and Client ID
+                           var tracker = ga.getAll()[0];
+                           var trackingId = tracker.get('trackingId');
+                           var clientId = tracker.get('clientId');
+                           var userId = tracker.get('userId');
+                           $("input[name='GACLIENTID__c'").val(clientId);
+                           $("input[name='GATRACKID__c'").val(trackingId);
+                           $("input[name='GAUSERID__c'").val(userId);
+                       });
+                 }
+            
+        	});
+			form.onSuccess(function(values, followUpUrl) {
+				//if(typeof marketoFormSubmitTealiumEvent !== "undefined"){marketoFormSubmitTealiumEvent(values);}
+				if(typeof marketoFormSubmitGTMEvent !== "undefined") {
+					marketoFormSubmitGTMEvent(values);
+				}
+				
+				if(typeof fdc.blog.replaceFormWithThankYou === "function") {
+					var result = fdc.blog.replaceFormWithThankYou(form,values,followUpUrl);
+					if (result === false) {
+						return false;
+					}
+				} 
+				return true;
+			});
+			
+			var adrC = typeof addMissingUTMsFromCookies !== "undefined" ? addMissingUTMsFromCookies(document.URL) : document.URL;
+			form.addHiddenFields({ ADR__c: adrC,ADR_Credit__c_account: document.title,ADR_Credit__c: document.referrer });
+			if(($("input[name='GACLIENTID__c']").length==0)&&($("input[name='GAUSERID__c']").length==0)&&($("input[name='GATRACKID__c']").length==0)){
+				form.addHiddenFields({ GACLIENTID__c:"",GAUSERID__c:"",GATRACKID__c:""});				
+			}
+			
+		});
+	</script>
+</div></div>
+<div class="section share">
+<h6><small>Share</small></h6>
+
+<div class="addthis_inline_share_toolbox_7uq8"></div>
+</div>
+<div class="section recent">
+<h6>Recent Posts</h6>
+
+<div class="c05 c05v0"><ul>
+<li class="c05_item"><p class="c05_date">04 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/detection-response-to-exploitation-of-microsoft-exchange-zero-day-vulnerabilities.html" title="Detection and Response to Exploitation of Microsoft Exchange Zero-Day Vulnerabilities">Detection and Response to Exploitation of Microsoft Exchange Zero-Day Vulnerabilities</a></li>
+
+<li class="c05_item"><p class="c05_date">04 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/sunshuttle-second-stage-backdoor-targeting-us-based-entity.html" title="New SUNSHUTTLE Second-Stage Backdoor Uncovered Targeting U.S.-Based Entity; Possible Connection to UNC2452">New SUNSHUTTLE Second-Stage Backdoor Uncovered Targeting U.S.-Based
+Entity; Possible Connection to UNC2452</a></li>
+
+<li class="c05_item"><p class="c05_date">03 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/fuzzing-image-parsing-in-windows-uninitialized-memory.html" title="Fuzzing Image Parsing in Windows, Part Two: Uninitialized Memory">Fuzzing Image Parsing in Windows, Part Two: Uninitialized Memory</a></li>
+</ul></div>
+</div>
+<a href="/content/fireeye-www/en_US/blog/threat-research/_jcr_content.feed" target="_blank">
+<div class="section rss">
+<h6><small>RSS Feed: </small><small>Stay Connected</small></h6>
+<span class="ficon ficon-feed"></span>
+</div>
+</a>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<div class="footer_f635 footer">
+
+<footer id="g03-footer" class="l_footer g03 g03v0 g03v2 g03-5col">
+<div class="main-footer-wrapper">
+
+<div class="g03_list g03_list_1">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Company</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company.html" class="Footer">Why FireEye?</a></li>
+<li class="g03_item"><a href="/customers.html" class="Footer">Customer Stories</a></li>
+<li class="g03_item"><a href="/company/jobs.html" class="Footer">Careers</a></li>
+<li class="g03_item"><a href="/company/compliance-certification.html" class="Footer">Certifications and Compliance</a></li>
+<li class="g03_item"><a href="http://investors.fireeye.com/" target="_blank" class="Footer">Investor Relations</a></li>
+<li class="g03_item"><a href="/company/supplier.html" class="Footer">Supplier Documents</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_2">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>News and Events</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company/newsroom.html" class="Footer">Newsroom</a></li>
+<li class="g03_item"><a href="/company/press-releases.html" class="Footer">Press Releases</a></li>
+<li class="g03_item"><a href="/company/webinars.html" class="Footer">Webinars</a></li>
+<li class="g03_item"><a href="/company/events.html" class="Footer">Events</a></li>
+<li class="g03_item"><a href="/company/awards.html" class="Footer">Awards and Honors</a></li>
+<li class="g03_item"><a href="/company/contact-us/manage-your-communication-preference.html" class="Footer">Email Preferences</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_3">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Technical Support</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company/incident-response.html" class="Footer">Incident?</a></li>
+<li class="g03_item"><a href="/company/security.html" class="Footer">Report Security Issue</a></li>
+<li class="g03_item"><a href="/support/contacts.html" class="Footer">Contact Support</a></li>
+<li class="g03_item"><a href="https://csportal.fireeye.com/secur/login_portal.jsp?orgId=00D3000000063LS&portalId=06030000000pSNE" target="_blank" class="Footer">Customer Portal</a></li>
+<li class="g03_item"><a href="https://community.fireeye.com/s/support-community" target="_blank" class="Footer">Communities</a></li>
+<li class="g03_item"><a href="https://docs.fireeye.com" target="_blank" class="Footer">Documentation Portal</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_4">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>FireEye Blogs</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/blog/threat-research.html" class="Footer">Threat Research</a></li>
+<li class="g03_item"><a href="/blog/products-and-services.html" class="Footer">FireEye Stories</a></li>
+<li class="g03_item"><a href="/blog/executive-perspective.html" class="Footer">Industry Perspectives</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Threat Map</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/cyber-map/threat-map.html" class="Footer">View the Latest Threats</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_5">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Contact Us</strong><br>
+<div class="footer-list section">
+<ul class="g03_block">
+<li class="g03_item"><a href="tel:+1 877-347-3393" class="contactlinks">+1 877-347-3393</a><br>&nbsp;</li>
+</ul>
+</div></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Stay Connected</strong></p></div>
+<div class="followus-footer section"><h4 class="g03_title" id="g03-followus-title"> </h4><ul class="g03_block g03-s" id="g03-followus-list"><li class="g03_item g03_item-s">
+<a href="https://www.linkedin.com/company/fireeye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-li ficon-linkedin"></span>
+<span class="g03-s_label">LinkedIn</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://twitter.com/fireeye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-tw ficon-twitter2"></span>
+<span class="g03-s_label">Twitter</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.facebook.com/FireEye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-fb ficon-facebook2"></span>
+<span class="g03-s_label">Facebook</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.youtube.com/user/FireEyeInc" target="_blank">
+<span class="g03-s-i ficon g03-s-i-yt ficon-youtube2"></span>
+<span class="g03-s_label">YouTube</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://itunes.apple.com/us/podcast/eye-on-security/id1073779629?mt=2" target="_blank">
+<span class="g03-s-i ficon g03-s-i-pc ficon-podcast"></span>
+<span class="g03-s_label">Podcast</span>
+</a>
+</li></ul>
+</div>
+<div class="htmlpassthru section">
+<div class="country-notification">
+<div id="c08_modal-lang" class="c08_modal lang">
+<div class="c08 c08v1">
+<div class="c08_header">
+<a href="#dismiss-lightbox" class="ficon ficon-close c08_dismiss" data-behavior="dismiss-c08"></a>
+</div>
+<div class="c08_content">
+<div class="c08_body">
+<div class="col FR">
+<p class="type-ML">Cette page est également disponible en français.</p>
+<div class="button section"><a class="btn" href="/index.html">Version française</a></div>
+</div>
+<div class="col DE">
+<p class="type-ML">Diese Seite ist auch auf Deutsch verfügbar</p>
+<div class="button section"><a class="btn" href="/index.html">Zur deutschen Seite wechseln</a></div>
+</div>
+<div class="col JP">
+<p class="type-ML">日本語ページを</p>
+<div class="button section"><a class="btn" href="/index.html">見る</a></div>
+</div>
+<div class="col KR">
+<p class="type-ML">해당 페이지는 한글 버전으로 보실 수 있습니다</p>
+<div class="button section"><a class="btn" href="/index.html">바로 가기</a></div>
+</div>
+<hr>
+<div class="col">
+<p><a class="dismiss" href="#dismiss-lightbox" data-behavior="dismiss-c08">Continue viewing this page in English</a></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<style>
+.c08_modal.lang {
+    background: rgba(255,255,255,0.8);
+}
+.c08_modal.lang .c08_header {
+    background: transparent;
+    border-left: none;
+}
+.c08_modal.lang .c08 {
+    top: 20%;
+    width: 600px;
+    border-radius: 12px;
+    box-shadow: rgba(0, 0, 0, 0.37) 0 0 15px;
+    border: 1px solid #b4b5b8;
+    background-image: url("/content/dam/fireeye-www/fw/images/bg-language-select.jpg");
+    background-position: right bottom;
+    margin: 0 auto;
+    position: relative;
+    max-width: 90%;
+}
+.c08_modal.lang .c08_dismiss {
+    color: #222;
+}
+.c08_modal.lang .c08_body {
+    padding: 12px 50px 60px;
+}
+.c08_modal.lang .col {
+    display: none;
+}
+.c08_modal.lang .col:last-child {
+    display: block;
+}
+.c08_modal.lang .btn {
+    margin-bottom: 0;
+}
+.c08_modal.lang hr {
+    margin: 30px 80px;
+}
+.c08_modal.lang hr:before {
+    border-bottom: none;
+}
+</style>
+</div></div>
+</div>
+</div></div>
+<div class="legal-footer-wrapper">
+<div class="legal-footer">
+<div class="g03_copyright">
+<p class="g03_copyright_p">
+Copyright&nbsp;&copy;&nbsp;2021&nbsp;FireEye, Inc.&nbsp;All rights reserved.&nbsp;<span class="g03-legal"><a href="/company/privacy.html">Privacy &amp; Cookies Policy</a> | <a href="/company/privacy-shield-commitment.html">Privacy Shield</a> | <a href="/company/legal.html">Legal Documentation</a></span>
+</p>
+</div><div class="g03_languages">
+<a class="g01_options-option" href="#footer-worldwide">
+<span>Site Language</span>
+<span>English<span class="ficon ficon-globe"></span></span>
+</a>
+<div class="option-menu" id="footer-worldwide">
+<p><strong>My preferred language:</strong></p>
+<ul class="g01_options_list"><li><a href="https://www.fireeye.com/blog/threat-research/2020/08/bypassing-masslogger-anti-analysis-man-in-the-middle-approach.html" target="_blank">English (English)</a></li>
+<li><a href="https://www.fireeye.fr" target="_blank">French (Français)</a></li>
+<li><a href="https://www.fireeye.de" target="_blank">German (Deutsch)</a></li>
+<li><a href="https://www.fireeye.jp" target="_blank">Japanese (日本語)</a></li>
+<li><a href="https://www.fireeye.kr" target="_blank">Korean (한국어)</a></li>
+<li><a href="/products/international-literature.html">More languages</a></li>
+</ul>
+</div>
+</div> </div>
+</div>
+</footer>
+</div>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_fw.min.js"></script>
+
+
+<div class="htmlpassthru_c66c htmlpassthru">
+</div>
+
+<script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=fewebadmin"></script>
+</body>
+</html>

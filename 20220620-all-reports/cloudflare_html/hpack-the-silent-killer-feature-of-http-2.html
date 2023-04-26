@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>HPACK: the silent killer (feature) of HTTP/2</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/hpack-the-silent-killer-feature-of-http-2/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="HPACK: the silent killer (feature) of HTTP/2" />
+    <meta property="og:description" content="If you have experienced HTTP/2 for yourself, you are probably aware of the visible performance gains possible with HTTP/2 due to features like stream multiplexing, explicit stream dependencies, and Server Push." />
+    <meta property="og:url" content="https://blog.cloudflare.com/hpack-the-silent-killer-feature-of-http-2/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/6129093355_9434beed25_z.jpg" />
+    <meta property="article:published_time" content="2016-11-28T14:10:41.000Z" />
+    <meta property="article:modified_time" content="2018-08-27T21:21:55.000Z" />
+    <meta property="article:tag" content="HTTP2" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="NGINX" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="HPACK: the silent killer (feature) of HTTP/2" />
+    <meta name="twitter:description" content="If you have experienced HTTP/2 for yourself, you are probably aware of the visible performance gains possible with HTTP/2 due to features like stream multiplexing, explicit stream dependencies, and Server Push." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/hpack-the-silent-killer-feature-of-http-2/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/6129093355_9434beed25_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Vlad Krasnov" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="HTTP2, TLS, Security, NGINX" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Vlad Krasnov",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/165e069.jpg",
+        "url": "https://blog.cloudflare.com/author/vlad-krasnov/",
+        "sameAs": []
+    },
+    "headline": "HPACK: the silent killer (feature) of HTTP/2",
+    "url": "https://blog.cloudflare.com/hpack-the-silent-killer-feature-of-http-2/",
+    "datePublished": "2016-11-28T14:10:41.000Z",
+    "dateModified": "2018-08-27T21:21:55.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/6129093355_9434beed25_z.jpg",
+    "keywords": "HTTP2, TLS, Security, NGINX",
+    "description": "If you have experienced HTTP/2 for yourself, you are probably aware of the visible performance gains possible with HTTP/2 due to features like stream multiplexing, explicit stream dependencies, and Server Push.\n\n",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-http2 tag-tls tag-security tag-nginx sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-http2 tag-tls tag-security tag-nginx ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">HPACK: the silent killer (feature) of HTTP/2</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2016-11-28T14:10:41Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">November 28, 2016 2:10PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/vlad-krasnov/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/165e069.jpg" alt="Vlad Krasnov" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/vlad-krasnov" class="fw5 f3 no-underline black mr3">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>If you have <a href="https://www.cloudflare.com/website-optimization/http2/">experienced HTTP/2</a> for yourself, you are probably aware of the visible performance gains possible with <a href="https://www.cloudflare.com/website-optimization/http2/">HTTP/2</a> due to features like stream multiplexing, explicit stream dependencies, and <a href="https://blog.cloudflare.com/announcing-support-for-http-2-server-push-2/">Server Push</a>.</p>
+<p>There is however one important feature that is not obvious to the eye. This is the HPACK header compression. Current implementation of nginx, as well edge networks and CDNs using it, do not support the full HPACK implementation. We have, however, implemented the full HPACK in nginx, and <a href="http://mailman.nginx.org/pipermail/nginx-devel/2015-December/007682.html">upstreamed</a> the part that performs Huffman encoding.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/11/6129093355_9434beed25_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/conchur/6129093355/in/photolist-akBcVn-6eEtUq-d9Xi2T-c8MwzA-mGVr3z-aVezji-mGVxov-acMJmz-6nvbCJ-6a6DGQ-5uwrr9-rRtCCp-acMKsk-cKeuXY-9F6N13-9GSuHh-acMDBk-cJYes5-cijtcj-akFua9-cK1iqS-fiAHkE-acMCDt-cJZ9Fq-5qtfNv-cJWFiw-e4pfTd-6fzyLV-8RNMTo-p7jJLQ-524dkf-dw52qG-mVDttF-duUbYU-dvXt3Z-c8NkYG-6e6K2S-duKJjZ-5DbaqV-duBiR3-dvGTsM-dvLst4-dvPfJ1-ezYL1J-7f1cMC-bqi5WN-5MMGkV-9F3C7c-eWASXx-cJXsW9">image</a> by <a href="https://www.flickr.com/photos/conchur/">Conor Lawless</a></small></p>
+<p>This blog post gives an overview of the reasons for the development of HPACK, and the hidden bandwidth and latency benefits it brings.</p>
+<h3 id="somebackground">Some Background</h3>
+<p>As you probably know, a regular HTTPS connection is in fact an overlay of several connections in the multi-layer model. The most basic connection you usually care about is the TCP connection (the transport layer), on top of that you have the TLS connection (mix of transport/application layers), and finally the HTTP connection (application layer).</p>
+<p>In the the days of yore, HTTP compression was performed in the TLS layer, using gzip. Both headers and body were compressed indiscriminately, because the lower TLS layer was unaware of the transferred data type. In practice it meant both were compressed with the <a href="https://blog.cloudflare.com/results-experimenting-brotli/">DEFLATE</a> algorithm.</p>
+<p>Then came SPDY with a new, dedicated, header compression algorithm. Although specifically designed for headers, including the use of a preset <a href="https://blog.cloudflare.com/improving-compression-with-preset-deflate-dictionary/">dictionary</a>, it was still using DEFLATE, including dynamic Huffman codes and string matching.</p>
+<p>Unfortunately both were found to be vulnerable to the <a href="https://www.ekoparty.org/archive/2012/CRIME_ekoparty2012.pdf">CRIME</a> attack, that can extract secret authentication cookies from compressed headers: because DEFLATE uses backward string matches and dynamic Huffman codes, an attacker that can control part of the request headers, can gradually recover the full cookie by modifying parts of the request and seeing how the total size of the request changes during compression.</p>
+<p>Most edge networks, including Cloudflare, disabled header compression because of CRIME. That’s until HTTP/2 came along.</p>
+<h3 id="hpack">HPACK</h3>
+<p>HTTP/2 supports a new dedicated header compression algorithm, called HPACK. HPACK was developed with attacks like CRIME in mind, and is therefore considered safe to use.</p>
+<p>HPACK is resilient to CRIME, because it does not use partial backward string matches and dynamic Huffman codes like DEFLATE. Instead, it uses these three methods of compression:</p>
+<ul>
+<li>
+<p>Static Dictionary: A <a href="https://http2.github.io/http2-spec/compression.html#static.table.definition">predefined dictionary</a> of 61 commonly used header fields, some with predefined values.</p>
+</li>
+<li>
+<p>Dynamic Dictionary: A list of actual headers that were encountered during the connection. This dictionary has limited size, and when new entries are added, old entries might be evicted.</p>
+</li>
+<li>
+<p>Huffman Encoding: A <a href="https://http2.github.io/http2-spec/compression.html#huffman.code">static Huffman code</a> can be used to encode any string: name or value. This code was computed specifically for HTTP Response/Request headers - ASCII digits and lowercase letters are given shorter encodings. The shortest encoding possible is 5 bits long, therefore the highest compression ratio achievable is 8:5 (or 37.5% smaller).</p>
+</li>
+</ul>
+<h4 id="hpackflow">HPACK flow</h4>
+<p>When HPACK needs to encode a header in the format <em><strong>name:value</strong></em>, it will first look in the static and dynamic dictionaries. If the <em><strong>full</strong></em> <strong>name:value</strong> is present, it will simply reference the entry in the dictionary. This will usually take one byte, and in most cases two bytes will suffice! A whole header encoded in a single byte! How crazy is that?</p>
+<p>Since many headers are repetitive, this strategy has a very high success rate. For example, headers like <strong>:authority:www.cloudflare.com</strong> or the sometimes huge <strong>cookie</strong> headers are the usual suspects in this case.</p>
+<p>When HPACK can't match a whole header in a dictionary, it will attempt to find a header with the same <em><strong>name</strong></em>. Most of the popular header names are present in the static table, for example: <strong>content-encoding</strong>, <strong>cookie</strong>, <strong>etag</strong>. The rest are likely to be repetitive and therefore present in the dynamic table. For example, Cloudflare assigns a unique <strong>cf-ray</strong> header to each response, and while the value of this field is always different, the name can be reused!</p>
+<p>If the name was found, it can again be expressed in one or two bytes in most cases, otherwise the name will be encoded using either raw encoding or the Huffman encoding: the shorter of the two. The same goes for the value of the header.</p>
+<p>We found that the Huffman encoding alone saves almost 30% of header size.</p>
+<p>Although HPACK does string matching, for the attacker to find the value of a header, they must guess the entire value, instead of a gradual approach that was possible with DEFLATE matching, and was vulnerable to CRIME.</p>
+<h4 id="requestheaders">Request Headers</h4>
+<p>The gains HPACK provides for HTTP request headers are more significant than for response headers. Request headers get better compression, due to much higher duplication in the headers. For example, here are two requests for our own blog, using Chrome:</p>
+<h6 id="request1">Request #1:</h6>
+<p><font color=red><strong>:authority:</strong></font><font color=green>blog.cloudflare.com<br>
+<font color=red>**:method:**GET<br>
+<strong>:path:</strong> /<br>
+**:scheme:**https<br>
+<strong>accept:</strong></font>text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,<em>/</em>;q=0.8<br>
+<font color=red><strong>accept-encoding:</strong></font>gzip, deflate, sdch, br<br>
+<font color=red><strong>accept-language:</strong></font>en-US,en;q=0.8<br>
+<font color=red><strong>cookie:</strong></font> 297 byte cookie<br>
+**upgrade-insecure-requests:**1<br>
+<font color=red><strong>user-agent:</strong></font>Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2853.0 Safari/537.36</font></p>
+<p>I marked in red the headers that can be compressed with the use of the static dictionary. Three fields: <strong>:method:GET</strong>, <strong>:path:/</strong> and <strong>:scheme:https</strong> are always present in the static dictionary, and will each be encoded in a single byte. Then some fields will only have their names compressed in a byte: <strong>:authority</strong>, <strong>accept</strong>, <strong>accept-encoding</strong>, <strong>accept-language</strong>, <strong>cookie</strong> and <strong>user-agent</strong> are present in the static dictionary.</p>
+<p>Everything else, marked in green will be Huffman encoded.</p>
+<p>Headers that were not matched, will be inserted into the dynamic dictionary for the following requests to use.</p>
+<p>Let's take a look at a later request:</p>
+<h6 id="request2">Request #2:</h6>
+<p><font color=blue><strong>:authority:<strong>blog.cloudflare.com</font><br>
+<font color=red></strong>:method:<strong>GET</font><br>
+<font color=red></strong>:path:</strong></font><font color=green>/assets/images/cloudflare-sprite-small.png</font><br>
+<font color=red>**:scheme:**https</font><br>
+<font color=red><strong>accept:</strong></font><font color=green>image/webp,image/<em>,</em>/*;q=0.8</font><br>
+<font color=blue>**accept-encoding:**gzip, deflate, sdch, br<br>
+**accept-language:**en-US,en;q=0.8<br>
+**cookie:**same 297 byte cookie</font><br>
+<font color=red><strong>referer:</strong></font><font color=green><a href="https://blog.cloudflare.com/assets/css/screen.css?v=2237be22c2">https://blog.cloudflare.com/assets/css/screen.css?v=2237be22c2</a></font><br>
+<font color=blue>**user-agent:**Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2853.0 Safari/537.36</font></p>
+<p>Here I added blue encoded fields. Those indicate fields that were matched from the dynamic dictionary. It is clear that most fields repeat between requests. In this case two fields are again present in the static dictionary and five more are repeated and therefore present in the dynamic dictionary, that means they can be encoded in one or two bytes each. One of those is the ~300 byte <strong>cookie</strong> header, and ~130 byte <strong>user-agent</strong>. That is 430 bytes encoded into mere 4 bytes, 99% compression!</p>
+<p>All in all for the repeat request, only three short strings will be Huffman encoded.</p>
+<p>This is how ingress header traffic appears on the Cloudflare edge network during a six hour period:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/10/headers-ingress-1.png" alt="alt"></p>
+<p>On average we are seeing a 76% compression for ingress headers. As the headers represent the majority of ingress traffic, it also provides substantial savings in the total ingress traffic:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/10/headers-ingress-2-1.png" alt="alt"></p>
+<p>We can see that the total ingress traffic is reduced by 53% as the result of HPACK compression!</p>
+<p>In fact today, we process about the same number of requests for HTTP/1 and HTTP/2 over HTTPS, yet the ingress traffic for HTTP/2 is only half that of HTTP/1.</p>
+<h3 id="responseheaders">Response Headers</h3>
+<p>For the response headers (egress traffic) the gains are more modest, but still spectacular:</p>
+<h6 id="response1">Response #1:</h6>
+<p><font color=green><font color=red><strong>cache-control:</strong></font>public, max-age=30<br>
+**cf-cache-status:**HIT<br>
+<strong>cf-h2-pushed:</strong>&lt;/assets/css/screen.css?v=2237be22c2&gt;,&lt;/assets/js/jquery.fitvids.js?v=2237be22c2&gt;<br>
+**cf-ray:**2ded53145e0c1ffa-DFW<br>
+<font color=red><strong>content-encoding:</strong></font>gzip<br>
+<font color=red><strong>content-type:</strong></font>text/html; charset=utf-8<br>
+<font color=red><strong>date:</strong></font>Wed, 07 Sep 2016 21:41:23 GMT<br>
+<font color=red><strong>expires:</strong></font>Wed, 07 Sep 2016 21:41:53 GMT<br>
+<font color=red><strong>link:</strong></font> &lt;<a href="//cdn.bizible.com/scripts/bizible.js">//cdn.bizible.com/scripts/bizible.js</a>&gt;; rel=preload; as=script,&lt;<a href="https://code.jquery.com/jquery-1.11.3.min.js">https://code.jquery.com/jquery-1.11.3.min.js</a>&gt;; rel=preload; as=script<br>
+<font color=red><strong>server:</strong></font>cloudflare-nginx<br>
+<font color=red><strong>status:200</strong></font><br>
+<font color=red><strong>vary:</strong></font>Accept-Encoding<br>
+**x-ghost-cache-status:**From Cache<br>
+**x-powered-by:**Express<br>
+</font></p>
+<p>The majority of the first response will be Huffman encoded, with some of the field names being matched from the static dictionary.</p>
+<h6 id="response2">Response #2:</h6>
+<p><font color=green><font color=red><strong>cache-control:</strong></font>public, max-age=31536000<br>
+**cf-bgj:imgq:**100<br>
+<font color=blue>**cf-cache-status:**HIT</font><br>
+<font color=blue><strong>cf-ray</strong>:</font>2ded53163e241ffa-DFW<br>
+<font color=red><strong>content-type:</strong></font>image/png<br>
+<font color=blue>**date:**Wed, 07 Sep 2016 21:41:23 GMT</font><br>
+<font color=red><strong>expires:</strong></font>Thu, 07 Sep 2017 21:41:23 GMT<br>
+<font color=blue>**server:**cloudflare-nginx</font><br>
+<font color=red>**status:**200</font><br>
+<font color=blue>**vary:**Accept-Encoding<br>
+**x-ghost-cache-status:**From Cache<br>
+<strong>x-powered-by:Express</strong></font></font></p>
+<p>Again, the blue color indicates matches from the dynamic table, red indicate matches from the static table, and the green ones represent Huffman encoded strings.</p>
+<p>On the second response it is possible to fully match seven of twelve headers. For four of the remaining five, the name can be fully matched, and six strings will be efficiently encoded using the static Huffman encoding.</p>
+<p>Although the two <strong>expires</strong> headers are almost identical, they can only be Huffman compressed, because they can't be matched in full.</p>
+<p>The more requests are being processed, the bigger the dynamic table becomes, and more headers can be matched, leading to increased compression ratio.</p>
+<p>This is how egress header traffic appears on the Cloudflare edge:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/10/headers-egress-1.png" alt="alt"></p>
+<p>On average egress headers are compressed by 69%. The savings for the total egress traffic are not that significant however:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/10/headers-egress-2-1.png" alt="alt"></p>
+<p>It is difficult to see, but we get 1.4% savings in the total egress HTTP/2 traffic. While it does not look like much, it is still more than <a href="https://blog.cloudflare.com/results-experimenting-brotli/">increasing the compression level for data would give</a> in many cases. This number is also significantly skewed by websites that serve very large files: we measured savings of well over 15% for some websites.</p>
+<h3 id="testyourhpack">Test your HPACK</h3>
+<p>If you have nghttp2 installed, you can test the efficiency of HPACK compression on your website with a bundled tool called h2load.</p>
+<p>For example:</p>
+<pre><code>h2load https://blog.cloudflare.com | tail -6 |head -1
+traffic: 18.27KB (18708) total, 538B (538) headers (space savings 27.98%), 17.65KB (18076) data
+</code></pre>
+<p>We see 27.98% space savings in the headers. That is for a single request, and the gains are mostly due to the Huffman encoding. To test if the website utilizes the full power of HPACK, we need to issue two requests, for example:</p>
+<pre><code>h2load https://blog.cloudflare.com -n 2 | tail -6 |head -1
+traffic: 36.01KB (36873) total, 582B (582) headers (space savings 61.15%), 35.30KB (36152) data
+</code></pre>
+<p>If for two similar requests the savings are 50% or more then it is very likely full HPACK compression is utilized.</p>
+<p>Note that compression ratio improves with additional requests:</p>
+<pre><code>h2load https://blog.cloudflare.com -n 4 | tail -6 |head -1
+traffic: 71.46KB (73170) total, 637B (637) headers (space savings 78.68%), 70.61KB (72304) data
+</code></pre>
+<h3 id="conclusion">Conclusion</h3>
+<p>By implementing HPACK compression for HTTP response headers we've seen a significant drop in egress bandwidth. HPACK has been enabled for all Cloudflare customers using HTTP/2, all of whom benefit from faster, smaller HTTP responses.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/http2/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTP2</a>
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/nginx/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">NGINX</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-08-24T12:00:00+01:00">August 24, 2020 12:00PM</p>
+        <a href="/delivering-http-2-upload-speed-improvements/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Delivering HTTP/2 upload speed improvements</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare recently shipped improved upload speeds across our network for clients using HTTP/2. This post describes our journey from troubleshooting an issue to fixing it and delivering faster upload speeds to the global Internet....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/junho/" class="fw5 f2 black no-underline">Junho Choi</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-network/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-04-14T12:00:00+01:00">April 14, 2020 12:00PM</p>
+        <a href="/http-3-vs-http-2/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Comparing HTTP/3 vs. HTTP/2 Performance</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We announced support for HTTP/3, the successor to HTTP/2, during Cloudflare’s birthday week last year. Our goal is and has always been to help build a better Internet. Even though HTTP/3 is still in draft status, we've seen a lot of interest from our users....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sreeni-tellakula/" class="fw5 f2 black no-underline">Sreeni Tellakula</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http3/" class="no-underline f1 fw2 blue3 underline-hover">HTTP3</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/betterinternet/" class="no-underline f1 fw2 blue3 underline-hover">Better Internet</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-14T14:00:00+01:00">May 14, 2019 2:00PM</p>
+        <a href="/better-http-2-prioritization-for-a-faster-web/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Better HTTP/2 Prioritization for a Faster Web</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Advancing the state of the art of HTTP/2 to deliver a faster user experience. See why it matters and how much of a difference it can make....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/patrick-meenan/" class="fw5 f2 black no-underline">Patrick Meenan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-week/" class="no-underline f1 fw2 blue3 underline-hover">Speed Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-08-16T13:17:19+01:00">August 16, 2016 1:17PM</p>
+        <a href="/accelerating-node-js-applications-with-http-2-server-push/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Accelerating Node.js applications with HTTP/2 Server Push</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In April, we announced support for HTTP/2 Server Push via the HTTP Link header. My coworker John has demonstrated how easy it is to add Server Push to an example PHP application.  We wanted to make it easy to improve the performance of contemporary websites built with Node.js....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/terin-stock/" class="fw5 f2 black no-underline">Terin Stock</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/php/" class="no-underline f1 fw2 blue3 underline-hover">php</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/server-push/" class="no-underline f1 fw2 blue3 underline-hover">Server Push</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

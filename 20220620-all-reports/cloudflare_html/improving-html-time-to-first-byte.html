@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Improving HTML Time to First Byte</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Fixing slow Time To First Byte by edge-caching HTML with Cloudflare Workers and automatically purging the cache when content changes." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/improving-html-time-to-first-byte/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Improving HTML Time to First Byte" />
+    <meta property="og:description" content="Fixing slow Time To First Byte by edge-caching HTML with Cloudflare Workers and automatically purging the cache when content changes." />
+    <meta property="og:url" content="https://blog.cloudflare.com/improving-html-time-to-first-byte/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/12/tweet-3.png" />
+    <meta property="article:published_time" content="2018-12-24T16:00:00.000Z" />
+    <meta property="article:modified_time" content="2018-12-24T16:00:00.000Z" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="Cloudflare Workers KV" />
+    <meta property="article:tag" content="WordPress" />
+    <meta property="article:tag" content="Cache" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Improving HTML Time to First Byte" />
+    <meta name="twitter:description" content="Fixing slow Time To First Byte by edge-caching HTML with Cloudflare Workers and automatically purging the cache when content changes." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/improving-html-time-to-first-byte/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/12/tweet-2.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Patrick Meenan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Speed &amp; Reliability, Cloudflare Workers, Cloudflare Workers KV, WordPress, Cache, Serverless, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@patmeenan" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Patrick Meenan",
+        "image": "https://blog.cloudflare.com/content/images/2018/08/PatPerfCalendar.jpg",
+        "url": "https://blog.cloudflare.com/author/patrick-meenan/",
+        "sameAs": [
+            "https://www.webpagetest.org/",
+            "https://twitter.com/patmeenan"
+        ]
+    },
+    "headline": "Improving HTML Time to First Byte",
+    "url": "https://blog.cloudflare.com/improving-html-time-to-first-byte/",
+    "datePublished": "2018-12-24T16:00:00.000Z",
+    "dateModified": "2018-12-24T16:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/12/tweet-1.png",
+    "keywords": "Speed & Reliability, Cloudflare Workers, Cloudflare Workers KV, WordPress, Cache, Serverless, Programming",
+    "description": "Fixing slow Time To First Byte by edge-caching HTML with Cloudflare Workers and automatically purging the cache when content changes.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-speed-and-reliability tag-workers tag-workers-kv tag-wordpress tag-cache tag-serverless tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-speed-and-reliability tag-workers tag-workers-kv tag-wordpress tag-cache tag-serverless tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Improving HTML Time to First Byte</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-12-24T16:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 24, 2018 4:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/patrick-meenan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/08/PatPerfCalendar.jpg" alt="Patrick Meenan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/patrick-meenan" class="fw5 f3 no-underline black mr3">Patrick Meenan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>The Time to First Byte (TTFB) of a site is the time from when the user starts navigating until the HTML for the page they requested starts to arrive. A slow TTFB has been the bane of my existence for more than the ten years I have been running <a href="https://www.webpagetest.org/">WebPageTest</a>.</p>
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">Looking at a recent test data set (~100k pages):<br><br>20% TTFB &gt; 3s<br>80% start render &gt; 5s (10% &gt; 10s)<br>500 pages were &gt; 15MB<br><br>So much slow to fix</p>&mdash; Patrick Meenan (@patmeenan) <a href="https://twitter.com/patmeenan/status/763372155052494852?ref_src=twsrc%5Etfw">August 10, 2016</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>There is a reason why TTFB appears as one of the few “grades” that WebPageTest scores a site on and, specifically, why it is the first grade in the list.</p>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/grades.png" alt="WebPageTest optimization grades."></figure><br>
+<p>If the first byte is slow, <strong>EVERY</strong> other metric will also be slow. Improving it is one of the few cases where you can predict what the impact will be on every other measurement. Every millisecond improvement in the TTFB translates directly into a millisecond of savings in every other measurement (i.e. first paint will be 500ms faster if TTFB improves by 500ms). That said, a fast ttfb doesn't guarantee a fast experience but a slow ttfb does guarantee a slow experience. I’d estimate that roughly 50% of all requests for help with WebPageTest results come from site owners struggling with a slow TTFB.</p>
+<p>Many things can roll up into the TTFB, including redirects, DNS, connection setup, SSL negotiation and the actual server response time. Most of them can be fixed relatively easily by using a service like Cloudflare, but the server response time for the HTML itself is often the biggest problem and the hardest one to solve.</p>
+<p>The waterfall diagram below shows the server response time as a light blue bar on the first request and it can be painfully obvious when it is slow. Under optimal conditions, the server response time would be no longer than the orange socket connect bar right before it.</p>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/waterfall.png" alt="Waterfall diagram showing a 3 second TTFB."><figcaption style="font-size:smaller;line-height:1em;">Over three seconds for the server to respond.</figcaption></figure><br>
+<p>Slow origin response times can be caused by an enormous assortment of issues from the server configuration, system load, back-end databases and systems it talks to, to the application code itself. Getting to the root of the performance issues usually involves teams of <a href="https://en.wikipedia.org/wiki/DevOps">Dev Ops</a> engineers working with <a href="https://en.wikipedia.org/wiki/Application_performance_management">Application Performance Management</a> tools to track down the slowest parts of the application and improve them.</p>
+<p>A huge portion of the site owners I have worked with don’t have the resources or expertise to handle that kind of an investigation. More often than not, they paid someone a one-time development fee to build their site or built it themselves on WordPress and are hosting it on the lowest-cost hosting they could find. The hosting is generally designed to run as many sites as possible, not necessarily for the highest performance.</p>
+<h3 id="edgecachingofhtml">Edge Caching of HTML</h3>
+<p>The thing is, most HTML isn’t really dynamic. It needs to be able to change relatively quickly when the site is updated but for a huge portion of the web the content is static for months or years at a time.</p>
+<p>There are special cases like when a user is logged-in (as the admin or otherwise) where the content needs to differ but the vast majority of visits are of anonymous users. If the HTML can be cached and served directly from the edge then the performance gains can be substantial (over 3 seconds faster on all metrics in this case).</p>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/waterfall-fast.png" alt="Waterfall diagram showing a fast TTFB."><figcaption style="font-size:smaller;line-height:1em;">Much faster server response time.</figcaption></figure><br>
+<p>There are dozens of plugins for WordPress for caching content at the origin but they require configuration (where to cache the pages) and the performance still depends heavily on the performance of the hosting itself. Pushing the content cache further out to the edge reduces the complexity, eliminates the additional time to get back to the origin and completely removes the hosting performance from the equation. It can also significantly reduce the load on the hosting systems by offloading all of the anonymous traffic.</p>
+<p>Cloudflare supports <a href="https://support.cloudflare.com/hc/en-us/articles/236166048-Caching-Static-HTML-with-WordPress-WooCommerce">caching static HTML</a>, and business and enterprise customers can enable logged-in users to skip the cache by enabling “bypass cache on cookies”. It works in tandem with the <a href="https://wordpress.org/plugins/cloudflare/">Cloudflare plugin for WordPress</a> so the cache can be cleared whenever content is updated. There are also several other caching plugins that integrate with various CDN’s but in all of the cases they need to be configured with API keys for the CDN and the implementations are specific for each CDN.</p>
+<h3 id="zeroconfigedgecachingofhtml">Zero-Config Edge Caching of HTML</h3>
+<p>For broad adoption, we need to make the caching of HTML happen automatically (or as close to automatically as possible). To that end, we need a way to communicate between an origin (like a WordPress site) and an edge cache (like Cloudflare’s edge nodes) for managing a remote cache that can be explicitly purged.</p>
+<p>The Origin needs to be able to:</p>
+<ul>
+<li>Recognize when there is a supported edge cache in front of it.</li>
+<li>Specify content that should be cached and for what visitors (i.e. visits without a login cookie).</li>
+<li>Purge the cached content when it has changed (globally across all edges).</li>
+</ul>
+<p>Instead of requiring the origin to integrate with an API for purging on changes and requiring manual configuration for what to cache an when we can accomplish everything using HTTP headers on the requests that travel back and forth between the edges and the origin:</p>
+<p>1 - A HTTP header is added to requests going from the edge to the origin to advertise that there is an edge cache present and the capabilities it supports:</p>
+<pre><code>x-HTML-Edge-Cache: supports=cache|purgeall|bypass-cookies
+</code></pre>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/get.png" alt="Fetch from origin."></figure><br>
+<p>2 - When the origin responds with a cacheable page it adds a HTTP header on the response to indicate that it should be cached and any rules for when the cached version shouldn’t be used (to allow for bypassing the cache for logged-in users):</p>
+<pre><code>x-HTML-Edge-Cache: cache,bypass-cookies=wp-|wordpress
+</code></pre>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/get-response.png" alt="Response with cache instructions."></figure><br>
+<p>In this case the HTML will be cached but any requests that have cookies that start with “wordpress” or “wp-” for the cookie name will bypass the cache and go to the origin.</p>
+<p>3 - When a request modifies the site content (updating a post, changing a theme, adding a comment) the origin adds a HTTP response header indicating that the cache needs to be purged:</p>
+<pre><code>x-HTML-Edge-Cache: purgeall
+</code></pre>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/update.png" alt="Content Update."></figure><br>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/update-response.png" alt="Response with purge command."></figure><br>
+<p>The only tricky part to deal with is that the purge needs to clear the cache from ALL of the edges, not just the one edge that the request went through.</p>
+<p>4 - When a new request comes in for HTML that is in the edge cache, the request cookies are checked against the rules for the cached response. If the cookies are not present then the cached version is served; otherwise, the request is passed through to the origin.</p>
+<figure style="text-align:center; margin:1em"><img src="https://blog.cloudflare.com/content/images/2018/12/cached.png" alt="Served from edge cache."></figure><br>
+<p>With this simple header-based command and control interface we can eliminate the need for an origin to talk to an API and for any explicit configuration. It also makes the logic on the origin significantly easier to implement as there is no configuration (or UI) and no need to make any outbound requests to a vendor-specific API. The <a href="https://github.com/cloudflare/worker-examples/blob/master/examples/edge-cache-html/WordPress%20Plugin/cloudflare-page-cache/cloudflare-page-cache.php">example WordPress plugin</a> is less than 50 lines of code and the vast majority of that is hooking up callbacks for all of the events that change content.</p>
+<h3 id="startcachingtodaywithwordpressandworkers">Start Caching today with WordPress and Workers</h3>
+<p>One of the things I love most about Workers is that it gives you a fully programmable edge to experiment with ideas and implement your own logic. I created a <a href="https://github.com/cloudflare/worker-examples/tree/master/examples/edge-cache-html">Worker script</a> that implements the header-based protocol and edge caching on the Cloudflare edges and a <a href="https://github.com/cloudflare/worker-examples/tree/master/examples/edge-cache-html/WordPress%20Plugin">WordPress plugin</a> that implements the origin logic for WordPress.</p>
+<p>The only tricky part with the Worker was finding a way to purge items from the cache globally. The Worker caches are local to each edge and don’t provide an interface for doing any global operations. One way it does it is to use the Cloudflare API to purge the global cache but that is a bit of a heavy hammer (purging everything from the cache including scripts and images) and it requires some configuration. If you know the specific URLs that will be changed by a content change then doing a targeted purge through the API for just those URLs would probably be the best solution.</p>
+<p>Using the new <a href="https://developers.cloudflare.com/workers/kv/">Workers KV store</a> we can purge the cache a different way. The Worker script uses a versioning scheme for the cache where every URL gets a version number appended to it (i.e. <a href="http://www.example.com/?cf_edge_cache_ver=32">http://www.example.com/?cf_edge_cache_ver=32</a>). The modified URL is only ever used locally by the worker as a key for the cached responses and the current version number is stored in KV which is a global store. When the cache is purged, the version number is incremented which changes the URL for all of the resources. Old entries will age out of the cache normally since they will no longer be accessed. It requires a little configuration to set up KV for the worker but hopefully at some point in the future that can also be automatic.</p>
+<h3 id="whatnext">What Next?</h3>
+<p>I think there is a huge value for the web in standardizing a way for edge caches and origins to communicate for caching of dynamic content. That would provide incentive for content management systems to build support directly into the platforms and provide a standard interface that could be used across different providers (and even for local edge caches in load balancers or other reverse proxies). After doing some more testing with different types of sites I’m planning to bring the concept to the <a href="https://httpwg.org/">IETF HTTP Working Group</a> to see if we can come up with an official standard for the control headers (using different names). If you have opinions about how it should work or what features you’d need exposed I’d love to hear about it (like purging specific URLs, varying content for mobile/desktop or region, expanding it to cover all content types, etc).</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/workers-kv/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers KV</a>
+        <a href="/tag/wordpress/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">WordPress</a>
+        <a href="/tag/cache/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cache</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-19T22:38:20Z">November 19, 2020 10:38PM</p>
+        <a href="/improving-performance-and-search-rankings-with-cloudflare-for-fun-and-profit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving Performance and Search Rankings with Cloudflare for Fun and Profit</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Making things fast is one of the things we do at Cloudflare. More responsive websites, apps, APIs, and networks directly translate into improved conversion and user experience....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/rita/" class="fw5 f2 black no-underline">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/seo/" class="no-underline f1 fw2 blue3 underline-hover">SEO</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/browser-insights/" class="no-underline f1 fw2 blue3 underline-hover">Browser Insights</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/analytics/" class="no-underline f1 fw2 blue3 underline-hover">Analytics</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-12-31T19:13:58Z">December 31, 2019 7:13PM</p>
+        <a href="/adopting-a-new-approach-to-http-prioritization/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Adopting a new approach to HTTP prioritization</h2>
+        </a>
+
+        <p class="gray1 lh-copy">HTTP prioritization is important for web performance. This is the story behind a new approach recently adopted for further work in the IETF....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/lucas/" class="fw5 f2 black no-underline">Lucas Pardue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-08-13T14:01:00+01:00">August 13, 2019 2:01PM</p>
+        <a href="/magic-transit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Magic Transit makes your network smarter, better, stronger, and cheaper to operate</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we’re excited to announce Cloudflare Magic Transit. Magic Transit provides secure, performant, and reliable IP connectivity to the Internet. Out-of-the-box, Magic Transit deployed in front of your on-premise network protects it from DDoS attack...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-08-13T14:00:00+01:00">August 13, 2019 2:00PM</p>
+        <a href="/magic-transit-network-functions/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Magic Transit: Network functions at Cloudflare scale</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we announced Cloudflare Magic Transit, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-wondra/" class="fw5 f2 black no-underline">Nick Wondra</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/anycast/" class="no-underline f1 fw2 blue3 underline-hover">Anycast</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

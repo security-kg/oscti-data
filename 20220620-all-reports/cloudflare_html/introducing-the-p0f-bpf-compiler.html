@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Introducing the p0f BPF compiler</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/introducing-the-p0f-bpf-compiler/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Introducing the p0f BPF compiler" />
+    <meta property="og:description" content="Two years ago we blogged about our love of BPF (BSD packet filter) bytecode. Today we are very happy to open source another component of the bpftools: our p0f BPF compiler!" />
+    <meta property="og:url" content="https://blog.cloudflare.com/introducing-the-p0f-bpf-compiler/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/13488404_e45bf52f98_z.jpg" />
+    <meta property="article:published_time" content="2016-08-02T14:01:15.000Z" />
+    <meta property="article:modified_time" content="2018-08-28T20:30:23.000Z" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="Tips" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Introducing the p0f BPF compiler" />
+    <meta name="twitter:description" content="Two years ago we blogged about our love of BPF (BSD packet filter) bytecode. Today we are very happy to open source another component of the bpftools: our p0f BPF compiler!" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/introducing-the-p0f-bpf-compiler/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/13488404_e45bf52f98_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Gilberto Bertin" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TCP, Tips, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Gilberto Bertin",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/fVckmgHM.jpg",
+        "url": "https://blog.cloudflare.com/author/gilberto-bertin/",
+        "sameAs": []
+    },
+    "headline": "Introducing the p0f BPF compiler",
+    "url": "https://blog.cloudflare.com/introducing-the-p0f-bpf-compiler/",
+    "datePublished": "2016-08-02T14:01:15.000Z",
+    "dateModified": "2018-08-28T20:30:23.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/13488404_e45bf52f98_z.jpg",
+    "keywords": "TCP, Tips, Programming",
+    "description": "Two years ago we blogged about our love of BPF (BSD packet filter) bytecode. Today we are very happy to open source another component of the bpftools: our p0f BPF compiler!",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tcp tag-tips tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tcp tag-tips tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Introducing the p0f BPF compiler</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2016-08-02T15:01:15+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">August 02, 2016 3:01PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/gilberto-bertin/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/fVckmgHM.jpg" alt="Gilberto Bertin" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/gilberto-bertin" class="fw5 f3 no-underline black mr3">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Two years ago we blogged about our love of <a href="https://blog.cloudflare.com/bpf-the-forgotten-bytecode/">BPF (BSD packet filter)</a> bytecode.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/08/13488404_e45bf52f98_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/rocketjim54/13488404/in/photolist-6UV6AL-cNg6EC-bCTyGc-pHpUZt-8mgA4n-pZV4Qq-dJTkkr-ckZqwA-dJTkhB-q2Kyas-cLvVP1-2c8CG-a5JDy8-6NSXFW-73SFAD-9JGikG-6NNM2t-6mGTaN-eHCuuX-6NSXLC-6mH8fQ">image</a> by <a href="https://www.flickr.com/photos/rocketjim54/">jim simonson</a></small></p>
+<p>Then we published a set of utilities we are using to generate the BPF rules for our production iptables: <a href="https://blog.cloudflare.com/introducing-the-bpf-tools/">the bpftools</a>.</p>
+<p>Today we are very happy to open source another component of the bpftools: our <strong>p0f BPF compiler</strong>!</p>
+<h3 id="meetthep0f">Meet the p0f</h3>
+<p><a href="http://lcamtuf.coredump.cx/p0f3/">p0f</a> is a tool written by superhuman <a href="https://en.wikipedia.org/wiki/Micha%C5%82_Zalewski">Michal Zalewski</a>.<br>
+The main purpose of p0f is to passively analyze and categorize arbitrary network traffic. You can feed p0f any packet and in return it will derive knowledge about the operating system that sent the packet.</p>
+<p>One of the features that caught our attention was the concise yet explanatory signature format used to describe TCP SYN packets.</p>
+<p>The p0f SYN signature is a simple string consisting of colon separated values. This string cleanly describes a SYN packet in a human-readable way. The format is pretty smart, skipping the varying TCP fields and keeping focus only on the essence of the SYN packet, extracting the interesting bits from it.</p>
+<p>We are using this on daily basis to categorize the packets that we, at CloudFlare, see when we are a target of a SYN flood. To defeat SYN attacks we want to discriminate the packets that are part of an attack from legitimate traffic. One of the ways we do this uses p0f.</p>
+<p>We want to rate limit attack packets, and in effect prioritize processing of <em>other</em>, hopefully legitimate, ones. The p0f SYN signatures give us a language to describe and distinguish different types of SYN packets.</p>
+<p>For example here is a typical p0f SYN signature of a Linux SYN packet:</p>
+<pre><code>4:64:0:*:mss*10,6:mss,sok,ts,nop,ws:df,id+:0
+</code></pre>
+<p>while this is a Windows 7 one:</p>
+<pre><code>4:128:0:*:8192,8:mss,nop,ws,nop,nop,sok:df,id+:0
+</code></pre>
+<p>Not getting into details yet, but you can clearly see that there are differences between these operating systems. Over time we noticed that the attack packets are often different. Here are two examples of attack SYN packets:</p>
+<pre><code>4:255:0:0:*,0::ack+,uptr+:0
+4:64:0:*:65535,*:mss,nop,ws,nop,nop,sok:df,id+:0
+</code></pre>
+<p>You can have a look at more signatures in p0f's <a href="https://github.com/p0f/p0f/blob/master/docs/README">README</a> and <a href="https://github.com/p0f/p0f/blob/master/p0f.fp">signatures database</a>.</p>
+<p>It's not <em>always</em> possible to perfectly distinguish an attack from valid packets, but very often it is. This realization led us to develop an attack mitigation tool based on p0f SYN signatures. With this we can ask <code>iptables</code> to rate limit only the selected attack signatures.</p>
+<p>But before we discuss the mitigations, let's explain the signature format.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/08/640px-12-8_equals_4-4_drum_pattern.png" alt=""><br>
+<small><a href="http://creativecommons.org/licenses/by-sa/3.0/" title="Creative Commons Attribution-Share Alike 3.0">CC BY-SA 3.0</a> <a href="https://commons.wikimedia.org/w/index.php?curid=17871154">image</a> by <a href="//en.wikipedia.org/wiki/User:Hyacinth" class="extiw" title="en:User:Hyacinth">Hyacinth</a> at the <a href="//en.wikipedia.org/wiki/" class="extiw" title="w:">English language Wikipedia</a></small></p>
+<h2 id="signature">Signature</h2>
+<p>As mentioned, the p0f SYN signature is a colon-separated string with the following parts:</p>
+<ul>
+<li><strong>IP version</strong>: the first field carries the IP version. Allowed values are <code>4</code> and <code>6</code>.</li>
+<li><strong>Initial TTL</strong>: assuming that realistically a packet will not jump through more than 35 hops, we can specify an initial TTL <em>ittl</em> (usual values are <code>255</code>, <code>128</code>, <code>64</code> and <code>32</code>) and check if the packet's TTL is in the range (<em>ittl</em>, <em>ittl</em> - 35).</li>
+<li><strong>IP options length</strong>: length of IP options. Although it's not that common to see options in the IP header (and so <code>0</code> is the typical value you would see in a signature), the standard defines a variable length field before the IP payload where options can be specified. A <code>*</code> value is allowed too, which means &quot;not specified&quot;.</li>
+<li><strong>MSS</strong>: maximum segment size specified in the TCP options. Can be a constant or <code>*</code>.</li>
+<li><strong>Window Size</strong>: window size specified in the TCP header. It can be a expressed as:</li>
+<li>a constant <code>c</code>, like 8192</li>
+<li>a multiple of the MSS, in the <code>c*mss</code> format</li>
+<li>a multiple of a constant, in the <code>%c</code> format</li>
+<li>any value, as <code>*</code></li>
+<li><strong>Window Scale</strong>: window scale specified during the three way handshake. Can be a constant or <code>*</code>.</li>
+<li><strong>TCP options layout</strong>: list of TCP options in the order they are seen in a TCP packet.</li>
+<li><strong>Quirks</strong>: comma separated list of unusual (e.g. ACK number set in a non ACK packet) or incorrect (e.g. malformed TCP options) characteristics of a packet.</li>
+<li><strong>Payload class</strong>: TCP payload size. Can be <code>0</code> (no data), <code>+</code> (1 or more bytes of data) or <code>*</code>.</li>
+</ul>
+<h4 id="tcpoptionsformat">TCP Options format</h4>
+<p>The following common TCP options are recognised:</p>
+<ul>
+<li><strong>nop</strong>: no-operation</li>
+<li><strong>mss</strong>: maximum segment size</li>
+<li><strong>ws</strong>: window scaling</li>
+<li><strong>sok</strong>: selective ACK permitted</li>
+<li><strong>sack</strong>: selective ACK</li>
+<li><strong>ts</strong>: timestamp</li>
+<li><strong>eol+x</strong>: end of options followed by <code>x</code> bytes of padding</li>
+</ul>
+<h4 id="quirks">Quirks</h4>
+<p>p0f describes a number of quirks:</p>
+<ul>
+<li><strong>df</strong>: don't fragment bit is set in the IP header</li>
+<li><strong>id+</strong>: df bit is set and IP identification field is non zero</li>
+<li><strong>id-</strong>: df bit is not set and IP identification is zero</li>
+<li><strong>ecn</strong>: explicit congestion flag is set</li>
+<li><strong>0+</strong>: reserved (&quot;must be zero&quot;) field in IP header is not actually zero</li>
+<li><strong>flow</strong>: flow label in IPv6 header is non-zero</li>
+<li><strong>seq-</strong>: sequence number is zero</li>
+<li><strong>ack+</strong>: ACK field is non-zero but ACK flag is not set</li>
+<li><strong>ack-</strong>: ACK field is zero but ACK flag is set</li>
+<li><strong>uptr+</strong>: URG field is non-zero but URG flag not set</li>
+<li><strong>urgf+</strong>: URG flag is set</li>
+<li><strong>pushf+</strong>: PUSH flag is set</li>
+<li><strong>ts1-</strong>: timestamp 1 is zero</li>
+<li><strong>ts2+</strong>: timestamp 2 is non-zero in a SYN packet</li>
+<li><strong>opt+</strong>: non-zero data in options segment</li>
+<li><strong>exws</strong>: excessive window scaling factor (window scale greater than 14)</li>
+<li><strong>linux</strong>: match a packet sent from the Linux network stack (<code>IP.id</code> field equal to <code>TCP.ts1</code> xor <code>TCP.seq_num</code>). Note that this quirk is not part of the original p0f signature format; we decided to add it since we found it useful.</li>
+<li><strong>bad</strong>: malformed TCP options</li>
+</ul>
+<h2 id="mitigatingattacks">Mitigating attacks</h2>
+<p>Given a p0f SYN signature, we want to pass it to <code>iptables</code> for mitigation. It's not obvious how to do so, but fortunately we are experienced in BPF bytecode since we are already using it to block DNS DDoS attacks.</p>
+<p>We decided to extend our BPF infrastructure to support p0f as well, by building a tool to compile a p0f SYN signature into a BPF bytecode blob, which got incorporated into the bpftools project.</p>
+<p>This allows us to use a simple and human readable syntax for the mitigations - the p0f signature - and compile it to a very efficient BPF form that can be used by iptables.</p>
+<p>With a p0f signature running as BPF in the iptables we're able to distinguish attack packets with a very high speed and react accordingly. We can either hard <code>-j DROP</code> them or do a rate limit if we wish.</p>
+<h2 id="howtocompilep0ftobpf">How to compile p0f to BPF</h2>
+<p>First you need to clone the <code>cloudflare/bpftools</code> GitHub repository:</p>
+<pre><code>$ git clone https://github.com/cloudflare/bpftools.git
+</code></pre>
+<p>Then compile it:</p>
+<pre><code>$ cd bpftools
+$ make
+</code></pre>
+<p>With this you can run <code>bpfgen p0f</code> to generate a BPF filter that matches a p0f signature.</p>
+<p>Here's an example where we take the p0f signature of a Linux TCP SYN packet (the one we introduced before), and by using <code>bpftools</code> we generate the BPF bytecode that will match this category of packets:</p>
+<pre><code>$ ./bpfgen p0f -- 4:64:0:*:mss*10,6:mss,sok,ts,nop,ws:df,id+:0
+56,0 0 0 0,48 0 0 8,37 52 0 64,37 0 51 29,48 0 0 0,
+84 0 0 15,21 0 48 5,48 0 0 9,21 0 46 6,40 0 0 6,
+69 44 0 8191,177 0 0 0,72 0 0 14,2 0 0 8,72 0 0 22,
+36 0 0 10,7 0 0 0,96 0 0 8,29 0 36 0,177 0 0 0,
+80 0 0 39,21 0 33 6,80 0 0 12,116 0 0 4,21 0 30 10,
+80 0 0 20,21 0 28 2,80 0 0 24,21 0 26 4,80 0 0 26,
+21 0 24 8,80 0 0 36,21 0 22 1,80 0 0 37,21 0 20 3,
+48 0 0 6,69 0 18 64,69 17 0 128,40 0 0 2,2 0 0 1,
+48 0 0 0,84 0 0 15,36 0 0 4,7 0 0 0,96 0 0 1,
+28 0 0 0,2 0 0 5,177 0 0 0,80 0 0 12,116 0 0 4,
+36 0 0 4,7 0 0 0,96 0 0 5,29 0 1 0,6 0 0 65536,
+6 0 0 0,
+</code></pre>
+<p>If this looks magical, use the <code>-s</code> flag to see the explanation on what's going on:</p>
+<pre><code>$ ./bpfgen -s p0f -- 4:64:0:*:mss*10,6:mss,sok,ts,nop,ws:df,id+:0
+; ip: ip version
+; (ip[8] &lt;= 64): ttl &lt;= 64
+; (ip[8] &gt; 29): ttl &gt; 29
+; ((ip[0] &amp; 0xf) == 5): IP options len == 0
+; (tcp[14:2] == (tcp[22:2] * 10)): win size == mss * 10
+; (tcp[39:1] == 6): win scale == 6
+; ((tcp[12] &gt;&gt; 4) == 10): TCP data offset
+; (tcp[20] == 2): olayout mss
+; (tcp[24] == 4): olayout sok
+; (tcp[26] == 8): olayout ts
+; (tcp[36] == 1): olayout nop
+; (tcp[37] == 3): olayout ws
+; ((ip[6] &amp; 0x40) != 0): df set
+; ((ip[6] &amp; 0x80) == 0): mbz zero
+; ((ip[2:2] - ((ip[0] &amp; 0xf) * 4) - ((tcp[12] &gt;&gt; 4) * 4)) == 0): payload len == 0
+;
+; ipver=4
+; ip and (ip[8] &lt;= 64) and (ip[8] &gt; 29) and ((ip[0] &amp; 0xf) == 5) and (tcp[14:2] == (tcp[22:2] * 10)) and (tcp[39:1] == 6) and ((tcp[12] &gt;&gt; 4) == 10) and (tcp[20] == 2) and (tcp[24] == 4) and (tcp[26] == 8) and (tcp[36] == 1) and (tcp[37] == 3) and ((ip[6] &amp; 0x40) != 0) and ((ip[6] &amp; 0x80) == 0) and ((ip[2:2] - ((ip[0] &amp; 0xf) * 4) - ((tcp[12] &gt;&gt; 4) * 4)) == 0)
+
+l000:
+    ld       #0x0
+l001:
+    ldb      [8]
+l002:
+    jgt      #0x40, l055, l003
+l003:
+    jgt      #0x1d, l004, l055
+l004:
+    ldb      [0]
+l005:
+    and      #0xf
+l006:
+    jeq      #0x5, l007, l055
+l007:
+    ldb      [9]
+l008:
+    jeq      #0x6, l009, l055
+l009:
+    ldh      [6]
+l010:
+    jset     #0x1fff, l055, l011
+l011:
+    ldxb     4*([0]&amp;0xf)
+l012:
+    ldh      [x + 14]
+l013:
+    st       M[8]
+l014:
+    ldh      [x + 22]
+l015:
+    mul      #10
+l016:
+    tax
+l017:
+    ld       M[8]
+l018:
+    jeq      x, l019, l055
+l019:
+    ldxb     4*([0]&amp;0xf)
+l020:
+    ldb      [x + 39]
+l021:
+    jeq      #0x6, l022, l055
+l022:
+    ldb      [x + 12]
+l023:
+    rsh      #4
+l024:
+    jeq      #0xa, l025, l055
+l025:
+    ldb      [x + 20]
+l026:
+    jeq      #0x2, l027, l055
+l027:
+    ldb      [x + 24]
+l028:
+    jeq      #0x4, l029, l055
+l029:
+    ldb      [x + 26]
+l030:
+    jeq      #0x8, l031, l055
+l031:
+    ldb      [x + 36]
+l032:
+    jeq      #0x1, l033, l055
+l033:
+    ldb      [x + 37]
+l034:
+    jeq      #0x3, l035, l055
+l035:
+    ldb      [6]
+l036:
+    jset     #0x40, l037, l055
+l037:
+    jset     #0x80, l055, l038
+l038:
+    ldh      [2]
+l039:
+    st       M[1]
+l040:
+    ldb      [0]
+l041:
+    and      #0xf
+l042:
+    mul      #4
+l043:
+    tax
+l044:
+    ld       M[1]
+l045:
+    sub      x
+l046:
+    st       M[5]
+l047:
+    ldxb     4*([0]&amp;0xf)
+l048:
+    ldb      [x + 12]
+l049:
+    rsh      #4
+l050:
+    mul      #4
+l051:
+    tax
+l052:
+    ld       M[5]
+l053:
+    jeq      x, l054, l055
+l054:
+    ret      #65536
+l055:
+    ret      #0
+</code></pre>
+<h2 id="examplerun">Example run</h2>
+<p>For example, consider we want to block SYN packets generated by the <code>hping3</code> tool.</p>
+<p>First, we need to recognize the p0f SYN signature. Here it is, we know that one off the top of our heads:</p>
+<pre><code>4:64:0:0:*,0::ack+:0
+</code></pre>
+<p>(notice: unless you use the <code>-L 0</code> option, <code>hping3</code> will send SYN packets with the ACK number set, interesting, isn't it?)</p>
+<p>Now, we can use the bpftools to get BPF bytecode that will match the naughty packets:</p>
+<pre><code>$ ./bpfgen p0f -- 4:64:0:0:*,0::ack+:0
+39,0 0 0 0,48 0 0 8,37 35 0 64,37 0 34 29,48 0 0 0,
+84 0 0 15,21 0 31 5,48 0 0 9,21 0 29 6,40 0 0 6,
+69 27 0 8191,177 0 0 0,80 0 0 12,116 0 0 4,
+21 0 23 5,48 0 0 6,69 21 0 128,80 0 0 13,
+69 19 0 16,64 0 0 8,21 17 0 0,40 0 0 2,2 0 0 3,
+48 0 0 0,84 0 0 15,36 0 0 4,7 0 0 0,96 0 0 3,
+28 0 0 0,2 0 0 7,177 0 0 0,80 0 0 12,116 0 0 4,
+36 0 0 4,7 0 0 0,96 0 0 7,29 0 1 0,6 0 0 65536,
+6 0 0 0,
+</code></pre>
+<p>This bytecode can then be passed to iptables:</p>
+<pre><code>$ sudo iptables -A INPUT -p tcp --dport 80 -m bpf --bytecode &quot;39,0 0 0 0,48 0 0 8,37 35 0 64,37 0 34 29,48 0 0 0,84 0 0 15,21 0 31 5,48 0 0 9,21 0 29 6,40 0 0 6,69 27 0 8191,177 0 0 0,80 0 0 12,116 0 0 4,21 0 23 5,48 0 0 6,69 21 0 128,80 0 0 13,69 19 0 16,64 0 0 8,21 17 0 0,40 0 0 2,2 0 0 3,48 0 0 0,84 0 0 15,36 0 0 4,7 0 0 0,96 0 0 3,28 0 0 0,2 0 0 7,177 0 0 0,80 0 0 12,116 0 0 4,36 0 0 4,7 0 0 0,96 0 0 7,29 0 1 0,6 0 0 65536,6 0 0 0,&quot; -j DROP
+</code></pre>
+<p>And here's how it would look in iptables:</p>
+<pre><code>$ sudo iptables -L INPUT -v
+Chain INPUT (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+    6   240            tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:80match bpf 0 0 0 0,48 0 0 8,37 35 0 64,37 0 34 29,48 0 0 0,84 0 0 15,21 0 31 5,48 0 0 9,21 0 29 6,40 0 0 6,69 27 0 8191,177 0 0 0,80 0 0 12,116 0 0 4,21 0 23 5,48 0 0 6,69 21 0 128,80 0 0 13,69 19 0 16,64 0 0 8,21 17 0 0,40 0 0 2,2 0 0 3,48 0 0 0,84 0 0 15,36 0 0 4,7 0 0 0,96 0 0 3,28 0 0 0,2 0 0 7,177 0 0 0,80 0 0 12,116 0 0 4,36 0 0 4,7 0 0 0,96 0 0 7,29 0 1 0,6 0 0 65536,6 0 0 0
+</code></pre>
+<h4 id="closingwords">Closing words</h4>
+<p>While defending from DDoS attacks is sometimes fun, most often it's a mundane repetitive job. We are constantly working on improving our automatic DDoS mitigation system, but we do not believe there is a strong reason to keep it all secret. We want to help others fighting attacks. Maybe if we all worked together one day we could solve the DDoS problem for all.</p>
+<p>Releasing our code <a href="https://cloudflare.github.io/">open source</a> is an important part of CloudFlare. This blog post and the p0f BPF compiler are part of our effort to open source our DDoS mitigations. We hope others affected by SYN floods will find it useful.</p>
+<p><em>Do you enjoy playing with low level networking bits? Are you interested in dealing with some of the largest DDoS attacks ever seen?<br>
+If so you should definitely have a look at the <a href="https://www.cloudflare.com/join-our-team/">opened positions</a> in our London, San Francisco, Singapore, Champaign (IL) and Austin (TX) offices!</em></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+        <a href="/tag/tips/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Tips</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-02-18T13:13:02Z">February 18, 2019 1:13PM</p>
+        <a href="/sockmap-tcp-splicing-of-the-future/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SOCKMAP - TCP splicing of the future</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Proper TCP socket splicing reduces the load on userspace processes and enables more efficient data forwarding. We realized that Linux Kernel's SOCKMAP infrastructure can be reused for this purpose....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-11-07T10:15:00Z">November 07, 2017 10:15AM</p>
+        <a href="/perfect-locality-and-three-epic-systemtap-scripts/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Perfect locality and three epic SystemTap scripts</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a recent blog post we discussed epoll behavior causing uneven load among NGINX worker processes. We suggested a work around - the REUSEPORT socket option....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-07-07T12:50:34+01:00">July 07, 2016 12:50PM</p>
+        <a href="/why-we-use-the-linux-kernels-tcp-stack/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Why we use the Linux kernel&#x27;s TCP stack</h2>
+        </a>
+
+        <p class="gray1 lh-copy">A recent blog post posed the question Why do we use the Linux kernel's TCP stack?. It triggered a very interesting discussion on Hacker News....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-06-21T07:29:00+01:00">June 21, 2012 7:29AM</p>
+        <a href="/the-bandwidth-of-a-boeing-747-and-its-impact/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The bandwidth of a Boeing 747 and its impact on web browsing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Suppose you needed to transfer 1TB of data (perhaps your home movie collection) from San Francisco to London. What would be the fastest route? Put the disk on British Airways flight 286 at SFO, or transfer it across the Internet using a 100 Mbps connection?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/bandwidth/" class="no-underline f1 fw2 blue3 underline-hover">Bandwidth</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

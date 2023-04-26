@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Encrypt it or lose it: how encrypted SNI works</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/encrypted-sni/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Encrypt it or lose it: how encrypted SNI works" />
+    <meta property="og:description" content="Today we announced support for encrypted SNI, an extension to the TLS 1.3 protocol that improves privacy of Internet users." />
+    <meta property="og:url" content="https://blog.cloudflare.com/encrypted-sni/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/09/esni-3@3.5x-2.png" />
+    <meta property="article:published_time" content="2018-09-24T12:01:00.000Z" />
+    <meta property="article:modified_time" content="2019-12-04T20:52:53.000Z" />
+    <meta property="article:tag" content="Birthday Week" />
+    <meta property="article:tag" content="Product News" />
+    <meta property="article:tag" content="Cryptography" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="TLS 1.3" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Encrypt it or lose it: how encrypted SNI works" />
+    <meta name="twitter:description" content="Today we announced support for encrypted SNI, an extension to the TLS 1.3 protocol that improves privacy of Internet users." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/encrypted-sni/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/09/esni-3@3.5x-2.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Alessandro Ghedini" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Birthday Week, Product News, Cryptography, Security, TLS, TLS 1.3, DNS, Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Alessandro Ghedini",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/09/Ii4TgsoTda2layE131Dk_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg",
+            "width": 600,
+            "height": 600
+        },
+        "url": "https://blog.cloudflare.com/author/alessandro-ghedini/",
+        "sameAs": []
+    },
+    "headline": "Encrypt it or lose it: how encrypted SNI works",
+    "url": "https://blog.cloudflare.com/encrypted-sni/",
+    "datePublished": "2018-09-24T12:01:00.000Z",
+    "dateModified": "2019-12-04T20:52:53.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/09/esni-3@3.5x-2.png",
+    "keywords": "Birthday Week, Product News, Cryptography, Security, TLS, TLS 1.3, DNS, Reliability",
+    "description": "Today we announced support for encrypted SNI, an extension to the TLS 1.3 protocol that improves privacy of Internet users.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-birthday-week tag-product-news tag-cryptography tag-security tag-tls tag-tls-1-3 tag-dns tag-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-birthday-week tag-product-news tag-cryptography tag-security tag-tls tag-tls-1-3 tag-dns tag-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Encrypt it or lose it: how encrypted SNI works</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-09-24T13:01:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">September 24, 2018 1:01PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/alessandro-ghedini/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/09/Ii4TgsoTda2layE131Dk_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg" alt="Alessandro Ghedini" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/alessandro-ghedini" class="fw5 f3 no-underline black mr3">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2018/09/esni-3@3.5x-1.png" class="kg-image"></figure><p>Today we announced <a href="https://blog.cloudflare.com/esni">support for encrypted SNI</a>, <a href="https://tools.ietf.org/html/draft-ietf-tls-esni">an extension</a> to the <a href="https://blog.cloudflare.com/rfc-8446-aka-tls-1-3/">TLS 1.3</a> protocol that improves privacy of Internet users by preventing on-path observers, including ISPs, coffee shop owners and firewalls, from intercepting the TLS Server Name Indication (SNI) extension and using it to determine which websites users are visiting.</p><p>Encrypted SNI, together with other Internet security features already offered by Cloudflare for free, will make it harder to censor content and track users on the Internet. Read on to learn how it works.</p><h3 id="snwhy">SNWhy?</h3><p>The TLS Server Name Indication (SNI) extension, <a href="https://tools.ietf.org/html/rfc3546">originally standardized back in 2003</a>, lets servers host multiple TLS-enabled websites on the same set of IP addresses, by requiring clients to specify which site they want to connect to during the initial TLS handshake. Without SNI the server wouldn’t know, for example, which certificate to serve to the client, or which configuration to apply to the connection.</p><p>The client adds the SNI extension containing the hostname of the site it’s connecting to to the ClientHello message. It sends the ClientHello to the server during the TLS handshake. Unfortunately the ClientHello message is sent unencrypted, due to the fact that client and server don’t share an encryption key at that point.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2018/09/tls13_unencrypted_server_name_indication-2.png" class="kg-image"><figcaption><em>TLS 1.3 with Unencrypted SNI</em></figcaption></figure><p>This means that an on-path observer (say, an ISP, coffee shop owner, or a firewall) can intercept the plaintext ClientHello message, and determine which website the client is trying to connect to. That allows the observer to track which sites a user is visiting.</p><p>But with SNI encryption the client encrypts the SNI even though the rest of the ClientHello is sent in plaintext. </p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2018/09/tls13_encrypted_server_name_indication-1.png" class="kg-image"><figcaption><em>TLS 1.3 with Encrypted SNI</em></figcaption></figure><p>So how come the original SNI couldn’t be encrypted before, but now it can? Where does the encryption key come from if client and server haven’t negotiated one yet?</p><h3 id="if-the-chicken-must-come-before-the-egg-where-do-you-put-the-chicken">If the chicken must come before the egg, where do you put the chicken?</h3><p>As with <a href="https://datatracker.ietf.org/meeting/101/materials/slides-101-dnsop-sessa-the-dns-camel-01">many other Internet features</a> the answer is simply “DNS”. </p><p>The server publishes a <a href="https://en.wikipedia.org/wiki/Public-key_cryptography">public key</a> on a well-known DNS record, which can be fetched by the client before connecting (as it already does for A, AAAA and other records). The client then replaces the SNI extension in the ClientHello with an “encrypted SNI” extension, which is none other than the original SNI extension, but encrypted using a symmetric encryption key derived using the server’s public key, as described below. The server, which owns the private key and can derive the symmetric encryption key as well, can then decrypt the extension and therefore terminate the connection (or forward it to a backend server). Since only the client, and the server it’s connecting to, can derive the encryption key, the encrypted SNI cannot be decrypted and accessed by third parties.</p><p>It’s important to note that this is an extension to TLS version 1.3 and above, and doesn’t work with previous versions of the protocol. The reason is very simple: one of the changes introduced by TLS 1.3 (<a href="https://blog.cloudflare.com/you-get-tls-1-3-you-get-tls-1-3-everyone-gets-tls-1-3/">not without problems</a>) meant moving the Certificate message sent by the server to the encrypted portion of the TLS handshake (before 1.3, it was sent in plaintext). Without this fundamental change to the protocol, an attacker would still be able to determine the identity of the server by simply observing the plaintext certificate sent on the wire.</p><p>The underlying cryptographic machinery involves using the <a href="https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange">Diffie-Hellman key exchange algorithm</a> which allows client and server to generate a shared encryption key over an untrusted channel. The encrypted SNI encryption key is thus calculated on the client-side by using the server’s public key (which is actually the public portion of a Diffie-Hellman semi-static key share) and the private portion of an ephemeral Diffie-Hellman share generated by the client itself on the fly and discarded immediately after the ClientHello is sent to the server. Additional data (such as some of the cryptographic parameters sent by the client as part of its ClientHello message) is also mixed into the cryptographic process for good measure.</p><p>The client’s ESNI extension will then include, not only the actual encrypted SNI bits, but also the client’s public key share, the cipher suite it used for encryption and the digest of the server’s ESNI DNS record. On the other side, the server uses its own private key share, and the public portion of the client’s share to generate the encryption key and decrypt the extension.</p><p>While this may seem overly complicated, this ensures that the encryption key is cryptographically tied to the specific TLS session it was generated for, and cannot be reused across multiple connections. This prevents an attacker able to observe the encrypted extension sent by the client from simply capturing it and replaying it to the server in a separate session to unmask the identity of the website the user was trying to connect to (this is known as “cut-and-paste” attack).</p><p>However a compromise of the server’s private key would put all ESNI symmetric keys generated from it in jeopardy (which would allow observers to decrypt previously collected encrypted data), which is why Cloudflare’s own SNI encryption implementation rotates the server’s keys every hour to improve forward secrecy, but keeps track of the keys for the previous few hours to allow for DNS caching and replication delays, so that clients with slightly outdated keys can still use ESNI without problems (but eventually all keys are discarded and forgotten).</p><h3 id="but-wait-dns-for-real">But wait, DNS? For real?</h3><p>The observant reader might have realized that simply using DNS (which is, by default, unencrypted) would make the whole encrypted SNI idea completely pointless: an on-path observer would be able to determine which website the client is connecting to by simply observing the plaintext DNS queries sent by the client itself, whether encrypted SNI was used or not.</p><p>But with the introduction of DNS features such as DNS over TLS (DoT) and DNS over HTTPS (DoH), and of public DNS resolvers that provide those features to their users (such as Cloudflare’s own <a href="https://blog.cloudflare.com/announcing-1111/">1.1.1.1</a>), DNS queries can now be encrypted and protected by the prying eyes of censors and trackers alike.</p><p>However, while responses from DoT/DoH DNS resolvers can be trusted, to a certain extent (evil resolvers notwithstanding), it might still be possible for a determined attacker to poison the resolver’s cache by intercepting its communication with the authoritative DNS server and injecting malicious data. That is, unless both the authoritative server and the resolver support <a href="https://www.cloudflare.com/dns/dnssec/">DNSSEC</a><sub>[1]</sub>. Incidentally, Cloudflare’s authoritative DNS servers can sign responses returned to resolvers, and the 1.1.1.1 resolver can verify them.</p><h3 id="what-about-the-ip-address">What about the IP address?</h3><p>While both DNS queries and the TLS SNI extensions can now be protected by on-path attackers, it might still be possible to determine which websites users are visiting by simply looking at the destination IP addresses on the traffic originating from users’ devices. Some of our customers are protected by this to a certain degree thanks to the fact that many Cloudflare domains share the same sets of addresses, but this is not enough and more work is required to protect end users to a larger degree. Stay tuned for more updates from Cloudflare on the subject in the future.</p><h3 id="where-do-i-sign-up">Where do I sign up?</h3><p>Encrypted SNI is now enabled for free on all Cloudflare zones using our name servers, so you don’t need to do anything to enable it on your Cloudflare website. On the browser side, our friends at Firefox tell us that they expect to add encrypted SNI support this week to <a href="https://www.mozilla.org/firefox/channel/desktop/">Firefox Nightly</a> (keep in mind that the encrypted SNI spec is still under development, so it’s not stable just yet).</p><p>By visiting <a href="https://encryptedsni.com">encryptedsni.com</a> you can check how secure your browsing experience is. Are you using secure DNS? Is your resolver validating DNSSEC signatures? Does your browser support TLS 1.3? Did your browser encrypt the SNI? If the answer to all those questions is “yes” then you can sleep peacefully knowing that your browsing is protected from prying eyes.</p><h3 id="conclusion">Conclusion</h3><p>Encrypted SNI, along with TLS 1.3, DNSSEC and DoT/DoH, plugs one of the few remaining holes that enable surveillance and censorship on the Internet. More work is still required to get to a surveillance-free Internet, but we are (slowly) getting there.</p><p><sub>[1]: It's important to mention that DNSSEC could be disabled by BGP route hijacking between a DNS resolver and the TLD server. Last week we <a href="https://blog.cloudflare.com/rpki/">announced</a> our commitment to RPKI and if DNS resolvers and TLDs also implement RPKI, this type of hijacking will be much more difficult</sub>.</p><p><em><a href="https://blog.cloudflare.com/subscribe/" rel="noopener noreferer">Subscribe to the blog</a> for daily updates on all our Birthday Week announcements.</em></p><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/09/Cloudflare-Birthday-Week-3.png" class="kg-image"></figure>
+            </div>
+        </section>
+
+        <a href="/tag/birthday-week/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Birthday Week</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+        <a href="/tag/cryptography/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cryptography</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-04T12:00:00Z">December 04, 2020 12:00PM</p>
+        <a href="/diversity-and-the-digital-divide-thoughts-from-tech-leaders/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Diversity and The Digital Divide: Thoughts From Tech Leaders</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Leaders from across the tech industry and beyond recently joined us for Cloudflare’s Birthday Week, helping us celebrate Cloudflare’s 10th birthday. Many of them touched on the importance of diversity and making the Internet accessible to everyone....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/cristinalee/" class="fw5 f2 black no-underline">Cristina Lee</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/diversity/" class="no-underline f1 fw2 blue3 underline-hover">Diversity</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-11T13:17:44Z">November 11, 2020 1:17PM</p>
+        <a href="/tech-leaders-on-the-future-of-remote-work/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Tech Leaders on the Future of Remote Work</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Dozens of top leaders and thinkers from the tech industry and beyond recently joined us for a series of fireside chats commemorating Cloudflare’s 10th birthday. Here are some of the highlights....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jason-kincaid/" class="fw5 f2 black no-underline">Jason Kincaid</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-tv/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare TV</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-04T13:03:03+01:00">October 04, 2020 1:03PM</p>
+        <a href="/birthday-week-cloudflare-turns-10/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Birthday week: Cloudflare turns 10</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Let’s recap the key announcements from Birthday Week 2020....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/james-allworth/" class="fw5 f2 black no-underline">James Allworth</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-02T14:01:00+01:00">October 02, 2020 2:01PM</p>
+        <a href="/automatic-platform-optimizations-starting-with-wordpress/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Automatic Platform Optimization, starting with WordPress</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today, we are announcing a new service to serve more than just the static content of your website with the Automatic Platform Optimization (APO) service. With this launch, we are supporting WordPress, the most popular website hosting solution serving 38% of all websites....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/garrett/" class="fw5 f2 black no-underline">Garrett Galow</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wordpress/" class="no-underline f1 fw2 blue3 underline-hover">WordPress</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ttfb/" class="no-underline f1 fw2 blue3 underline-hover">TTFB</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

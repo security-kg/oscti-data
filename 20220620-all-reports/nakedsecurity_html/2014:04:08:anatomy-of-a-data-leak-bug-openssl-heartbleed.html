@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google-site-verification" content="RHQeasQqjasbRt5asY6atZYbs5tr10gFBevDt2HRhW0" />
+<link rel="pingback" href="https://nakedsecurity.sophos.com/xmlrpc.php">
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-5VK6LTK');</script>
+<!-- End Google Tag Manager -->
+
+<meta name="description" content="An information disclosure vulnerability has been found, and promptly patched, in OpenSSL. Paul Ducklin takes a look at what went wrong in the code..." />
+<meta name="keywords" content="cryptography, bug, data leak, heartbleed, openssl" />
+<title>Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow  &#8211; Naked Security</title>
+<meta name='robots' content='max-image-preview:large' />
+<!-- Jetpack Site Verification Tags -->
+<meta name="google-site-verification" content="I9dHFo-YhnK2MfAHn-20V4GnWrOttVUYyISGamyU41M" />
+<meta name="msvalidate.01" content="7D8D1FA2892142B1543D2CBCD07FB88F" />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel='dns-prefetch' href='//v0.wordpress.com' />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Feed" href="https://nakedsecurity.sophos.com/feed/" />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Comments Feed" href="https://nakedsecurity.sophos.com/comments/feed/" />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow Comments Feed" href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/feed/" />
+<link rel='stylesheet' id='all-css-0' href='https://nakedsecurity.sophos.com/_static/??-eJyVz00KwjAQhuELmUwjptCFeJY0HUw0f2QmlN6+KXbnRpcD7wPfwFqETza0BQksESyeGOaQ7VsEP1dTNyDeAsrok+zBBbqwOTEmBnYYu6NcXKaEK4nroPQJ/olFMIzEv5pjqFkku4qGhWs9rtLE8uVjEyW0p08EL+Ri+leT/PjzPsgj3tWo9G0ctJp2dx1jEg==' type='text/css' media='all' />
+<style id='wp-block-library-inline-css'>
+.has-text-align-justify{text-align:justify;}
+</style>
+<script type='text/javascript' src='https://nakedsecurity.sophos.com/_static/??-eJzTLy/QzcxLzilNSS3WzwKiwtLUokoopZebmaeXVayjj0+Rbm5melFiSSpUsX2uraGZoamxkaGpmWEWAK8/Ihc='></script>
+<link rel="https://api.w.org/" href="https://nakedsecurity.sophos.com/wp-json/" /><link rel="alternate" type="application/json" href="https://nakedsecurity.sophos.com/wp-json/wp/v2/posts/256725" /><link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://nakedsecurity.sophos.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://nakedsecurity.sophos.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.7" />
+<link rel="canonical" href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/" />
+<link rel='shortlink' href='https://nakedsecurity.sophos.com/?p=256725' />
+<link rel="alternate" type="application/json+oembed" href="https://nakedsecurity.sophos.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2014%2F04%2F08%2Fanatomy-of-a-data-leak-bug-openssl-heartbleed%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://nakedsecurity.sophos.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2014%2F04%2F08%2Fanatomy-of-a-data-leak-bug-openssl-heartbleed%2F&#038;format=xml" />
+<style type='text/css'>img#wpstats{display:none}</style><link rel="amphtml" href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/amp/">
+<!-- Jetpack Open Graph Tags -->
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow" />
+<meta property="og:url" content="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/" />
+<meta property="og:description" content="An information disclosure vulnerability has been found, and promptly patched, in OpenSSL. Paul Ducklin takes a look at what went wrong in the code&#8230;" />
+<meta property="article:published_time" content="2014-04-08T17:38:00+00:00" />
+<meta property="article:modified_time" content="2014-04-08T18:23:25+00:00" />
+<meta property="og:site_name" content="Naked Security" />
+<meta property="og:image" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?w=250" />
+<meta property="og:image:secure_url" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?w=250" />
+<meta property="og:image:width" content="250" />
+<meta property="og:image:height" content="250" />
+<meta property="og:locale" content="en_US" />
+<meta name="twitter:site" content="@NakedSecurity" />
+<meta name="twitter:text:title" content="Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow" />
+<meta name="twitter:image" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?w=144" />
+<meta name="twitter:card" content="summary" />
+<meta property="fb:admins" content="28552295016" />
+
+<!-- End Jetpack Open Graph Tags -->
+<link rel="icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=32" sizes="32x32" />
+<link rel="icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=192" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=180" />
+<meta name="msapplication-TileImage" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=270" />
+</head>
+<body class="post-template-default single single-post postid-256725 single-format-standard" >
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5VK6LTK"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div style="display: none">
+<svg>
+	<symbol id="sophos" viewBox="0 0 132 24">
+		<path d="m111.82 22.176h11.64c3.267 0 4.65-0.2 5.74-0.896 1.715-1.063 2.804-3.26 2.804-5.62 0-1.928-0.658-3.89-1.647-4.888-1.288-1.33-3.035-1.828-6.271-1.828h-3.527c-1.586 0-2.754-0.067-3.412-0.365-0.794-0.367-1.256-1.165-1.256-2.161 0-1.165 0.56-2.03 1.486-2.264 0.692-0.163 1.498-0.163 3.574-0.198h10.419v-3.956h-11.473c-2.574 0-3.727 0.099-4.718 0.466-2.279 0.796-3.828 3.257-3.828 6.083 0 1.93 0.76 3.727 2.079 4.89 1.155 0.996 2.872 1.462 5.51 1.462h4.697c1.057 0 1.915 0.132 2.376 0.398 0.893 0.433 1.418 1.328 1.418 2.36 0 0.864-0.395 1.597-1.087 2.027-0.561 0.369-1.517 0.534-3.268 0.534h-11.256zm-111.35 0h11.64c3.267 0 4.652-0.2 5.741-0.896 1.714-1.063 2.803-3.26 2.803-5.62 0-1.928-0.66-3.89-1.65-4.888-1.285-1.33-3.034-1.828-6.27-1.828h-3.527c-1.584 0-2.751-0.067-3.41-0.365-0.792-0.367-1.253-1.165-1.253-2.161 0-1.165 0.56-2.03 1.484-2.264 0.693-0.163 1.496-0.163 3.574-0.198h10.42v-3.956h-11.477c-2.573 0-3.727 0.099-4.715 0.466-2.278 0.796-3.83 3.257-3.83 6.083 0 1.93 0.762 3.727 2.08 4.89 1.155 0.996 2.871 1.462 5.51 1.462h4.696c1.057 0 1.913 0.132 2.377 0.398 0.888 0.433 1.416 1.328 1.416 2.36 0 0.864-0.394 1.597-1.089 2.027-0.558 0.369-1.517 0.534-3.264 0.534h-11.256v3.956zm94.05-16.18c-0.68 1.076-1.003 2.803-1.003 5.122 0 5.088 1.747 7.405 5.63 7.405 3.822 0 5.568-2.317 5.568-7.34 0-5.092-1.715-7.373-5.568-7.373-2.102 0-3.754 0.784-4.627 2.186zm13.174-2.511c1.329 1.761 2.072 4.63 2.072 7.992 0 3.816-1.197 6.948-3.334 8.677-1.619 1.304-4.078 2.022-6.995 2.022-4.142 0-7.41-1.372-9.092-3.817-1.263-1.793-1.88-4.176-1.88-7.08 0-4.172 1.133-7.339 3.27-9.035 1.682-1.37 4.339-2.122 7.383-2.122 3.85 0 6.925 1.209 8.576 3.363zm-22.018-3.068h-4.596v8.908h-8.319v-8.908h-4.597v21.759h4.597v-8.97h8.318v8.97h4.596v-21.759zm-28.61 10.277c1.23 0 1.941-0.163 2.427-0.62 0.581-0.49 0.938-1.533 0.938-2.74 0-1.436-0.58-2.478-1.584-2.838-0.356-0.13-0.94-0.197-1.684-0.197h-6.344v6.395zm-6.247 11.481h-4.598v-21.758h10.78c3.786 0 5.114 0.39 6.538 1.991 1.264 1.37 1.942 3.163 1.942 5.088 0 2.284-0.904 4.404-2.394 5.676-1.262 1.077-2.43 1.402-4.888 1.402h-7.38zm-22.589-16.179c-0.682 1.076-1.004 2.803-1.004 5.122 0 5.088 1.748 7.405 5.634 7.405 3.818 0 5.568-2.317 5.568-7.34 0-5.092-1.716-7.373-5.568-7.373-2.106 0-3.757 0.784-4.63 2.186zm13.174-2.511c1.328 1.761 2.073 4.63 2.073 7.992 0 3.816-1.2 6.948-3.335 8.677-1.618 1.304-4.079 2.022-6.993 2.022-4.144 0-7.413-1.372-9.096-3.817-1.264-1.793-1.878-4.176-1.878-7.08 0-4.172 1.133-7.339 3.272-9.035 1.681-1.37 4.337-2.122 7.38-2.122 3.851 0 6.93 1.209 8.578 3.363z"></path>
+	</symbol>
+	<symbol id="twitter" viewBox="0 0 24 24">
+ 		<path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"></path>
+ 	</symbol>
+	<symbol id="facebook" viewBox="0 0 24 24">
+ 		<path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"></path>
+ 	</symbol>
+	<symbol id="instagram" viewBox="0 0 24 24">
+		<path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"></path>
+	</symbol>
+	<symbol id="linkedin" viewBox="0 0 24 24">
+		<path d="M4.98 3.5c0 1.381-1.11 2.5-2.48 2.5s-2.48-1.119-2.48-2.5c0-1.38 1.11-2.5 2.48-2.5s2.48 1.12 2.48 2.5zm.02 4.5h-5v16h5v-16zm7.982 0h-4.968v16h4.969v-8.399c0-4.67 6.029-5.052 6.029 0v8.399h4.988v-10.131c0-7.88-8.922-7.593-11.018-3.714v-2.155z"></path>
+	</symbol>
+	<symbol id="rss" viewBox="0 0 24 24">
+		<path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"></path>
+	</symbol>
+	<symbol id="reddit" viewBox="0 0 24 24">
+		<path d="M24 11.779c0-1.459-1.192-2.645-2.657-2.645-.715 0-1.363.286-1.84.746-1.81-1.191-4.259-1.949-6.971-2.046l1.483-4.669 4.016.941-.006.058c0 1.193.975 2.163 2.174 2.163 1.198 0 2.172-.97 2.172-2.163s-.975-2.164-2.172-2.164c-.92 0-1.704.574-2.021 1.379l-4.329-1.015c-.189-.046-.381.063-.44.249l-1.654 5.207c-2.838.034-5.409.798-7.3 2.025-.474-.438-1.103-.712-1.799-.712-1.465 0-2.656 1.187-2.656 2.646 0 .97.533 1.811 1.317 2.271-.052.282-.086.567-.086.857 0 3.911 4.808 7.093 10.719 7.093s10.72-3.182 10.72-7.093c0-.274-.029-.544-.075-.81.832-.447 1.405-1.312 1.405-2.318zm-17.224 1.816c0-.868.71-1.575 1.582-1.575.872 0 1.581.707 1.581 1.575s-.709 1.574-1.581 1.574-1.582-.706-1.582-1.574zm9.061 4.669c-.797.793-2.048 1.179-3.824 1.179l-.013-.003-.013.003c-1.777 0-3.028-.386-3.824-1.179-.145-.144-.145-.379 0-.523.145-.145.381-.145.526 0 .65.647 1.729.961 3.298.961l.013.003.013-.003c1.569 0 2.648-.315 3.298-.962.145-.145.381-.144.526 0 .145.145.145.379 0 .524zm-.189-3.095c-.872 0-1.581-.706-1.581-1.574 0-.868.709-1.575 1.581-1.575s1.581.707 1.581 1.575-.709 1.574-1.581 1.574z"></path>
+	</symbol>
+</svg>
+</div>
+<div id="page" class="hfeed site">
+	<a class="skip-link screen-reader-text" href="#content">Skip to content</a>
+
+	
+	<header id="masthead" class="site-header variation variation-3" role="banner">
+		<div class="header-container">
+			<div class="site-branding">
+				<div class="site-title">
+					<a title="Naked Security" href="https://nakedsecurity.sophos.com/" rel="home"><img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/naked-security-logo-white@2x.png"></a>
+					by
+					<a title="sophos.com" href="https://www.sophos.com"><svg viewBox="0 0 132 24" class="icon sophos"><use xlink:href="#sophos"></use></svg></a>
+				</div>
+			</div><!-- .site-branding -->
+			<nav id="site-navigation" class="main-navigation" role="navigation">
+				<div class="container">
+					<ul id="menu-variation-two" class="exit-links menu"><li id="menu-item-436509" class="products menu-item menu-item-type-custom menu-item-object-custom menu-item-436509"><a href="#">Products</a></li>
+<li id="menu-item-436515" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-436515"><a href="https://www.sophos.com/en-us/products/free-tools.aspx">Free Tools</a></li>
+<li id="menu-item-436531" class="search-toggle menu-item menu-item-type-custom menu-item-object-custom menu-item-436531"><a href="#">Search</a></li>
+<li id="menu-item-436532" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-436532"><a href="https://home.sophos.com/en-us.aspx">Free Sophos Home</a></li>
+</ul>				</div>
+			</nav><!-- #site-navigation -->
+			<div class="site-search-block">
+	<form target="_top" role="search" class="search-form" method="get" action="https://nakedsecurity.sophos.com/">
+        <fieldset>
+            <div class="field">
+				<input type="search" value="" name="s" class="search-field" placeholder="Search naked security...">
+            </div>
+            <div class="submit">
+				<button type="submit" class="search-submit button">Go</button>
+            </div>
+        </fieldset>
+    </form>
+</div>
+		</div><!-- .container -->
+	</header>
+
+	<div class="responsive-flyout-panel small-12 column active" style="opacity: 1; display: none;">
+		<div class="modal-filler"></div>
+	    <div class="productNavBox">
+	        <div class="productNavContainer">
+	            <div class="row prodRow">
+	                <div class="prodListBox column large-9">
+	                    <div class="row margin-0 highlightProduct">
+	                        <div class="column medium-6">
+	                            <a href="https://www.sophos.com/products/next-gen-firewall.aspx"><img src="https://www.sophos.com/medialibrary/2F4785DE8C3F43ECBD699A18F332FEEB.ashx">
+	                                <div class="menu-section-header">
+										<div class="menu-section-title">XG Firewall</div>
+	                                	<div class="menu-section-subtitle">Next-Gen Firewall</div>
+									</div>
+	                            </a>
+	                        </div>
+	                        <div class="column medium-6">
+	                            <a href="https://www.sophos.com/products/intercept-x.aspx"><img src="https://www.sophos.com/medialibrary/27111765D65A45D49A232925D2CE428B.ashx">
+	                                <div class="menu-section-header">
+										<div class="menu-section-title">Intercept X</div>
+	                                	<div class="menu-section-subtitle">Next-Gen Endpoint</div>
+									</div>
+	                            </a>
+	                        </div>
+	                    </div>
+	                    <div class="productList">
+	                        <ul>
+								<li>
+									<a href="https://www.sophos.com/en-us/products/cloud-optix.aspx"><img src="https://www.sophos.com/medialibrary/SophosNext/Images/Products/Icons/sophos-cloud-optix-icon.svg">Sophos Cloud Optix</a>
+								</li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/sophos-central.aspx"><img src="https://www.sophos.com/medialibrary/08EA66123F1B4DDE8FE5C9B578A7FAA7.ashx">Sophos Central</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/mobile-control.aspx"><img src="https://www.sophos.com/medialibrary/678FE994855047739F50D6C411184FA6.ashx">Sophos Mobile</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/server-security.aspx"><img src="https://www.sophos.com/medialibrary/01B80E7D7CD54EF8AC2E51C9C6EC0236.ashx">Intercept X for Server</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/secure-wifi.aspx"><img src="https://www.sophos.com/medialibrary/BEBD9C41BB4E480498514B29B92A145A.ashx">Secure Wi-Fi</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/phish-threat.aspx"><img src="https://www.sophos.com/medialibrary/DC9D1A7BA3964B0C9DAF1F1E68806B5A.ashx">Phish Threat</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/safeguard-encryption.aspx"><img src="https://www.sophos.com/medialibrary/8F51F06B62814B108D3B2763FF018E37.ashx">SafeGuard Encryption</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/sophos-email.aspx"><img src="https://www.sophos.com/medialibrary/597ADA0AF01A4A12B2B27239D0F9992C.ashx">Secure Email</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/unified-threat-management.aspx"><img src="https://www.sophos.com/medialibrary/8CB72BF5E1AD41F7894CE5E42101B0F3.ashx">SG UTM</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/secure-web-gateway.aspx"><img src="https://www.sophos.com/medialibrary/C586E372694547A1B207A61D87246BA7.ashx">Secure Web Gateway</a>
+	                            </li>
+	                        </ul>
+	                    </div>
+	                </div>
+	                <div class="homeUserBox column large-3">
+						<img src="https://www.sophos.com/medialibrary/3376DF5742A64AEE93FDB9DCA7291239.ashx">
+						<div class="menu-section-title">For Home Users</div>
+	                    <p>Sophos Home protects every Mac and PC in your home </p><a href="https://home.sophos.com/" target="_blank" class="greenSmallMenuBtn">Learn More</a>
+					</div>
+	            </div>
+	            <div class="row blueRow">
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/free-tools.aspx"><img width="19" src="https://www.sophos.com/medialibrary/A1FF440D2BB84511B8C94D771D44E207.ashx">Free Security Tools</a>
+	                </div>
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/free-trials.aspx"><img width="20" src="https://www.sophos.com/medialibrary/FCD3410ED2C347808D9DB8AC12C62DBD.ashx">Free Trials</a>
+	                </div>
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/demos.aspx"><img width="18" src="https://www.sophos.com/medialibrary/50985180E5F54C94917A2A6508E24287.ashx">Product Demos</a>
+	                </div>
+	                <!-- <div class="column large-3 medium-6">
+	                    <a href="javascript:fairfax.openLiveChatFromFlyoutLink();" class="flyout-live-chat-link"><img width="20" src="https://www.sophos.com/medialibrary/E24C5050837145F6A5C592E299BA2A0D.ashx">Live Sales Chat</a>
+	                </div> -->
+	            </div>
+	        </div>
+	    </div>
+	</div>
+	<script>
+
+	jQuery(document).ready( function () {
+		var productButton   = jQuery('nav .menu-item.products');
+		var modalBackground = jQuery('.modal-filler');
+		var flyoutMenu		= jQuery('.responsive-flyout-panel');
+		var Sophos			= Sophos || {};
+
+		Sophos.MenuTest = {};
+
+		Sophos.MenuTest.open = function () {
+				productButton.addClass('open');
+				flyoutMenu.show();
+				modalBackground.show();
+		};
+
+		Sophos.MenuTest.close = function () {
+			productButton.removeClass('open');
+			flyoutMenu.hide();
+			modalBackground.hide();
+		};
+
+		Sophos.MenuTest.toggle = function () {
+			if ( productButton.hasClass('open') ) {
+				Sophos.MenuTest.close();
+			} else {
+				Sophos.MenuTest.open();
+			}
+		};
+
+		productButton.click( Sophos.MenuTest.toggle );
+		modalBackground.click( Sophos.MenuTest.close );
+	});
+
+	</script>
+
+	
+	<section class="about-panel">
+	<div class="container">
+	<div class="panel-content ">
+
+		<div class="description"><span>Have you listened to our podcast? <a href="/podcast/">Listen now</a></span></div>
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	<div id="content" class="site-content">
+		<div class="content-container">
+
+</div> <!-- .container -->
+</div> <!-- #content -->
+
+
+	<section class="content-panel">
+	<div class="container">
+	<div class="panel-content framed-content-area">
+
+		<main id="main" class="site-main" role="main">
+
+	
+		
+<article id="post-256725" class="post-256725 post type-post status-publish format-standard has-post-thumbnail hentry category-cryptography category-featured tag-bug tag-data-leak tag-heartbleed tag-openssl">
+
+	<header class="entry-header">
+		<h1 class="entry-title">Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow</h1>		<div class="entry-meta">
+			<div>
+				
+	<span class="entry-published">
+		<time class="entry-date published" datetime="2014-04-08T18:38:00+01:00">08 Apr 2014</time>
+	</span>
+
+					<a href="#comments" class="comment-box">
+					<span class="count">31</span>
+				</a>
+					
+	<span class="entry-categories">
+	<a href="https://nakedsecurity.sophos.com/category/cryptography/">Cryptography</a>	</span>
+
+			</div>
+	</header> <!-- .entry-header -->
+
+    <div id="newsletter-signup" class="container top"></div>
+
+			<div class="entry-featured-image">
+			<img width="250" height="250" src="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?w=250&amp;h=250&amp;crop=1" class="attachment-hero-thumbnail size-hero-thumbnail wp-post-image" alt="" loading="lazy" srcset="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png 250w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=150,150 150w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=225,225 225w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=70,70 70w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=32,32 32w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=50,50 50w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=64,64 64w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=96,96 96w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2014/04/openssl-250.png?resize=128,128 128w" sizes="(max-width: 250px) 100vw, 250px" />					</div> <!-- .entry-featured-image -->
+		
+		<nav class="navigation post-navigation" role="navigation">
+		<h2 class="screen-reader-text">Post navigation</h2>
+
+		<div class="nav-links">
+			<div class="nav-previous"><a href="https://nakedsecurity.sophos.com/2014/04/08/match-com-lothario-cons-woman-out-of-her-retirement-savings/" rel="prev"><span class="nav-label">Previous</span><span class="nav-seperator">:</span><span class="nav-title"> Match.com Lothario cons woman out of her retirement savings</span></a></div><div class="nav-next"><a href="https://nakedsecurity.sophos.com/2014/04/09/patch-tuesday-april-2014-xps-last-breath/" rel="next"><span class="nav-label">Next</span><span class="nav-seperator">:</span><span class="nav-title"> Patch Tuesday April 2014 &#8211; XP&#8217;s last breath</span></a></div>		</div>
+		<!-- .nav-links -->
+	</nav><!-- .navigation -->
+	
+	<div class="entry-content">
+		<div class="entry-prefix">
+			<div class="entry-author">
+				
+	
+					<span class="by">by</span>
+			<a href="https://nakedsecurity.sophos.com/author/paul-ducklin/" title="Posts by Paul Ducklin" class="author url fn" rel="author">Paul Ducklin</a>		
+	
+				</div>
+			<div class="entry-sharing">
+				
+	<ul class="block social share">
+		<li class="facebook"><a href="https://www.facebook.com/share.php?u=https%3A%2F%2Fnakedsecurity.sophos.com%2F2014%2F04%2F08%2Fanatomy-of-a-data-leak-bug-openssl-heartbleed%2F&title=Anatomy+of+a+data+leakage+bug+%E2%80%93+the+OpenSSL+%E2%80%9Cheartbleed%E2%80%9D+buffer+overflow" data-title="Anatomy of a data leakage bug – the OpenSSL “heartbleed” buffer overflow" title="Share on Facebook"><svg style="height: 20px;" viewBox="0 0 100 100" class="icon facebook"><use xlink:href="#facebook"></use></svg></a></li>
+		<li class="twitter"><a href="https://twitter.com/intent/tweet?text=Anatomy+of+a+data+leakage+bug+%E2%80%93+the+OpenSSL+%E2%80%9Cheartbleed%E2%80%9D+buffer+overflow+https%3A%2F%2Fnakedsecurity.sophos.com%2F%3Fp%3D256725" data-title="Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow" title="Share on Twitter"><svg style="height: 20px;" viewBox="0 0 100 100" class="icon twitter"><use xlink:href="#twitter"></use></svg></a></li>
+		<li class="linkedin"><a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2014%2F04%2F08%2Fanatomy-of-a-data-leak-bug-openssl-heartbleed%2F&title=Anatomy+of+a+data+leakage+bug+%E2%80%93+the+OpenSSL+%E2%80%9Cheartbleed%E2%80%9D+buffer+overflow" data-title="Anatomy of a data leakage bug – the OpenSSL “heartbleed” buffer overflow" title="Share on LinkedIn"><svg style="height: 20px;"  viewBox="0 0 100 100" class="icon linkedin"><use xlink:href="#linkedin"></use></svg></a></li>
+		<li class="reddit"><a href="https://reddit.com/submit/?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2014%2F04%2F08%2Fanatomy-of-a-data-leak-bug-openssl-heartbleed%2F&title=Anatomy+of+a+data+leakage+bug+%E2%80%93+the+OpenSSL+%E2%80%9Cheartbleed%E2%80%9D+buffer+overflow" title="Share on Reddit"><svg style="height: 20px;"  viewBox="0 0 100 100" class="icon reddit"><use xlink:href="#reddit"></use></svg></a></li>
+
+			</ul>
+
+				</div>
+		</div>
+		<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2014/04/openssl-170.png" width="170" height="170" align="right" hspace="10"></img>An information disclosure vulnerability has been found, and <a href="http://www.openssl.org/news/secadv_20140407.txt" rel="nofollow">promptly patched</a>, in OpenSSL.</p>
+<p>OpenSSL is a very widely used encryption library, responsible for putting the S in HTTPS, and the padlock in the address bar, for many websites.</p>
+<p>The bug only exists in the OpenSSL 1.0.1 source code (from version 1.0.1 to 1.0.1f inclusive), because the faulty code relates to a fairly new feature known as the <em>TLS Heartbeat Extension</em>.</p>
+<p>The heartbeat extension was first documented in <a href="https://tools.ietf.org/html/rfc6520">RFC 6520</a> in February 2012.</p>
+<p>TLS heartbeats are used as &#8220;keep alive&#8221; packets so that the ends of an encrypted connection can agree to keep the session open even when they don&#8217;t have any official data to exchange.</p>
+<p>Because the heartbeats consist of a reply and a matching response, they allow either end to confirm not only that the session is open, but also that end-to-end connectivity is working properly.</p>
+<h4>Sending heartbeat requests</h4>
+<p>The RFC 6520 standard explicitly restricts the maxium size of a heartbeat request to 2<sup>14</sup> bytes (16KBytes), but OpenSSL itself generates far shorter requests.</p>
+<p>Don&#8217;t worry if you don&#8217;t understand C; but if you do, the OpenSSL heartbeat request code looks like this:</p>
+<pre class="brush: cpp; highlight: [8]; title: ; notranslate" title="">
+unsigned int payload = 18; /* Sequence number + random bytes */
+unsigned int padding = 16; /* Use minimum padding */
+
+/* Check if padding is too long, payload and padding
+* must not exceed 2^14 - 3 = 16381 bytes in total.
+*/
+
+OPENSSL_assert(payload + padding &amp;lt;= 16381);
+
+/* Create HeartBeat message, we just use a sequence number
+ * as payload to distuingish different messages and add
+ * some random stuff.
+ *  - Message Type, 1 byte
+ *  - Payload Length, 2 bytes (unsigned int)
+ *  - Payload, the sequence number (2 bytes uint)
+ *  - Payload, random bytes (16 bytes uint)
+ *  - Padding
+ */
+
+buf = OPENSSL_malloc(1 + 2 + payload + padding);
+p = buf;
+/* Message Type */
+*p++ = TLS1_HB_REQUEST;
+/* Payload length (18 bytes here) */
+s2n(payload, p);
+/* Sequence number */
+s2n(s-&amp;gt;tlsext_hb_seq, p);
+/* 16 random bytes */
+RAND_pseudo_bytes(p, 16);
+p += 16;
+/* Random padding */
+RAND_pseudo_bytes(p, padding);
+
+ret = dtls1_write_bytes(s, TLS1_RT_HEARTBEAT, buf, 3 + payload + padding);
+</pre>
+<p>The reason that the code says that &#8220;payload and padding must not exceed 16381 bytes in total&#8221; is that the 16KByte (16384 byte) maximum heartbeat request size includes one byte to signal that this is a<tt> TLS1_HB_REQUEST</tt>, and two bytes to denote the length of the payload data in the request.</p>
+<p>As the code stands, the<tt> OPENSSL_assert </tt>to verify that<tt> payload + padding &lt;= 16381 </tt> is redundant, because the payload size is hard-wired to 18 bytes and the padding size to 16.</p>
+<p>But the programmer has tried to do the right thing: put in the check anyway, in case someone changes those payload or padding sizes in the future without considering the consequences.</p>
+<p>The code then transmits a heartbeat request consisting of:</p>
+<ul>
+<li> The single byte 0x01 (denoting that this is a<tt> TLS1_HB_REQUEST</tt>).
+<li> Two bytes containing the 16-bit representation of 34 (size of payload plus padding).
+<li> Two bytes of payload consising of a 16-bit sequence number.
+<li> 16 bytes of random data making up the rest of the 18-byte payload.
+<li> 16 further random padding bytes, required by the standard.
+</ul>
+<h4>Replying to heartbeat requests</h4>
+<p>When vulnerable versions of OpenSSL 1.0.1 respond to a heartbeat request, they aren&#8217;t quite so careful in processing the received data.</p>
+<p>Heartbeat replies are supposed to contain a copy of the payload data from the request, as a way of verifying that the encrypted circuit is still working both ways.</p>
+<p>It turns out that you can send a small heartbeat request, but sneakily set your payload length field to 0xFFFF (65535 bytes).</p>
+<p>Then, OpenSSL will uncomplainingly copy 65535 bytes from your request packet, even though you didn&#8217;t send across that many bytes:</p>
+<pre class="brush: cpp; highlight: [11]; title: ; notranslate" title="">
+/* Allocate memory for the response, size is 1 byte
+ * message type, plus 2 bytes payload length, plus
+ * payload, plus padding
+ */
+buffer = OPENSSL_malloc(1 + 2 + payload + padding);
+bp = buffer;
+
+/* Enter response type, length and copy payload */
+*bp++ = TLS1_HB_RESPONSE;
+s2n(payload, bp);
+memcpy(bp, pl, payload);
+bp += payload;
+/* Random padding */
+RAND_pseudo_bytes(bp, padding);
+
+r = dtls1_write_bytes(s, TLS1_RT_HEARTBEAT, buffer, 3 + payload + padding);
+</pre>
+<p>That means OpenSSL runs off the end of your data and scoops up whatever else is next to it in memory at the other end of the connection, for a potential data leakage of approximately 64KB each time you send a malformed heartbeat request.</p>
+<p>This bug has been rather melodramatically named &#8220;heartbleed,&#8221; for reasons that should now be obvious.</p>
+<p>According to the Finnish National Cyber Security Centre, the sort of data that &#8220;bleeds&#8221; when the bug is triggered varies enormously, but <a href="https://www.cert.fi/en/reports/2014/vulnerability788210.html" rel="nofollow">may include</a> message contents, user credentials, session keys and even copies of a server&#8217;s own private keys.</p>
+<p>That&#8217;s not good!</p>
+<h4>Fixing the problem</h4>
+<p>Fortunately, there&#8217;s a fix already: simply upgrade to OpenSSL 1.0.1g.</p>
+<p>If you don&#8217;t want to or can&#8217;t do that, you can rebuild your current version of OpenSSL from source without TLS Heartbeat support, by adding<tt> -DOPENSSL_NO_HEARTBEATS </tt> at compile time.</p>
+<p>Both of these immunise you from this flaw.</p>
+<p>The new OpenSSL version includes a bounds check to make sure the payload length you specified isn&#8217;t longer that the data you actually sent:</p>
+<pre class="brush: cpp; highlight: [6]; title: ; notranslate" title="">
+/* Read type and payload length first */
+if (1 + 2 + 16 &amp;gt; s-&amp;gt;s3-&amp;gt;rrec.length)
+        return 0; /* silently discard */
+hbtype = *p++;
+n2s(p, payload);
+if (1 + 2 + payload + 16 &amp;gt; s-&amp;gt;s3-&amp;gt;rrec.length)
+        return 0; /* silently discard per RFC 6520 sec. 4 */
+</pre>
+<p>The <tt> -DOPENSSL_NO_HEARTBEATS </tt>compile-time option simply omits the buggy code altogether from vulnerable versions.</p>
+<h4>The lessons to learn</h4>
+<p>If you&#8217;re a programmer, remember: <strong>always double-check the data that the other side sent you</strong> before you use it to control the operation of your own code.</p>
+<p>And remember: buffer overflows should always be treated as serious, even if they don&#8217;t lead to remote code execution.</p>
+<p>Data leakage bugs can be just as disastrous, as this flaw demonstrates.</p>
+<h4>For further information&#8230;</h4>
+<p>If you&#8217;d like to know more about the main sorts of vulnerablity, from RCE (remote code execution) through EoP (elevation of privilege) to Information Disclosure, please listen to our <a href="http://nakedsecurity.sophos.com/2013/09/18/sophos-techknow-understanding-vulnerabilties-podcast/">Techknow podcast</a>, <em>Understanding Vulnerabilities</em>:</p>
+<div style="background-color:#e8e8e8;padding-bottom:.3em;margin-bottom:1em;"><img loading="lazy" alt="" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/11/pod-listen-500.png" width="500" height="21" /><br />
+<iframe width="100%" height="120" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F117239445&auto_play=false&hide_related=false&visual=false&show_comments=false&show_user=false&show_reposts=false&color=1a60b3"></iframe></p>
+<p style="font-size:71%;text-align:center;">(Audio player not working? <a href="https://soundcloud.com/sophossecurity/sophos-techknow" rel="nofollow">Listen on Soundcloud</a>.)</p>
+</div>
+<p style='padding-bottom:.8em;padding-top:.8em;'></p>
+			</div> <!-- .entry-content -->
+	<ul class="block social follow">
+		<li>
+			<svg style="height: 24px" viewBox="0 0 24 24" class="icon twitter"><use xlink:href="#twitter"></use></svg>
+			<p>Follow <strong><a href="https://twitter.com/nakedsecurity">@NakedSecurity on Twitter</a></strong> for the latest computer security news.</p>
+		</li>
+		<li>
+			<svg style="height: 24px" viewBox="0 0 24 24" class="icon instagram"><use xlink:href="#instagram"></use></svg>
+			<p>Follow <strong><a href="https://www.instagram.com/nakedsecurity/">@NakedSecurity on Instagram</a></strong> for exclusive pics, gifs, vids and LOLs!</p>
+		</li>
+	</ul>
+</article><!-- #post-## -->
+
+		<div class="free-tools-block">
+			<h2 class="block-title">Free tools</h2>
+
+<div class="ns-free-tools">
+	<div class="ns-free-tools__item ns-free-tools__item--sophos-home">
+		<a class="ns-free-tools__link" href="https://home.sophos.com/en-us.aspx?cmp=701j0000001eLpnAAE">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/sophos-home@2x.png" alt="Sophos Home" class="ns-free-tools__image" width="166" height="100">
+			<h4 class="ns-free-tools__title">
+				Sophos Home			</h4>
+			<div class="ns-free-tools__sub-title">
+				Protect personal PCs and Macs			</div>
+		</a>
+	</div>
+	<div class="ns-free-tools__item ns-free-tools__item--hitman-pro">
+		<a class="ns-free-tools__link" href="https://www.hitmanpro.com/en-us/hmp.aspx">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/hitman-pro@2x.png" alt="Hitman Pro" class="ns-free-tools__image" width="154" height="100">
+			<h4 class="ns-free-tools__title">
+				Hitman Pro			</h4>
+			<div class="ns-free-tools__sub-title">
+				Find and remove malware			</div>
+		</a>
+	</div>
+	<div class="ns-free-tools__item ns-free-tools__item--intercept-x">
+		<a class="ns-free-tools__link" href="https://www.sophos.com/en-us/products/free-tools/sophos-mobile-security-free-edition.aspx">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/mobile-security-android@2x.png" alt="Sophos Intercept X for Mobile" class="ns-free-tools__image" width="96" height="110">
+			<h4 class="ns-free-tools__title">
+				Intercept X for Mobile			</h4>
+			<div class="ns-free-tools__sub-title">
+				Protect Android devices			</div>
+		</a>
+	</div>
+</div>
+		</div>
+
+			<nav class="navigation post-navigation" role="navigation">
+		<h2 class="screen-reader-text">Post navigation</h2>
+
+		<div class="nav-links">
+			<div class="nav-previous"><a href="https://nakedsecurity.sophos.com/2014/04/08/match-com-lothario-cons-woman-out-of-her-retirement-savings/" rel="prev"><span class="nav-label">Previous</span><span class="nav-seperator">:</span><span class="nav-title"> Match.com Lothario cons woman out of her retirement savings</span></a></div><div class="nav-next"><a href="https://nakedsecurity.sophos.com/2014/04/09/patch-tuesday-april-2014-xps-last-breath/" rel="next"><span class="nav-label">Next</span><span class="nav-seperator">:</span><span class="nav-title"> Patch Tuesday April 2014 &#8211; XP&#8217;s last breath</span></a></div>		</div>
+		<!-- .nav-links -->
+	</nav><!-- .navigation -->
+	
+	
+	</main><!-- #main -->
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	
+	<section class="comments-panel">
+	<div class="container">
+	<div class="panel-content framed-content-area">
+
+			
+<div id="comments" class="comments-area">
+
+			<h2 class="comments-title">
+			31 comments on &ldquo;<span>Anatomy of a data leakage bug &#8211; the OpenSSL &#8220;heartbleed&#8221; buffer overflow</span>&rdquo;		</h2>
+
+		<ol class="comment-list">
+					<li id="comment-2390451" class="comment even thread-even depth-1 parent">
+			<article id="div-comment-2390451" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/aa835072d4f5bd12cb5d4a5ac6076f5c?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/aa835072d4f5bd12cb5d4a5ac6076f5c?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">David Redekop (@DRtheNerd)</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2390451"><time datetime="2014-04-08T23:23:57+01:00">April 8, 2014 at 11:23 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Your own appliances, including 9.x up-to-date UTMs are vulnerable to this.  When will a patch be released?</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2390451"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2390451={"id":7238218,"unique_id":"wp-comment-2390451","title":"Your%20own%20appliances%2C%20including%209.x%20up-to-date%20UTMs%20are%20vulnerable%20to%20this.%20%20When%20will%20a%20patch%20be%20released%3F%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2390451","item_id":"_comm_2390451"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2390451#respond' data-commentid="2390451" data-postid="256725" data-belowelement="div-comment-2390451" data-respondelement="respond" data-replyto="Reply to David Redekop (@DRtheNerd)" aria-label='Reply to David Redekop (@DRtheNerd)'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2390973" class="comment byuser comment-author-chesterwisniewski odd alt depth-2">
+			<article id="div-comment-2390973" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Chester Wisniewski</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2390973"><time datetime="2014-04-09T01:37:26+01:00">April 9, 2014 at 1:37 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>We are working as quickly as possible to issue patches for the Sophos UTM product. We will announce the release on our corporate blog (http://blogs.sophos.com/) when available. It should be real soon now, but I am not allowed to make promises other team members have to keep.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2390973"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2390973={"id":7238218,"unique_id":"wp-comment-2390973","title":"We%20are%20working%20as%20quickly%20as%20possible%20to%20issue%20patches%20for%20the%20Sophos%20UTM%20product.%20We%20will%20announce%20the%20release%20on%20our%20corporate%20blog%20%28http%3A%2F%2Fblogs.sophos.com%2F%29%20when%20available.%20It%20should%20be%20real%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2390973","item_id":"_comm_2390973"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2390973#respond' data-commentid="2390973" data-postid="256725" data-belowelement="div-comment-2390973" data-respondelement="respond" data-replyto="Reply to Chester Wisniewski" aria-label='Reply to Chester Wisniewski'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2390980" class="comment even thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-2390980" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/24b49b27d36f2af05c76838ad2d5af58?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/24b49b27d36f2af05c76838ad2d5af58?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Dave</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2390980"><time datetime="2014-04-09T01:39:05+01:00">April 9, 2014 at 1:39 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Thanks for the explanation.  One thing that I don&#8217;t understand though, is the comment that the data leaked can include &#8220;copies of a server&#8217;s own private keys.&#8221;  Isn&#8217;t a private key, by definition, never transmitted?<br />
+This bug only affects data that is transmitted I think?</p>
+<p>I read somewhere that the bug can also affect data that have been &#8216;recorded&#8217; previously.  Perhaps I&#8217;ve misunderstood how SSL works but I don&#8217;t see how it&#8217;s possible?  My belief of SSL is that the client downloads the public key from the server, and uses it to encrypt a randomly generated session key (AES) that it sends back to the server.  All transmissions now use the session key (since the server can decrypt the session key with its private key).<br />
+So the tunnel is protected by a session key that was only ever transmitted in encrypted form with the public key.  You still don&#8217;t have the private key so still can&#8217;t decode the contents of the tunnel.  Am I missing something?  If so, please advise as this is quite important to understand.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2390980"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2390980={"id":7238218,"unique_id":"wp-comment-2390980","title":"Thanks%20for%20the%20explanation.%20%20One%20thing%20that%20I%20don%26%23039%3Bt%20understand%20though%2C%20is%20the%20comment%20that%20the%20data%20leaked%20can%20include%20%26quot%3Bcopies%20of%20a%20server%26%23039%3Bs%20own%20private%20keys.%26quot%3B%20%20Isn%26%23039%3Bt%20a%20private%20key%2C%20by%20definition%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2390980","item_id":"_comm_2390980"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2390980#respond' data-commentid="2390980" data-postid="256725" data-belowelement="div-comment-2390980" data-respondelement="respond" data-replyto="Reply to Dave" aria-label='Reply to Dave'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2393104" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-2">
+			<article id="div-comment-2393104" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2393104"><time datetime="2014-04-09T09:48:40+01:00">April 9, 2014 at 9:48 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The private key might be in memory temporarily, and it might be in memory near to where OpenSSL is temporarily storing the body of the heartbeat request. (It needs to keep the request so it can copy the payload part and send it back in the reply so the other end can check you replied with what it sent.)</p>
+<p>Since the memcpy() highlighted above can copy up to 64KB past the memory location where the request is stored, you&#8217;ll get various chunks of not-supposed-to&#8211;be-transmitted data in the replies. So that could include all sorts of, ahem, &#8220;interesting&#8221; stuff. (Could include pointless garbage, of course 🙂</p>
+<p>If you steal someone&#8217;s private key, you *may* be able to decrypt previously-sniffed encrypted sessions. That&#8217;s because the private key is used to agree a symmetric session key, which is part of the what you sniff. Decrypt the session key and you can decrypt the rest of the data in the session. Unless you use a technique called &#8220;forward secrecy,&#8221; where you also generate a one off public-private key pair *for each session*, keep them only in memory, and discard them after the session ends.</p>
+<p>More about this here:<br />
+http://nakedsecurity.sophos.com/2013/11/24/twitter-joins-the-forward-secrecy-club-for-added-resistance-to-surveillance/</p>
+<p>Techniques for forward secrecy online were supported from the earliest days of HTTPS, but have only started catching on recently because they put extra processing load on the server. (Generating a public-private key pairs for every session is much, much more computationally complex that generating a one-time symmetric key, which is just a shortish string of random bytes.)</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2393104"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2393104={"id":7238218,"unique_id":"wp-comment-2393104","title":"The%20private%20key%20might%20be%20in%20memory%20temporarily%2C%20and%20it%20might%20be%20in%20memory%20near%20to%20where%20OpenSSL%20is%20temporarily%20storing%20the%20body%20of%20the%20heartbeat%20request.%20%28It%20needs%20to%20keep%20the%20request%20so%20it%20can%20c%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2393104","item_id":"_comm_2393104"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2393104#respond' data-commentid="2393104" data-postid="256725" data-belowelement="div-comment-2393104" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2391341" class="comment even thread-even depth-1">
+			<article id="div-comment-2391341" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo avatar-default' height='50' width='50' loading='lazy'/>						<b class="fn">Anonymous</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2391341"><time datetime="2014-04-09T02:54:01+01:00">April 9, 2014 at 2:54 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>If you want to be extra safe when developing software that keeps passwords and other sensitive data in memory, you should set those bytes to 0 or random junk when you&#8217;re done with them.  That way, any attack like this that gets leftover memory garbage would get just that (garbage).</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2391341"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2391341={"id":7238218,"unique_id":"wp-comment-2391341","title":"If%20you%20want%20to%20be%20extra%20safe%20when%20developing%20software%20that%20keeps%20passwords%20and%20other%20sensitive%20data%20in%20memory%2C%20you%20should%20set%20those%20bytes%20to%200%20or%20random%20junk%20when%20you%26%23039%3Bre%20done%20with%20them.%20%20That%20way%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2391341","item_id":"_comm_2391341"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2391341#respond' data-commentid="2391341" data-postid="256725" data-belowelement="div-comment-2391341" data-respondelement="respond" data-replyto="Reply to " aria-label='Reply to '>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-2391776" class="comment odd alt thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-2391776" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/6b84c85053ebc0e32ad080b581ec3472?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/6b84c85053ebc0e32ad080b581ec3472?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">NoSpiesAllowed</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2391776"><time datetime="2014-04-09T04:10:57+01:00">April 9, 2014 at 4:10 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>I&#8217;m an ignorant PC user. Am I likely to have OpenSSL on my computer? If not, should I change all my dozens of passwords as suggested by media reports?</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2391776"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2391776={"id":7238218,"unique_id":"wp-comment-2391776","title":"I%26%23039%3Bm%20an%20ignorant%20PC%20user.%20Am%20I%20likely%20to%20have%20OpenSSL%20on%20my%20computer%3F%20If%20not%2C%20should%20I%20change%20all%20my%20dozens%20of%20passwords%20as%20suggested%20by%20media%20reports%3F%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2391776","item_id":"_comm_2391776"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2391776#respond' data-commentid="2391776" data-postid="256725" data-belowelement="div-comment-2391776" data-respondelement="respond" data-replyto="Reply to NoSpiesAllowed" aria-label='Reply to NoSpiesAllowed'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2392242" class="comment byuser comment-author-chesterwisniewski even depth-2 parent">
+			<article id="div-comment-2392242" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Chester Wisniewski</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2392242"><time datetime="2014-04-09T06:13:38+01:00">April 9, 2014 at 6:13 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>No and no. It is never a bad idea to change your passwords, but this mostly affects server administrators.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2392242"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2392242={"id":7238218,"unique_id":"wp-comment-2392242","title":"No%20and%20no.%20It%20is%20never%20a%20bad%20idea%20to%20change%20your%20passwords%2C%20but%20this%20mostly%20affects%20server%20administrators.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2392242","item_id":"_comm_2392242"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2392242#respond' data-commentid="2392242" data-postid="256725" data-belowelement="div-comment-2392242" data-respondelement="respond" data-replyto="Reply to Chester Wisniewski" aria-label='Reply to Chester Wisniewski'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2393456" class="comment odd alt depth-3">
+			<article id="div-comment-2393456" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo avatar-default' height='50' width='50' loading='lazy'/>						<b class="fn">Anonymous</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2393456"><time datetime="2014-04-09T11:08:12+01:00">April 9, 2014 at 11:08 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>unfortunately, once someone has a server private key they can eavesdop the communications to the server, and thus see any passwords you sent, and so yes, you should change any passwords you ahve used in the last 2 years</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2393456"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2393456={"id":7238218,"unique_id":"wp-comment-2393456","title":"unfortunately%2C%20once%20someone%20has%20a%20server%20private%20key%20they%20can%20eavesdop%20the%20communications%20to%20the%20server%2C%20and%20thus%20see%20any%20passwords%20you%20sent%2C%20and%20so%20yes%2C%20you%20should%20change%20any%20passwords%20you%20ahve%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2393456","item_id":"_comm_2393456"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2393456#respond' data-commentid="2393456" data-postid="256725" data-belowelement="div-comment-2393456" data-respondelement="respond" data-replyto="Reply to " aria-label='Reply to '>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2393354" class="comment byuser comment-author-pducklin bypostauthor even depth-2 parent">
+			<article id="div-comment-2393354" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2393354"><time datetime="2014-04-09T10:47:39+01:00">April 9, 2014 at 10:47 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The most likely way this sort of bug might be used against you on a regular PC would be while you browse.</p>
+<p>Imagine you got sucked into connecting to a rogue server that sent TLS heartbeats back to your browser in the hope of getting it to spill some of its memory, such as URLs you just visited, webmail text you just typed in, and so on&#8230;</p>
+<p>&#8230;well, there&#8217;s good news! Not one of the major browsers &#8211; that&#8217;s Microsoft IE on Windows, Apple Safari on OS X, Mozilla Firefox and Google Chrome/Chromium on all platforms &#8211; uses OpenSSL for its TLS (HTTPS) connections, so none of them are at risk 🙂</p>
+<p>On the other hand, lots of the world&#8217;s web *servers* do use OpenSSL, and most servers openly invite, even encourage, connections from anyone, anywhere, any time. So, as Chester suggests, this is mainly a problem for the sysadmins who run those OpenSSL-based web servers.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2393354"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2393354={"id":7238218,"unique_id":"wp-comment-2393354","title":"The%20most%20likely%20way%20this%20sort%20of%20bug%20might%20be%20used%20against%20you%20on%20a%20regular%20PC%20would%20be%20while%20you%20browse.Imagine%20you%20got%20sucked%20into%20connecting%20to%20a%20rogue%20server%20that%20sent%20TLS%20heartbeats%20back%20to%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2393354","item_id":"_comm_2393354"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2393354#respond' data-commentid="2393354" data-postid="256725" data-belowelement="div-comment-2393354" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-5120037" class="comment odd alt depth-3 parent">
+			<article id="div-comment-5120037" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/d551b67e8abb99086ebfda6d342099a7?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/d551b67e8abb99086ebfda6d342099a7?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Ceejay Perez</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-5120037"><time datetime="2018-06-28T02:40:05+01:00">June 28, 2018 at 2:40 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Android uses OpenSSL.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_5120037"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_5120037={"id":7238218,"unique_id":"wp-comment-5120037","title":"Android%20uses%20OpenSSL.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-5120037","item_id":"_comm_5120037"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=5120037#respond' data-commentid="5120037" data-postid="256725" data-belowelement="div-comment-5120037" data-respondelement="respond" data-replyto="Reply to Ceejay Perez" aria-label='Reply to Ceejay Perez'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-5120409" class="comment byuser comment-author-pducklin bypostauthor even depth-4">
+			<article id="div-comment-5120409" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-5120409"><time datetime="2018-06-28T08:26:02+01:00">June 28, 2018 at 8:26 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>IIRC, Android from version 6 onwards switched to Google’s own security-focused reimplementation of OpenSSL known as <em>BoringSSL</em>. </p>
+<p>And, again IIRC, Firefox (mentioned above as “exempt” from OpenSSL) uses Mozilla’s own SSL libraries known as <em>Network Security Services</em> (NSS) that ship as part of the Firefox app.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_5120409"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_5120409={"id":7238218,"unique_id":"wp-comment-5120409","title":"IIRC%2C%20Android%20from%20version%206%20onwards%20switched%20to%20Googles%20own%20security-focused%20reimplementation%20of%20OpenSSL%20known%20as%20%26lt%3Bem%26gt%3BBoringSSL%26lt%3B%2Fem%26gt%3B.%20And%2C%20again%20IIRC%2C%20Firefox%20%28mentioned%20above%20as%20exempt%20from%20Ope%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-5120409","item_id":"_comm_5120409"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=5120409#respond' data-commentid="5120409" data-postid="256725" data-belowelement="div-comment-5120409" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2394178" class="comment odd alt thread-even depth-1">
+			<article id="div-comment-2394178" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/cc262391460a40fa69d90d081021c60a?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/cc262391460a40fa69d90d081021c60a?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">VL-S</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2394178"><time datetime="2014-04-09T14:21:53+01:00">April 9, 2014 at 2:21 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>I believe the heartbeat request is an example of code that was not properly reviewed.<br />
+Opening comments in the code could have referenced the standard that was being followed. Perhaps this was mentioned earlier.<br />
+Payload, padding and maximum length (16381) could have been #defined at the outset reflecting the standard&#8230;a true hard-wire. Declaring them as an &#8216;int&#8217; is more of a soft-wire even though they did not change throughout the process.<br />
+Comment lines 16 and 24 would be in error should payload or padding change.<br />
+The value &#8217;16&#8217; in lines 29 and 30 should have been predefined.<br />
+Just some of the clean up that could have been done&#8230;IMHO</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2394178"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2394178={"id":7238218,"unique_id":"wp-comment-2394178","title":"I%20believe%20the%20heartbeat%20request%20is%20an%20example%20of%20code%20that%20was%20not%20properly%20reviewed.Opening%20comments%20in%20the%20code%20could%20have%20referenced%20the%20standard%20that%20was%20being%20followed.%20Perhaps%20this%20was%20ment%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2394178","item_id":"_comm_2394178"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2394178#respond' data-commentid="2394178" data-postid="256725" data-belowelement="div-comment-2394178" data-respondelement="respond" data-replyto="Reply to VL-S" aria-label='Reply to VL-S'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-2395025" class="comment even thread-odd thread-alt depth-1">
+			<article id="div-comment-2395025" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/7b4fd3b274c65888c43ab3a66188590a?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/7b4fd3b274c65888c43ab3a66188590a?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Techno</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2395025"><time datetime="2014-04-09T17:54:03+01:00">April 9, 2014 at 5:54 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Thanks to Naked Security, I have different, non-dictionary passwords for every site stored in Keepass.  I also have two step authentication set up in some places.</p>
+<p>The BBC is reporting that everybody should be changing their passwords everywhere, but I am holding back for now.  Hopefully by following your advice I am reasonably safe.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2395025"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2395025={"id":7238218,"unique_id":"wp-comment-2395025","title":"Thanks%20to%20Naked%20Security%2C%20I%20have%20different%2C%20non-dictionary%20passwords%20for%20every%20site%20stored%20in%20Keepass.%20%20I%20also%20have%20two%20step%20authentication%20set%20up%20in%20some%20places.The%20BBC%20is%20reporting%20that%20everybo%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2395025","item_id":"_comm_2395025"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2395025#respond' data-commentid="2395025" data-postid="256725" data-belowelement="div-comment-2395025" data-respondelement="respond" data-replyto="Reply to Techno" aria-label='Reply to Techno'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-2395486" class="comment odd alt thread-even depth-1">
+			<article id="div-comment-2395486" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/30f40c9f2c8182c4d39a59221048b62b?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/30f40c9f2c8182c4d39a59221048b62b?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">None</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2395486"><time datetime="2014-04-09T19:32:58+01:00">April 9, 2014 at 7:32 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>I looked at github, but it would be interesting to see what other patches the programmer who created heartbeat has done.  See if there are any patterns that would indicate that this was not accidental.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2395486"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2395486={"id":7238218,"unique_id":"wp-comment-2395486","title":"I%20looked%20at%20github%2C%20but%20it%20would%20be%20interesting%20to%20see%20what%20other%20patches%20the%20programmer%20who%20created%20heartbeat%20has%20done.%20%20See%20if%20there%20are%20any%20patterns%20that%20would%20indicate%20that%20this%20was%20not%20accid%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2395486","item_id":"_comm_2395486"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2395486#respond' data-commentid="2395486" data-postid="256725" data-belowelement="div-comment-2395486" data-respondelement="respond" data-replyto="Reply to None" aria-label='Reply to None'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-2395740" class="comment even thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-2395740" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/8509d2439850d49f307c13ca4600b2a9?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/8509d2439850d49f307c13ca4600b2a9?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Karl L</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2395740"><time datetime="2014-04-09T20:28:43+01:00">April 9, 2014 at 8:28 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Does no-one else consider it a little strange that the programmer takes care to ensure that the message *he* generates satisfies the standard, but completely omits those same checks from the message he receives.</p>
+<p>I guess I still prefer cockup over conspiracy on this one, especially since there is *still* no check on the 2^14 constraint that he so carefully (and unnecessarily) checks on generated packets.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2395740"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2395740={"id":7238218,"unique_id":"wp-comment-2395740","title":"Does%20no-one%20else%20consider%20it%20a%20little%20strange%20that%20the%20programmer%20takes%20care%20to%20ensure%20that%20the%20message%20%2Ahe%2A%20generates%20satisfies%20the%20standard%2C%20but%20completely%20omits%20those%20same%20checks%20from%20the%20mess%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2395740","item_id":"_comm_2395740"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2395740#respond' data-commentid="2395740" data-postid="256725" data-belowelement="div-comment-2395740" data-respondelement="respond" data-replyto="Reply to Karl L" aria-label='Reply to Karl L'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2398721" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-2 parent">
+			<article id="div-comment-2398721" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2398721"><time datetime="2014-04-10T07:27:48+01:00">April 10, 2014 at 7:27 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Well, there is a maxim in internet coding that says to be precise in what you send to others, but liberal and accommodating in what you receive.</p>
+<p>That might have affected the programmer&#8217;s judgement.</p>
+<p>(It&#8217;s time for that maxim to change. If well-coded apps stopped being so soft on incorrect ones, we might get better attention to detail all round, and we wouldn&#8217;t end up stuck with a &#8220;backward compatibility&#8221; reason to keep on doing the wrong thing&#8230;but that is a rant for another time.)</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2398721"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2398721={"id":7238218,"unique_id":"wp-comment-2398721","title":"Well%2C%20there%20is%20a%20maxim%20in%20internet%20coding%20that%20says%20to%20be%20precise%20in%20what%20you%20send%20to%20others%2C%20but%20liberal%20and%20accommodating%20in%20what%20you%20receive.That%20might%20have%20affected%20the%20programmer%26%23039%3Bs%20judgement%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2398721","item_id":"_comm_2398721"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2398721#respond' data-commentid="2398721" data-postid="256725" data-belowelement="div-comment-2398721" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2400282" class="comment even depth-3 parent">
+			<article id="div-comment-2400282" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/807f9d3dd7b288a186f00400adfa0ef7?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/807f9d3dd7b288a186f00400adfa0ef7?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">araybold</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2400282"><time datetime="2014-04-10T13:08:14+01:00">April 10, 2014 at 1:08 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>&#8220;There is a maxim in internet coding that says to be precise in what you send to others, but liberal and accommodating in what you receive.&#8221;</p>
+<p>I find it hard to believe that this statement appeared in a security-related blog. For a long time, the advice has been to be highly suspicious of incoming data, and to reject anything that is not explicitly permitted, rather than to create blacklists of things that known to be potentially harmful and allow the rest.</p>
+<p>Your statement does, unfortunately, reflect much of current practice, which is why buffer overrun, SQL injection, and cross-site scripting attacks are still dismayingly common.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2400282"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2400282={"id":7238218,"unique_id":"wp-comment-2400282","title":"%26quot%3BThere%20is%20a%20maxim%20in%20internet%20coding%20that%20says%20to%20be%20precise%20in%20what%20you%20send%20to%20others%2C%20but%20liberal%20and%20accommodating%20in%20what%20you%20receive.%26quot%3BI%20find%20it%20hard%20to%20believe%20that%20this%20statement%20appeared%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2400282","item_id":"_comm_2400282"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2400282#respond' data-commentid="2400282" data-postid="256725" data-belowelement="div-comment-2400282" data-respondelement="respond" data-replyto="Reply to araybold" aria-label='Reply to araybold'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2400518" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-4 parent">
+			<article id="div-comment-2400518" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2400518"><time datetime="2014-04-10T14:06:27+01:00">April 10, 2014 at 2:06 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Two points, since you seem to be a stickler for accuracy 🙂</p>
+<p>Firstly, you *must* believe that the words appeared here, because they did. Disbelief won&#8217;t make them go away.</p>
+<p>Secondly, the statement was not me endorsing that viewpoint (I think it is unsuitable in the modern age), but saying that &#8220;a maxim exists&#8221; to encourage it.</p>
+<p>That maxim, in fact, is written down in RFC 1122, and you will hear it called &#8220;the robustness principle,&#8221; though you can argue it delivers exactly the opposite.</p>
+<p>So, perhaps RFC 1122 influenced the programmer?</p>
+<p>That is all.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2400518"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2400518={"id":7238218,"unique_id":"wp-comment-2400518","title":"Two%20points%2C%20since%20you%20seem%20to%20be%20a%20stickler%20for%20accuracy%20%3A-%29Firstly%2C%20you%20%2Amust%2A%20believe%20that%20the%20words%20appeared%20here%2C%20because%20they%20did.%20Disbelief%20won%26%23039%3Bt%20make%20them%20go%20away.Secondly%2C%20the%20statement%20w%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2400518","item_id":"_comm_2400518"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2400518#respond' data-commentid="2400518" data-postid="256725" data-belowelement="div-comment-2400518" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2400733" class="comment even depth-5 parent">
+			<article id="div-comment-2400733" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/807f9d3dd7b288a186f00400adfa0ef7?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/807f9d3dd7b288a186f00400adfa0ef7?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">araybold</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2400733"><time datetime="2014-04-10T14:58:49+01:00">April 10, 2014 at 2:58 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>&#8220;So, perhaps RFC 1122 influenced the programmer?&#8221;</p>
+<p>If so, then evidently not by much, because the paragraph following the words you quoted (and which is also part of the robustness principle) says &#8220;Software should be written to deal with every conceivable error, no matter how unlikely; sooner or later a packet will come in with that particular combination of errors and attributes, and unless the software is prepared, chaos can ensue. In general, it is best to assume that the network is filled with malevolent entities that will send in packets designed to have the worst possible effect.  This assumption will lead to suitable protective design, although the most serious problems in the Internet have been caused by unenvisaged mechanisms triggered by low-probability events; mere human malice would never have taken so devious a course!&#8221;</p>
+<p>Not that I agree with the final clause, which now looks naive.</p>
+<p>It would be unfortunate if the maxim has been widely mistaken as advocating policies that lead to situations authors warned against. It is a risk you take whenever you put non-specific advice into a specification.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2400733"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2400733={"id":7238218,"unique_id":"wp-comment-2400733","title":"%26quot%3BSo%2C%20perhaps%20RFC%201122%20influenced%20the%20programmer%3F%26quot%3BIf%20so%2C%20then%20evidently%20not%20by%20much%2C%20because%20the%20paragraph%20following%20the%20words%20you%20quoted%20%28and%20which%20is%20also%20part%20of%20the%20robustness%20principle%29%20says%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2400733","item_id":"_comm_2400733"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2400733#respond' data-commentid="2400733" data-postid="256725" data-belowelement="div-comment-2400733" data-respondelement="respond" data-replyto="Reply to araybold" aria-label='Reply to araybold'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2400856" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-6 parent">
+			<article id="div-comment-2400856" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2400856"><time datetime="2014-04-10T15:32:43+01:00">April 10, 2014 at 3:32 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>That&#8217;s a great quote!</p>
+<p>&#8220;Sooner or later a packet will come in with that particular combination of errors and attributes, and unless the software is prepared, chaos can ensue.&#8221;</p>
+<p>Jon Postel, RIP.</p>
+<p>Don&#8217;t make &#8217;em like they used to 🙂</p>
+<p>As for the last clause, you are probably right about it being naive&#8230;but those &#8220;low probability events&#8221; are no *less* a problem (speaking in absolute terms) just because controlled malevolence has increased. </p>
+<p>And, of course, low probability doesn&#8217;t necessarily mean low *frequency* any more. A brute force DES attack is a low probability venture my any measure (a randomly chosen password has about a 10 in one million million million chance of being right), but can be completed within one day.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2400856"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2400856={"id":7238218,"unique_id":"wp-comment-2400856","title":"That%26%23039%3Bs%20a%20great%20quote%21%26quot%3BSooner%20or%20later%20a%20packet%20will%20come%20in%20with%20that%20particular%20combination%20of%20errors%20and%20attributes%2C%20and%20unless%20the%20software%20is%20prepared%2C%20chaos%20can%20ensue.%26quot%3BJon%20Postel%2C%20RIP.Don%26%23039%3Bt%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2400856","item_id":"_comm_2400856"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2400856#respond' data-commentid="2400856" data-postid="256725" data-belowelement="div-comment-2400856" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2401782" class="comment even depth-7 parent">
+			<article id="div-comment-2401782" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/d939638391d557ce4562a0140f22d995?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/d939638391d557ce4562a0140f22d995?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Laurence Marks</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2401782"><time datetime="2014-04-10T19:24:43+01:00">April 10, 2014 at 7:24 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Duck wrote &#8220;John Postel, RIP.&#8221;</p>
+<p>Err, that&#8217;s Jon.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2401782"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2401782={"id":7238218,"unique_id":"wp-comment-2401782","title":"Duck%20wrote%20%26quot%3BJohn%20Postel%2C%20RIP.%26quot%3BErr%2C%20that%26%23039%3Bs%20Jon.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2401782","item_id":"_comm_2401782"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2401782#respond' data-commentid="2401782" data-postid="256725" data-belowelement="div-comment-2401782" data-respondelement="respond" data-replyto="Reply to Laurence Marks" aria-label='Reply to Laurence Marks'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2402777" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-8">
+			<article id="div-comment-2402777" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2402777"><time datetime="2014-04-10T23:43:49+01:00">April 10, 2014 at 11:43 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Fixed in the original post. Thanks. Dunno how that happened.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2402777"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2402777={"id":7238218,"unique_id":"wp-comment-2402777","title":"Fixed%20in%20the%20original%20post.%20Thanks.%20Dunno%20how%20that%20happened.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2402777","item_id":"_comm_2402777"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2402777#respond' data-commentid="2402777" data-postid="256725" data-belowelement="div-comment-2402777" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2395755" class="comment even thread-even depth-1 parent">
+			<article id="div-comment-2395755" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/742520c086a7d3b28f28737e35dd0cbe?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/742520c086a7d3b28f28737e35dd0cbe?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Drew</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2395755"><time datetime="2014-04-09T20:31:57+01:00">April 9, 2014 at 8:31 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Thanks for the code description, exactly what I was looking for.</p>
+<p>Questions:<br />
+1) I know it&#8217;s *possible to leak out something important, but how likely is a memcpy of 65k actually have any usefull info in there? Especially something like actual key data. Wouldn&#8217;t it be using some volatile area of program memory used for storing short lived variables? Not something like constants or static data.</p>
+<p>2)You can actually trace it if you now know what you are looking for. A heartbeat request asking from more than it should but under 64k.<br />
+They should have actually updated the code to trap that request and log it instead of just preventing it.<br />
+Also, to be transferring heartbeats you would have to be in a secure SSL link which would already be logging your IP, etc if not tons more with the key handshake.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2395755"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2395755={"id":7238218,"unique_id":"wp-comment-2395755","title":"Thanks%20for%20the%20code%20description%2C%20exactly%20what%20I%20was%20looking%20for.Questions%3A1%29%20I%20know%20it%26%23039%3Bs%20%2Apossible%20to%20leak%20out%20something%20important%2C%20but%20how%20likely%20is%20a%20memcpy%20of%2065k%20actually%20have%20any%20usefull%20inf%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2395755","item_id":"_comm_2395755"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2395755#respond' data-commentid="2395755" data-postid="256725" data-belowelement="div-comment-2395755" data-respondelement="respond" data-replyto="Reply to Drew" aria-label='Reply to Drew'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2397757" class="comment odd alt depth-2 parent">
+			<article id="div-comment-2397757" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/e10ad83c7a36725c3d7f169c1c72cf6f?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/e10ad83c7a36725c3d7f169c1c72cf6f?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">dcx2</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2397757"><time datetime="2014-04-10T04:18:25+01:00">April 10, 2014 at 4:18 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The stack grows down.  If the request was placed on the stack, then the overflow would read part of the current function, and some of the callers.  Depending on how many locals the caller needs, you could see all the way up to main.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2397757"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2397757={"id":7238218,"unique_id":"wp-comment-2397757","title":"The%20stack%20grows%20down.%20%20If%20the%20request%20was%20placed%20on%20the%20stack%2C%20then%20the%20overflow%20would%20read%20part%20of%20the%20current%20function%2C%20and%20some%20of%20the%20callers.%20%20Depending%20on%20how%20many%20locals%20the%20caller%20needs%2C%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2397757","item_id":"_comm_2397757"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2397757#respond' data-commentid="2397757" data-postid="256725" data-belowelement="div-comment-2397757" data-respondelement="respond" data-replyto="Reply to dcx2" aria-label='Reply to dcx2'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2398636" class="comment byuser comment-author-pducklin bypostauthor even depth-3">
+			<article id="div-comment-2398636" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2398636"><time datetime="2014-04-10T07:11:17+01:00">April 10, 2014 at 7:11 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The buffer that the code reads off the end of is acquired using malloc(), so it&#8217;s on the heap, not the stack. As the name suggests, the heap doesn&#8217;t grow and shrink like the stack, so your chunk of allocated memory could end up next to apparently unrelated stuff that came from a completely different part of the program. </p>
+<p>If the heap&#8217;s largely empty, your request data might end up next to 64KB of unimportant zeros&#8230;but it might end up next to something much more exciting.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2398636"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2398636={"id":7238218,"unique_id":"wp-comment-2398636","title":"The%20buffer%20that%20the%20code%20reads%20off%20the%20end%20of%20is%20acquired%20using%20malloc%28%29%2C%20so%20it%26%23039%3Bs%20on%20the%20heap%2C%20not%20the%20stack.%20As%20the%20name%20suggests%2C%20the%20heap%20doesn%26%23039%3Bt%20grow%20and%20shrink%20like%20the%20stack%2C%20so%20your%20chunk%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2398636","item_id":"_comm_2398636"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2398636#respond' data-commentid="2398636" data-postid="256725" data-belowelement="div-comment-2398636" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2398600" class="comment byuser comment-author-pducklin bypostauthor odd alt depth-2">
+			<article id="div-comment-2398600" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2398600"><time datetime="2014-04-10T07:03:49+01:00">April 10, 2014 at 7:03 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>64KB may not sound a lot, but you can keep on firing heartbleed packets at a server, and keep on getting leaked data back&#8230;and even if you only ever see variables that were used recently, that still might be data from someone else&#8217;s session, or used by OpenSSL itself.</p>
+<p>Indeed, some people are claiming to have seen the server&#8217;s raw, unencrypted private key inamongst the leaked stuff.</p>
+<p>The point is that your TLS connection isn&#8217;t supposed to reveal *anything* about the state of the rest of the server, and the heartbeat reply is supposed to contain a copy only of the data *you* originally sent.</p>
+<p>Even one leaked byte would be a problem.</p>
+<p>64KB as many times as you care to keep asking is a correspondingly bigger problem&#8230;</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2398600"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2398600={"id":7238218,"unique_id":"wp-comment-2398600","title":"64KB%20may%20not%20sound%20a%20lot%2C%20but%20you%20can%20keep%20on%20firing%20heartbleed%20packets%20at%20a%20server%2C%20and%20keep%20on%20getting%20leaked%20data%20back...and%20even%20if%20you%20only%20ever%20see%20variables%20that%20were%20used%20recently%2C%20that%20s%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2398600","item_id":"_comm_2398600"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2398600#respond' data-commentid="2398600" data-postid="256725" data-belowelement="div-comment-2398600" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2401898" class="comment even thread-odd thread-alt depth-1">
+			<article id="div-comment-2401898" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/f534002d42f64bbe343d93f5f02e0b15?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/f534002d42f64bbe343d93f5f02e0b15?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">peter focas</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2401898"><time datetime="2014-04-10T19:52:58+01:00">April 10, 2014 at 7:52 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>What was the reason given, in OpenSSL &#8216;g&#8217; version that fixed this error? They must have known at that point that the previous code was vulnerable in a HUGE way, and alerted the community? Surely a gross breach here?</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2401898"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2401898={"id":7238218,"unique_id":"wp-comment-2401898","title":"What%20was%20the%20reason%20given%2C%20in%20OpenSSL%20%26%23039%3Bg%26%23039%3B%20version%20that%20fixed%20this%20error%3F%20They%20must%20have%20known%20at%20that%20point%20that%20the%20previous%20code%20was%20vulnerable%20in%20a%20HUGE%20way%2C%20and%20alerted%20the%20community%3F%20Surely%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2401898","item_id":"_comm_2401898"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2401898#respond' data-commentid="2401898" data-postid="256725" data-belowelement="div-comment-2401898" data-respondelement="respond" data-replyto="Reply to peter focas" aria-label='Reply to peter focas'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-2407721" class="comment odd alt thread-even depth-1 parent">
+			<article id="div-comment-2407721" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/0422ad82705822a1d17d30bd0b14a01f?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/0422ad82705822a1d17d30bd0b14a01f?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Jon</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2407721"><time datetime="2014-04-11T18:04:37+01:00">April 11, 2014 at 6:04 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>OPENSSL_malloc() should be modified to independently randomize the location of each buffer in a large address space.  And all buffers should be zeroed as they are freed.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2407721"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2407721={"id":7238218,"unique_id":"wp-comment-2407721","title":"OPENSSL_malloc%28%29%20should%20be%20modified%20to%20independently%20randomize%20the%20location%20of%20each%20buffer%20in%20a%20large%20address%20space.%20%20And%20all%20buffers%20should%20be%20zeroed%20as%20they%20are%20freed.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2407721","item_id":"_comm_2407721"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2407721#respond' data-commentid="2407721" data-postid="256725" data-belowelement="div-comment-2407721" data-respondelement="respond" data-replyto="Reply to Jon" aria-label='Reply to Jon'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2409628" class="comment byuser comment-author-pducklin bypostauthor even depth-2">
+			<article id="div-comment-2409628" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2409628"><time datetime="2014-04-11T23:47:20+01:00">April 11, 2014 at 11:47 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Or the code should use some kind of managed strings with length checking. (Randomising doesn&#8217;t help much here &#8211; it might merely make the variety of stuff leaked from a long sequence of heartbleeds even greater, making the bug even worse.)</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2409628"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2409628={"id":7238218,"unique_id":"wp-comment-2409628","title":"Or%20the%20code%20should%20use%20some%20kind%20of%20managed%20strings%20with%20length%20checking.%20%28Randomising%20doesn%26%23039%3Bt%20help%20much%20here%20-%20it%20might%20merely%20make%20the%20variety%20of%20stuff%20leaked%20from%20a%20long%20sequence%20of%20heartbleed%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2409628","item_id":"_comm_2409628"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2409628#respond' data-commentid="2409628" data-postid="256725" data-belowelement="div-comment-2409628" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-2410708" class="comment odd alt thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-2410708" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/38c008a1eb2b5bf674fd4128dc46719c?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/38c008a1eb2b5bf674fd4128dc46719c?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Michael Nash</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2410708"><time datetime="2014-04-12T02:29:41+01:00">April 12, 2014 at 2:29 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Gotta love the shocking spread of magic numbers in those small snippets of code. I guess #define is out of the question.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2410708"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2410708={"id":7238218,"unique_id":"wp-comment-2410708","title":"Gotta%20love%20the%20shocking%20spread%20of%20magic%20numbers%20in%20those%20small%20snippets%20of%20code.%20I%20guess%20%23define%20is%20out%20of%20the%20question.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2410708","item_id":"_comm_2410708"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2410708#respond' data-commentid="2410708" data-postid="256725" data-belowelement="div-comment-2410708" data-respondelement="respond" data-replyto="Reply to Michael Nash" aria-label='Reply to Michael Nash'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-2413266" class="comment byuser comment-author-pducklin bypostauthor even depth-2">
+			<article id="div-comment-2413266" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#comment-2413266"><time datetime="2014-04-12T07:50:25+01:00">April 12, 2014 at 7:50 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Why? If it&#8217;s a constant, it&#8217;s never going to change 🙂</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_2413266"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_2413266={"id":7238218,"unique_id":"wp-comment-2413266","title":"Why%3F%20If%20it%26%23039%3Bs%20a%20constant%2C%20it%26%23039%3Bs%20never%20going%20to%20change%20%3A-%29%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2014\/04\/08\/anatomy-of-a-data-leak-bug-openssl-heartbleed\/#comment-2413266","item_id":"_comm_2413266"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/?replytocom=2413266#respond' data-commentid="2413266" data-postid="256725" data-belowelement="div-comment-2413266" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		</ol><!-- .comment-list -->
+
+		
+	
+	
+		<div id="respond" class="comment-respond">
+		<h3 id="reply-title" class="comment-reply-title">What do you think? <small><a rel="nofollow" id="cancel-comment-reply-link" href="/2014/04/08/anatomy-of-a-data-leak-bug-openssl-heartbleed/#respond" style="display:none;">Cancel reply</a></small></h3><form action="https://nakedsecurity.sophos.com/wp-comments-post.php" method="post" id="commentform" class="comment-form" novalidate><p class="comment-form-comment"><label for="comment">Comment</label> <textarea id="comment" name="comment" cols="45" rows="8" maxlength="65525" required="required"></textarea></p><p class="comment-form-author"><label for="author">Name</label> <input id="author" name="author" type="text" value="" size="30" maxlength="245" /></p>
+<p class="comment-form-email"><label for="email">Email</label> <input id="email" name="email" type="email" value="" size="30" maxlength="100" /></p>
+<p class="comment-form-url"><label for="url">Website</label> <input id="url" name="url" type="url" value="" size="30" maxlength="200" /></p>
+<p class="form-submit"><input name="submit" type="submit" id="submit" class="submit" value="Post Comment" /> <input type='hidden' name='comment_post_ID' value='256725' id='comment_post_ID' />
+<input type='hidden' name='comment_parent' id='comment_parent' value='0' />
+</p><p style="display: none;"><input type="hidden" id="akismet_comment_nonce" name="akismet_comment_nonce" value="d20df1a704" /></p><input type="hidden" id="ak_js" name="ak_js" value="199"/><textarea name="ak_hp_textarea" cols="45" rows="8" maxlength="100" style="display: none !important;"></textarea></form>	</div><!-- #respond -->
+	
+</div><!-- #comments -->
+		<div class="comments-widget-area">
+					</div>
+	
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+
+	<section class="recommended-panel">
+	<div class="container">
+	<div class="panel-content ">
+
+		<h3 class="block-title">Recommended reads</h3>
+	<div class="blocks">
+		<article id="post-557560" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2021/03/07/poison-packages-supply-chain-risks-user-hits-python-community-with-4000-fake-modules/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2021/03/pypi-1200-1.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Mar</span><span class="day">07</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Paul Ducklin	
+	</div>
+			<div class="comment-box">
+				<span class="count">16</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2021/03/07/poison-packages-supply-chain-risks-user-hits-python-community-with-4000-fake-modules/" rel="bookmark">Poison packages &#8211; &#8220;Supply Chain Risks&#8221; user hits Python community with 4000 fake modules</a></h3>	</div>
+</article> <!-- .card-article -->
+<article id="post-544757" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2021/01/28/s3-ep17-facemasks-hidden-ads-and-paranormal-hacking-podcast/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2021/01/nean-with-mic-wt-brownish-1200.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Jan</span><span class="day">28</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Paul Ducklin	
+	</div>
+			<div class="comment-box">
+				<span class="count">3</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2021/01/28/s3-ep17-facemasks-hidden-ads-and-paranormal-hacking-podcast/" rel="bookmark">S3 Ep17: Facemasks, hidden ads and paranormal hacking [Podcast]</a></h3>	</div>
+</article> <!-- .card-article -->
+<article id="post-544664" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2021/01/25/naked-security-live-dont-let-digital-jokes-turn-into-digital-disasters/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/10/nslive-1200-3.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Jan</span><span class="day">25</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Paul Ducklin	
+	</div>
+			<div class="comment-box">
+				<span class="count">0</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2021/01/25/naked-security-live-dont-let-digital-jokes-turn-into-digital-disasters/" rel="bookmark">Naked Security Live &#8211; Don’t let digital jokes turn into digital disasters</a></h3>	</div>
+</article> <!-- .card-article -->
+	</div>
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	
+	<footer id="colophon" class="site-footer" role="contentinfo">
+		<div class="footer-container">
+			<a href="#" class="js-collapse-footer"><svg style="height: 20px" viewBox="0 0 132 24" class="block icon sophos"><use xlink:href="#sophos"></use></svg></a>
+			<div id="collapseFooter" class="blocks">
+				<div class="sophos block">
+					<ul id="menu-footer-primary" class="primary menu"><li id="menu-item-306737" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-306737"><a href="https://nakedsecurity.sophos.com/about/">About Naked Security</a></li>
+<li id="menu-item-306754" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-306754"><a href="https://www.sophos.com/en-us/company.aspx">About Sophos</a></li>
+<li id="menu-item-306747" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-306747"><a href="https://nakedsecurity.sophos.com/send-us-a-tip/">Send us a tip</a></li>
+<li id="menu-item-323171" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323171"><a href="/cookies-and-scripts/">Cookies</a></li>
+<li id="menu-item-323170" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323170"><a href="https://www.sophos.com/en-us/legal/sophos-group-privacy-policy.aspx">Privacy</a></li>
+<li id="menu-item-323169" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323169"><a href="https://www.sophos.com/en-us/legal.aspx">Legal</a></li>
+</ul>				</div>
+										<div class="news block">
+							<ul id="menu-products-column-one" class="small menu"><li id="menu-item-306998" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-306998"><a href="https://www.sophos.com/en-us/products/intercept-x.aspx">Intercept X</a></li>
+<li id="menu-item-440801" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440801"><a href="https://www.sophos.com/en-us/products/server-security.aspx">Intercept X for Server</a></li>
+<li id="menu-item-440802" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440802"><a href="https://www.sophos.com/en-us/products/mobile-control.aspx">Intercept X for Mobile</a></li>
+</ul>						</div>
+											<div class="products block">
+							<ul id="menu-products-column-two" class="small menu"><li id="menu-item-440803" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440803"><a href="https://www.sophos.com/en-us/products/next-gen-firewall.aspx">XG Firewall</a></li>
+<li id="menu-item-440805" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440805"><a href="https://www.sophos.com/en-us/products/sophos-email.aspx">Sophos Email</a></li>
+<li id="menu-item-440804" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440804"><a href="https://www.sophos.com/en-us/products/secure-wifi.aspx">Sophos Wireless</a></li>
+</ul>						</div>
+											<div class="threats block">
+							<ul id="menu-server-protection" class="small menu"><li id="menu-item-440806" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440806"><a href="https://www.sophos.com/en-us/products/managed-threat-response.aspx">Managed Threat Response</a></li>
+<li id="menu-item-448404" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-448404"><a href="https://www.sophos.com/en-us/products/cloud-optix.aspx">Cloud Optix</a></li>
+<li id="menu-item-440807" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440807"><a href="https://www.sophos.com/en-us/products/phish-threat.aspx">Phish Threat</a></li>
+</ul>						</div>
+								</div>
+			<ul class="block social footer">
+				<li class="twitter"><a rel="nofollow" href="https://twitter.com/NakedSecurity" title="Follow our team of security experts on Twitter"><svg style="height: 14px" viewBox="0 0 100 100" class="icon twitter"><use xlink:href="#twitter"></use></svg></a></li>
+				<li class="facebook"><a rel="nofollow" href="https://www.facebook.com/SophosSecurity" title="Join over 250,000 people in our Facebook community"><svg style="height: 14px" viewBox="0 0 100 100" class="icon facebook"><use xlink:href="#facebook"></use></svg></a></li>
+				<li class="instagram"><a rel="nofollow" href="https://www.instagram.com/nakedsecurity/" title="Follow Naked Security on Instagram"><svg style="height: 14px" viewBox="0 0 100 100" class="icon instagram"><use xlink:href="#instagram"></use></svg></a></li>
+				<li class="linkedin"><a rel="nofollow" href="https://www.linkedin.com/company/5053/" title="Join the naked security discussion group on LinkedIn"><svg style="height: 14px" viewBox="0 0 100 100" class="icon linkedin"><use xlink:href="#linkedin"></use></svg></a></li>
+				<li class="rss"><a rel="nofollow" href="/feed" title="Subscribe to our RSS feed"><svg style="height: 14px" viewBox="0 0 100 100" class="icon rss"><use xlink:href="#rss"></use></svg></a></li>
+			</ul>
+
+							<div class="vip-powered-wpcom">
+					<span class="copyright">© 1997 - 2021 Sophos Ltd.</span>
+					All rights reserved.
+					Powered by <a href="https://wpvip.com/?utm_source=vip_powered_wpcom&#038;utm_medium=web&#038;utm_campaign=VIP%20Footer%20Credit&#038;utm_term=nakedsecurity.sophos.com" rel="generator nofollow" class="powered-by-wpcom">WordPress VIP</a>				</div>
+					</div>
+		<script type="text/javascript">
+			window.cookieconsent_options = {
+				"message":"This site uses cookies. By continuing to browse the site you are agreeing to our use of cookies.",
+				"dismiss":"Got it!",
+				"learnMore":"Learn More",
+				"link":"/cookies-and-scripts",
+				"theme":"https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/css/sophos.css"};
+		</script>
+	</footer><!-- #colophon -->
+</div><!-- #page -->
+<div id="survey-wrapper" class="mfp-hide"><div class="pd-embed" id="pd_1499706777" data-settings=""></div></div>
+<script type='text/javascript' src='https://nakedsecurity.sophos.com/_static/??-eJzTLy/QTc7PK0nNK9EvyClNz8wr1i+uzCtJrMjITM/IAeKS1CJMEWP94uSizIISoOIM5/yiVL2sYh19yo1yKioFmldQADTOPtfW0MzQ1MTMwNTIMAsAjvQ/nw=='></script>
+<script type='text/javascript'>
+	(function(){
+		var corecss = document.createElement('link');
+		var themecss = document.createElement('link');
+		var corecssurl = "https://nakedsecurity.sophos.com/wp-content/plugins/syntaxhighlighter/syntaxhighlighter3/styles/shCore.css?ver=3.0.9b";
+		if ( corecss.setAttribute ) {
+				corecss.setAttribute( "rel", "stylesheet" );
+				corecss.setAttribute( "type", "text/css" );
+				corecss.setAttribute( "href", corecssurl );
+		} else {
+				corecss.rel = "stylesheet";
+				corecss.href = corecssurl;
+		}
+		document.head.appendChild( corecss );
+		var themecssurl = "https://nakedsecurity.sophos.com/wp-content/plugins/syntaxhighlighter/syntaxhighlighter3/styles/shThemeDefault.css?ver=3.0.9b";
+		if ( themecss.setAttribute ) {
+				themecss.setAttribute( "rel", "stylesheet" );
+				themecss.setAttribute( "type", "text/css" );
+				themecss.setAttribute( "href", themecssurl );
+		} else {
+				themecss.rel = "stylesheet";
+				themecss.href = themecssurl;
+		}
+		document.head.appendChild( themecss );
+	})();
+	SyntaxHighlighter.config.strings.expandSource = '+ expand source';
+	SyntaxHighlighter.config.strings.help = '?';
+	SyntaxHighlighter.config.strings.alert = 'SyntaxHighlighter\n\n';
+	SyntaxHighlighter.config.strings.noBrush = 'Can\'t find brush for: ';
+	SyntaxHighlighter.config.strings.brushNotHtmlScript = 'Brush wasn\'t configured for html-script option: ';
+	SyntaxHighlighter.defaults['pad-line-numbers'] = false;
+	SyntaxHighlighter.defaults['toolbar'] = false;
+	SyntaxHighlighter.all();
+
+	// Infinite scroll support
+	if ( typeof( jQuery ) !== 'undefined' ) {
+		jQuery( function( $ ) {
+			$( document.body ).on( 'post-load', function() {
+				SyntaxHighlighter.highlight();
+			} );
+		} );
+	}
+</script>
+<script id='child-js-plugins-js-extra'>
+var PG8Data = {"startPage":"1","maxPages":"0","nextLink":""};
+</script>
+<script id='child-js-core-js-extra'>
+var Sophos = {"ajaxurl":"https:\/\/nakedsecurity.sophos.com\/wp-admin\/admin-ajax.php","nonce":"64f6810f0c"};
+</script>
+<script type='text/javascript' src='https://nakedsecurity.sophos.com/_static/??-eJyNjkEKwjAQRS9kOo2YggvxKGLT0SZmJiGTULx9Q7HgwoXL+f89/sCSlI1ckAuUGQkFJKY5CuMi6thrA14ghfp0LJ2XA/wl2Jhxpx3bUKfGbTlRM1XGFN4dOf4FtRNpxOm73yepqs8zcH85ISxway48YqbGXumiB21OQ2/02a8RfU9z'></script>
+<script src='https://stats.wp.com/e-202112.js' defer></script>
+<script>
+	_stq = window._stq || [];
+	_stq.push([ 'view', {v:'ext',j:'1:9.5.2',blog:'166161173',post:'256725',tz:'0',srv:'nakedsecurity.sophos.com'} ]);
+	_stq.push([ 'clickTrackerInit', '166161173', '256725' ]);
+</script>
+</body>
+</html>

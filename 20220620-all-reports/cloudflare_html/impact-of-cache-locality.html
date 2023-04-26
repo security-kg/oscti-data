@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Impact of Cache Locality</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/impact-of-cache-locality/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Impact of Cache Locality" />
+    <meta property="og:description" content="Our Gen X servers process more requests per second per core than our previous fleet. The AMD 2nd Gen EPYC 7642 processor’s large L3 cache minimizes L3 cache misses, and the time-savings add up quickly." />
+    <meta property="og:url" content="https://blog.cloudflare.com/impact-of-cache-locality/" />
+    <meta property="og:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/02/facebook-Linked_Image___Infrastructure-after-@2x--1-.png" />
+    <meta property="article:published_time" content="2020-02-26T12:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-06-02T22:42:01.000Z" />
+    <meta property="article:tag" content="Hardware" />
+    <meta property="article:tag" content="Data Center" />
+    <meta property="article:tag" content="Cloudflare Network" />
+    <meta property="article:tag" content="Partners" />
+    <meta property="article:tag" content="EPYC" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Impact of Cache Locality" />
+    <meta name="twitter:description" content="Our Gen X servers process more requests per second per core than our previous fleet. The AMD 2nd Gen EPYC 7642 processor’s large L3 cache minimizes L3 cache misses, and the time-savings add up quickly." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/impact-of-cache-locality/" />
+    <meta name="twitter:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/02/twitter-In-Stream_Wide___Infrastructure-after-@2x--1-.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Sung Park" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Hardware, Data Center, Cloudflare Network, Partners, EPYC, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@shjpark92" />
+    <meta property="og:image:width" content="2000" />
+    <meta property="og:image:height" content="1047" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Sung Park",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/11/_tmp_uploaded20190827-140-5glea4.jpg",
+            "width": 600,
+            "height": 600
+        },
+        "url": "https://blog.cloudflare.com/author/sung/",
+        "sameAs": [
+            "https://twitter.com/shjpark92"
+        ]
+    },
+    "headline": "Impact of Cache Locality",
+    "url": "https://blog.cloudflare.com/impact-of-cache-locality/",
+    "datePublished": "2020-02-26T12:00:00.000Z",
+    "dateModified": "2020-06-02T22:42:01.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/02/gen-x-color-Wednesday@2x-1.png",
+    "keywords": "Hardware, Data Center, Cloudflare Network, Partners, EPYC, Speed & Reliability",
+    "description": "Our Gen X servers process more requests per second per core than our previous fleet. The AMD 2nd Gen EPYC 7642 processor’s large L3 cache minimizes L3 cache misses, and the time-savings add up quickly.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-hardware tag-data-center tag-cloudflare-network tag-partners tag-epyc tag-speed-and-reliability tag-hash-partnerposts sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-hardware tag-data-center tag-cloudflare-network tag-partners tag-epyc tag-speed-and-reliability tag-hash-partnerposts ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Impact of Cache Locality</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-02-26T12:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 26, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/sung/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/11/_tmp_uploaded20190827-140-5glea4.jpg" alt="Sung Park" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/sung" class="fw5 f3 no-underline black mr3">Sung Park</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/02/gen-x-color-Wednesday@2x.png" class="kg-image"></figure><p>In the past, we didn't have the opportunity to evaluate as many CPUs as we do today. The hardware ecosystem was simple – Intel had consistently delivered industry leading processors. Other vendors could not compete with them on both performance and cost. Recently it all changed: AMD has been challenging the status quo with their 2nd Gen EPYC processors.</p><p>This is not the first time that Intel has been challenged; previously <a href="https://blog.cloudflare.com/arm-takes-wing/">there was Qualcomm</a>, and we worked with AMD and considered their 1st Gen EPYC processors and based on the original Zen architecture, but ultimately, <a href="https://blog.cloudflare.com/a-tour-inside-cloudflares-g9-servers/">Intel prevailed</a>. AMD did not give up and unveiled their 2nd Gen EPYC processors codenamed Rome based on the latest Zen 2 architecture.</p><figure class="kg-card kg-embed-card"><blockquote class="twitter-tweet"><p lang="en" dir="ltr">Playing with some new fun kit. <a href="https://twitter.com/hashtag/epyc?src=hash&amp;ref_src=twsrc%5Etfw">#epyc</a> <a href="https://t.co/1No8Cmfzwl">pic.twitter.com/1No8Cmfzwl</a></p>&mdash; Matthew Prince 🌥 (@eastdakota) <a href="https://twitter.com/eastdakota/status/1192898039003766785?ref_src=twsrc%5Etfw">November 8, 2019</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+</figure><p>This made many improvements over its predecessors. Improvements include a die shrink from 14nm to 7nm, a doubling of the top end core count from 32 to 64, and a larger L3 cache size. Let’s emphasize again on the size of that L3 cache, which is 32 MiB L3 cache per Core Complex Die (CCD).</p><p>This time around, we have taken steps to understand our workloads at the hardware level through the use of hardware performance counters and profiling tools. Using these specialized CPU registers and profilers, we collected data on the AMD 2nd Gen EPYC and Intel Skylake-based Xeon processors in a lab environment, then validated our observations in production against other generations of servers from the past.</p><h2 id="simulated-environment">Simulated Environment</h2><p>CPU Specifications</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/02/image-3.png" class="kg-image"></figure><p>We evaluated several Intel Cascade Lake and AMD 2nd Gen EPYC processors, trading off various factors between power and performance; the AMD EPYC 7642 CPU came out on top. The majority of Cascade Lake processors have 1.375 MiB L3 cache per core shared across all cores, a common theme that started with Skylake. On the other hand, the 2nd Gen EPYC processors start at 4 MiB per core. The AMD EPYC 7642 is a unique SKU since it has 256 MiB of L3 cache. Having a cache this large or approximately 5.33 MiB sitting right next to each core means that a program will spend fewer cycles fetching data from RAM with the capability to have more data readily available in the L3 cache.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/02/Infrastructure-before@2x.png" class="kg-image"><figcaption><em>Before (Intel)</em></figcaption></figure><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/02/Infrastructure-after-@2x--1-.png" class="kg-image"><figcaption><em>After (AMD)</em></figcaption></figure><p>Traditional cache layout has also changed with the introduction of 2nd Gen EPYC, a byproduct of AMD using a multi-chip module (MCM) design. The 256 MiB L3 cache is formed by 8 individual dies or Core Complex Die (CCD) that is formed by 2 Core Complexes (CCX) with each CCX containing 16 MiB of L3 cache.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/02/image6.png" class="kg-image"><figcaption><em>Core Complex (CCX) - Up to four cores</em></figcaption></figure><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/02/image9.png" class="kg-image"><figcaption><em><em>Core Complex Die (CCD) - Created by combining two CCXs</em></em></figcaption></figure><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/02/image1-2.png" class="kg-image"><figcaption><em>AMD 2nd Gen EPYC 7642 - Created with 8x CCDs plus an I/O die in the center</em></figcaption></figure><h3 id="methodology">Methodology</h3><p>Our production traffic shares many characteristics of a sustained workload which typically does not induce large variation in operating frequencies nor enter periods of idle time. We picked out a simulated traffic pattern that closely resembled our production traffic behavior which was the Cached 10KiB png via HTTPS. We were interested in assessing the CPU’s maximum throughput or requests per second (RPS), one of our key metrics. With that being said, we did not disable Intel Turbo Boost or AMD Precision Boost, nor matched the frequencies clock-for-clock while measuring for requests per second, instructions retired per second (IPS), L3 cache miss rate, and sustained operating frequency.</p><h3 id="results">Results</h3><p>The 1P AMD 2nd Gen EPYC 7642 powered server took the lead and processed 50% more requests per second compared to our Gen 9’s 2P Intel Xeon Platinum 6162 server.</p><figure class="kg-card kg-image-card"><img src="https://lh5.googleusercontent.com/bg1akuH5YPbhMUGrZ9EGFTjdpVyHd5UKdhdCCFE6pbVli_zJ91Fc8RN37qWujzaKQczUJ5qxw64UrV_cGS-mvzGQMmLstid4SiaYSggPvRDWknWMp-kUJnnoNCb8JBkRoDkVbyQC" class="kg-image"></figure><p>We are running a sustained workload, so we should end up with a sustained operating frequency that is higher than base clock. The AMD EPYC 7642 operating frequency or the number cycles that the processor had at its disposal was approximately 20% greater than the Intel Xeon Platinum 6162, so frequency alone was not enough to explain the 50% gain in requests per second.</p><figure class="kg-card kg-image-card"><img src="https://lh5.googleusercontent.com/ym963p-QVuLp3sk_d3mlEoKgjmL3uaY-H0oITLKyx_DxD4XgwbJ_U1pq0fIdLLV-PB953QLV6_LUpmnLlbsF04owsHpMoGDy9SGnqAPkUbe0Gew2lZDQJ_siknRLakMtTKEkwYH5" class="kg-image"></figure><p>Taking a closer look, the number of instructions retired over time was far greater on the AMD 2nd Gen EPYC 7642 server, thanks to its low L3 cache miss rate.</p><figure class="kg-card kg-image-card"><img src="https://lh6.googleusercontent.com/CzKp4mSknMJKkSnRe0O28GV-7Qv9jXnHOgvQgg4WP5GC_cKUrLkusjY9QTG2JPJM9-Pu7YSxybpZrJccCZH7qZPnwy4XBEgWuQf_xcqpsZ1d8vjA2V4--aHWQ3rOnUnFAOQxMhpT" class="kg-image"></figure><figure class="kg-card kg-image-card"><img src="https://lh4.googleusercontent.com/te7FuWC6Yt_wN9HebMlqgyxjzZionjdfQWtwfK1sdzX30MEl7jcgX7rAGhyXQqFDJ6H7SA1YhK1eBOQYKX-PYHF__-5XfaS5iCS8yRXQcDVcegxO96GIwVRw0NouIf9yOt-eu07S" class="kg-image"></figure><h3 id="production-environment">Production Environment</h3><p>CPU Specifications</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/02/image-2.png" class="kg-image"></figure><h3 id="methodology-1">Methodology</h3><p>Our most predominant bottleneck appears to be the cache memory and we saw significant improvement in requests per second as well as <a href="https://blog.cloudflare.com/an-epyc-trip-to-rome-amd-is-cloudflares-10th-generation-edge-server-cpu/">time to process a request </a>due to low L3 cache miss rate. The data we present in this section was collected at a point of presence that spanned between Gen 7 to Gen 9 servers. We also collected data from a secondary region to gain additional confidence that the data we present here was not unique to one particular environment. Gen 9 is the baseline just as we have done in the previous section.</p><p>We put the 2nd Gen EPYC-based Gen X into production with hopes that the results would mirror closely to what we have previously seen in the lab. We found that the requests per second did not quite align with the results we had hoped, but the AMD EPYC server still outperformed all previous generations including outperforming the Intel Gen 9 server by 36%.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/02/image8.png" class="kg-image"></figure><p>Sustained operating frequency was nearly identical to what we have seen back in the lab.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/02/image10.png" class="kg-image"></figure><p>Due to the lower than expected requests per second, we also saw lower instructions retired over time and higher L3 cache miss rate but maintained a lead over Gen 9, with 29% better performance.</p><figure class="kg-card kg-image-card"><img src="https://lh3.googleusercontent.com/StUGiLjEYh7zhsHFysAwN0veK3NTYgwTsgqFf2O4JtbFTyOcJgXZ02kmMgEXE46nSbgggsZMD-f02sjJ7ZYuDao6s7_p3PWWFMPyasa4DegORiSo7RYhxVMVffgGZmrXtJDBTFn5" class="kg-image"></figure><figure class="kg-card kg-image-card"><img src="https://lh5.googleusercontent.com/-aEX0XTMp1Ztyl1ehFHWtOauNlLBtVGVjni55yqdOf7f3pepJI5xeyySn3vZse-ulfA-t3XOq2Uu_LRDreZUN0ZntgoWotLlzz8MB91I8M7YTK_378mWMIzzhFZKhm22t7ChkQdx" class="kg-image"></figure><h2 id="conclusion">Conclusion</h2><p>The single AMD EPYC 7642 performed very well during our lab testing, beating our Gen 9 server with dual Intel Xeon Platinum 6162 with the same total number of cores. Key factors we noticed were its large L3 cache, which led to a low L3 cache miss rate, as well as a higher sustained operating frequency. The AMD 2nd Gen EPYC 7642 did not have as big of an advantage in production, but nevertheless still outperformed all previous generations. The observation we made in production was based on a PoP that could have been influenced by a number of other factors such as but not limited to ambient temperature, timing, and other new products that will shape our traffic patterns in the future such as <a href="https://blog.cloudflare.com/webassembly-on-cloudflare-workers/">WebAssembly on Cloudflare Workers</a>. The AMD EPYC 7642 opens up the possibility for our upcoming Gen X server to maintain the same core count while processing more requests per second than its predecessor.</p><p>Got a passion for hardware? I think we should get in touch. We are always looking for talented and curious individuals to <a href="https://www.cloudflare.com/careers/departments/">join our team</a>. The data presented here would not have been possible if it was not for the teamwork between many different individuals within Cloudflare. As a team, we strive to work together to create highly performant, reliable, and secure systems that will form the pillars of our rapidly growing <a href="https://www.cloudflare.com/network/">network</a> that spans 200 cities in more than 90 countries and we are just getting started.</p>
+            </div>
+        </section>
+
+        <a href="/tag/hardware/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Hardware</a>
+        <a href="/tag/data-center/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Data Center</a>
+        <a href="/tag/cloudflare-network/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Network</a>
+        <a href="/tag/partners/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Partners</a>
+        <a href="/tag/epyc/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">EPYC</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-04T14:05:37Z">December 04, 2020 2:05PM</p>
+        <a href="/an-introduction-to-three-phase-power-and-pdus/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">An introduction to three-phase power and PDUs</h2>
+        </a>
+
+        <p class="gray1 lh-copy">This blog is a quick Electrical Engineering 101 session going over specifically how 3-phase PDUs work, along with some good practices on how we use them...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/robdinh/" class="fw5 f2 black no-underline">Rob Dinh</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/hardware/" class="no-underline f1 fw2 blue3 underline-hover">Hardware</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-center/" class="no-underline f1 fw2 blue3 underline-hover">Data Center</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/edge/" class="no-underline f1 fw2 blue3 underline-hover">Edge</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/edge-computing/" class="no-underline f1 fw2 blue3 underline-hover">Edge Computing</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-20T12:00:00Z">November 20, 2020 12:00PM</p>
+        <a href="/getting-to-the-core/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Getting to the Core: Benchmarking Cloudflare’s Latest Server Hardware</h2>
+        </a>
+
+        <p class="gray1 lh-copy">A refresh of the hardware that Cloudflare uses to run analytics provided big efficiency improvements....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/brian-bassett/" class="fw5 f2 black no-underline">Brian Bassett</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/hardware/" class="no-underline f1 fw2 blue3 underline-hover">Hardware</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/genx/" class="no-underline f1 fw2 blue3 underline-hover">Genx</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kafka/" class="no-underline f1 fw2 blue3 underline-hover">Kafka</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kubernetes/" class="no-underline f1 fw2 blue3 underline-hover">Kubernetes</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/clickhouse/" class="no-underline f1 fw2 blue3 underline-hover">ClickHouse</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-02-25T14:00:00Z">February 25, 2020 2:00PM</p>
+        <a href="/an-epyc-trip-to-rome-amd-is-cloudflares-10th-generation-edge-server-cpu/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">An EPYC trip to Rome: AMD is Cloudflare&#x27;s 10th-generation Edge server CPU</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As we started looking at production ready systems to power our Gen X solution, we took a long look at what is available to us in the market today and we’ve made our decision. We’re moving on from Gen 9's 48-core setup of dual socket Intel Xeon Platinum 6162's to a 48-core single socket AMD EPYC 7642...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/robdinh/" class="fw5 f2 black no-underline">Rob Dinh</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/hardware/" class="no-underline f1 fw2 blue3 underline-hover">Hardware</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-network/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-center/" class="no-underline f1 fw2 blue3 underline-hover">Data Center</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/epyc/" class="no-underline f1 fw2 blue3 underline-hover">EPYC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/partners/" class="no-underline f1 fw2 blue3 underline-hover">Partners</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-02-24T13:00:00Z">February 24, 2020 1:00PM</p>
+        <a href="/cloudflares-gen-x-servers-for-an-accelerated-future/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare’s Gen X: 
+Servers for an Accelerated Future</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We designed and built Cloudflare’s network to be able to grow capacity quickly and inexpensively; to allow every server, in every city, to run every service; and to allow us to shift customers and traffic across our network efficiently....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nitin-rao/" class="fw5 f2 black no-underline">Nitin Rao</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/hardware/" class="no-underline f1 fw2 blue3 underline-hover">Hardware</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-network/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-center/" class="no-underline f1 fw2 blue3 underline-hover">Data Center</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/partners/" class="no-underline f1 fw2 blue3 underline-hover">Partners</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

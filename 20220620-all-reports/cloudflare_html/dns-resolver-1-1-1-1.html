@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Introducing DNS Resolver, 1.1.1.1 (not a joke)</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/dns-resolver-1-1-1-1/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Introducing DNS Resolver, 1.1.1.1 (not a joke)" />
+    <meta property="og:description" content="Cloudflare’s mission is to help build a better Internet and today we are releasing our DNS resolver, 1.1.1.1 - a recursive DNS service. With this offering, we’re fixing the foundation of the Internet by building a faster, more secure and privacy-centric public DNS resolver." />
+    <meta property="og:url" content="https://blog.cloudflare.com/dns-resolver-1-1-1-1/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/03/1.1.1.1.png" />
+    <meta property="article:published_time" content="2018-04-01T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-04-02T21:54:17.000Z" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="1.1.1.1" />
+    <meta property="article:tag" content="Privacy" />
+    <meta property="article:tag" content="Resolver" />
+    <meta property="article:tag" content="Product News" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Introducing DNS Resolver, 1.1.1.1 (not a joke)" />
+    <meta name="twitter:description" content="Cloudflare’s mission is to help build a better Internet and today we are releasing our DNS resolver, 1.1.1.1 - a recursive DNS service. With this offering, we’re fixing the foundation of the Internet by building a faster, more secure and privacy-centric public DNS resolver." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/dns-resolver-1-1-1-1/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/03/1.1.1.1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ólafur Guðmundsson" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="DNS, 1.1.1.1, Privacy, Resolver, Product News" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ólafur Guðmundsson",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/3a917b8.jpg",
+        "url": "https://blog.cloudflare.com/author/olafur-gudmundsson/",
+        "sameAs": []
+    },
+    "headline": "Introducing DNS Resolver, 1.1.1.1 (not a joke)",
+    "url": "https://blog.cloudflare.com/dns-resolver-1-1-1-1/",
+    "datePublished": "2018-04-01T13:00:00.000Z",
+    "dateModified": "2019-04-02T21:54:17.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/03/1.1.1.1.png",
+    "keywords": "DNS, 1.1.1.1, Privacy, Resolver, Product News",
+    "description": "Cloudflare’s mission is to help build a better Internet and today we are releasing our DNS resolver, 1.1.1.1 - a recursive DNS service. With this offering, we’re fixing the foundation of the Internet by building a faster, more secure and privacy-centric public DNS resolver. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-dns tag-1-1-1-1 tag-privacy tag-resolver tag-product-news sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-dns tag-1-1-1-1 tag-privacy tag-resolver tag-product-news ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Introducing DNS Resolver, 1.1.1.1 (not a joke)</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-04-01T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">April 01, 2018 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/olafur-gudmundsson/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/3a917b8.jpg" alt="Ólafur Guðmundsson" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/olafur-gudmundsson" class="fw5 f3 no-underline black mr3">Ólafur Guðmundsson</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Cloudflare’s mission is to help build a better Internet and today we are releasing our DNS resolver, <a href="https://1.1.1.1/">1.1.1.1</a> - a recursive DNS service. With this offering, we’re fixing the foundation of the Internet by building a faster, more secure and privacy-centric public DNS resolver. The DNS resolver, 1.1.1.1, is available publicly for everyone to use - it is the first consumer-focused service Cloudflare has ever released.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/1.1.1.1.svg" alt="1.1.1.1"></p>
+<p>We’re using the following IPv4 addresses for our resolver: <strong>1.1.1.1</strong> and <strong>1.0.0.1</strong>. Easy to remember. These addresses have been provided to Cloudflare by APNIC for both joint research and this service. You can read more about their work via the <a href="https://labs.apnic.net/?p=1127">APNIC blog</a>.</p>
+<p>DNS resolver, 1.1.1.1, is served by Cloudflare’s Global Anycast <a href="https://www.cloudflare.com/network/">Network</a>.</p>
+<h3 id="backgroundaquickrefresherontheroleoftheresolverindns">Background: A quick refresher on the role of the resolver in DNS</h3>
+<p>Our friends at <a href="https://dnsimple.com/">DNSimple</a> have made this amazing DNS Tutorial for anyone to fill in their gaps on <a href="https://howdns.works/">how DNS works</a>. They explain all about resolvers, root name servers, and much more in a very informative way.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/dnsimple-howdns-works.png" alt="dnsimple-howdns-works"></p>
+<p>When resolving a domain name, a query travels from your end system (i.e. a web browser) to a recursive DNS service. If the DNS record is not in the service’s local cache, the recursor will query the authoritative DNS hierarchy to find the IP address information you are looking for. The recursor is the part that DNS resolver, 1.1.1.1 plays. It must be fast and these days it must be secure!</p>
+<h3 id="goalsfordnsresolver1111">Goals for DNS resolver, 1.1.1.1</h3>
+<p>Our goals with the public resolver are simple: Cloudflare wants to operate the fastest public resolver on the planet while raising the standard of privacy protections for users. To make the Internet faster, we are already building data centers all over the globe to reduce the distance (i.e. latency) from users to content. Eventually we want everyone to be within 10 milliseconds of at least one of our locations.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Cloudflare_and_world-population-map.png" alt="Cloudflare_and_world-population-map"></p>
+<p>In March alone, we enabled thirty-one new data centers globally (<a href="https://blog.cloudflare.com/istanbul-not-constantinople/">Istanbul</a>, <a href="https://blog.cloudflare.com/reykjavik-cloudflares-northernmost-location/">Reykjavík</a>, <a href="https://blog.cloudflare.com/riyadh/">Riyadh</a>, <a href="https://blog.cloudflare.com/macau/">Macau</a>, <a href="https://blog.cloudflare.com/baghdad/">Baghdad</a>, <a href="https://blog.cloudflare.com/usa-expansion/">Houston, Indianapolis, Montgomery, Pittsburgh, Sacramento</a>, <a href="https://blog.cloudflare.com/mexico-city/">Mexico City</a>, <a href="https://blog.cloudflare.com/tel-aviv/">Tel Aviv</a>, <a href="https://blog.cloudflare.com/durban-and-port-louis/">Durban, Port Louis</a>, <a href="https://blog.cloudflare.com/cebu/">Cebu City</a>, <a href="https://blog.cloudflare.com/edinburgh/">Edinburgh</a>, <a href="https://blog.cloudflare.com/riga-tallinn-vilnius/">Riga, Tallinn, Vilnius</a>, <a href="https://blog.cloudflare.com/welcome-calgary-saskatoon-and-winnipeg/">Calgary, Saskatoon, Winnipeg</a>, <a href="https://blog.cloudflare.com/more-us-data-centers/">Jacksonville, Memphis, Tallahassee</a>, <a href="https://blog.cloudflare.com/bogota/">Bogotá</a>, <a href="https://blog.cloudflare.com/luxembourg-chisinau/">Luxembourg City, Chișinău</a>) and just like every other city in our network, new sites run DNS Resolver, 1.1.1.1 on day-one!</p>
+<p>Our fast and highly distributed network is built to serve any protocol and we are currently the fastest authoritative DNS provider on the Internet, a capability enjoyed by over seven million Internet properties. Plus, we already provide an anycast service to two of the thirteen root nameservers. The next logical step was to provide faster recursive DNS service for users. Our recursor can take advantage of the authoritative servers that are co-located with us, resulting in faster lookups for all domain names.</p>
+<p>While DNSSEC ensures integrity of data between a resolver and an authoritative server, it does not protect the privacy of the “last mile” towards you. DNS resolver, 1.1.1.1, supports both emerging DNS privacy standards - DNS-over-TLS, and DNS-over-HTTPS, which both provide last mile encryption to keep your DNS queries private and free from tampering.</p>
+<h3 id="makingourresolverprivacyconscious">Making our resolver privacy conscious</h3>
+<p>Historically, recursor sends the full domain name to any intermediary as it finds its way to the root or authoritative DNS. This meant that if you were going to <a href="https://blog.cloudflare.com/dns-resolver-1-1-1-1/www.cloudflare.com">www.cloudflare.com</a>, the root server and the .com server would both be queried with the full domain name (i.e. the <code>www</code>, the <code>cloudflare</code>, and the <code>com</code> parts), even though the root servers just need to redirect the recursive to dot com (independent of anything else in the fully qualified domain name). This ease of access to all this personal browsing information via DNS presents a grave privacy concern to many. This has been addressed by several resolvers’ software packages, though not all solutions have been widely adapted or deployed.</p>
+<p>The DNS resolver, 1.1.1.1, provides, on day-one, all defined and proposed DNS privacy-protection mechanisms for use between the stub resolver and recursive resolver. For those not familiar, a stub resolver is a component of your operating system that talks to the recursive resolver. By only using DNS Query Name Minimisation defined in <a href="https://tools.ietf.org/html/rfc7816">RFC7816</a>, DNS resolver, 1.1.1.1, reduces the information leaked to intermediary DNS servers, like the root and TLDs. That means that DNS resolver, 1.1.1.1, only sends just enough of the name for the authority to tell the resolver where to ask the next question.</p>
+<p>The DNS resolver, 1.1.1.1, is also supporting privacy-enabled TLS queries on port 853 (<a href="https://developers.cloudflare.com/1.1.1.1/dns-over-tls/">DNS over TLS</a>), so we can keep queries hidden from snooping networks. Furthermore, by offering the experimental DoH (<a href="https://developers.cloudflare.com/1.1.1.1/dns-over-https/">DNS over HTTPS</a>) protocol, we improve both privacy and a number of future speedups for end users, as browsers and other applications can now mix DNS and HTTPS traffic into one single connection.</p>
+<p>With DNS aggressive negative caching, as described in <a href="https://tools.ietf.org/html/rfc8198">RFC8198</a>, we can further decrease the load on the global DNS system. This technique first tries to use the existing resolvers negative cache which keeps negative (or non-existent) information around for a period of time. For zones signed with DNSSEC and from the NSEC records in cache, the resolver can figure out if the requested name does NOT exist without doing any further query. So if you type <code>wwwwwww</code> dot something and then <code>wwww</code> dot something, the second query could well be answered with a very quick “no” (NXDOMAIN in the DNS world). Aggressive negative caching works only with DNSSEC signed zones, which includes both the root and a 1400 out of 1544 TLDs are signed today.</p>
+<p>We use <a href="https://blog.cloudflare.com/dnssec-an-introduction/">DNSSEC</a> validation when possible, as that allows us to be sure the answers are accurate and untampered with. The cost of signature verifications is low, and the potential savings we get from aggressive negative caching more than make up for that. We want our users to trust the answers we give out, and thus perform all possible checks to avoid giving bad answers to the clients.</p>
+<p>However, <a href="https://blog.cloudflare.com/dnssec-complexities-and-considerations/">DNSSEC</a> is very unforgiving. Errors in DNSSEC configuration by authoritative DNS operators can make such misconfigured domains unresolvable. To work around this problem, Cloudflare will configure &quot;Negative Trust Anchors&quot; on domains with detected and vetted DNSSEC errors and remove them once the configuration is rectified by authoritative operators. This limits the impact of broken DNSSEC domains by temporarily disabling DNSSEC validation for a specific misconfigured domain, restoring access to end consumers.</p>
+<h3 id="howdidwebuildit">How did we build it?</h3>
+<p>Initially, we thought about building our own resolver, but rejected that approach due to complexity and go-to-market considerations. Then we looked at all open source resolvers on the market; from this long list we narrowed our choices down to two or three that would be suitable to meet most of the project goals. In the end, we decided to build the system around the <a href="https://www.knot-resolver.cz/">Knot Resolver from CZ NIC</a>. This is a modern resolver that was originally released about two and a half years ago. By selecting the Knot Resolver, we also increase software diversity. The tipping point was that it had more of the core features we wanted, with a modular architecture similar to <a href="https://openresty.org/">OpenResty</a>. The Knot Resolver is in active use and development.</p>
+<h3 id="interestingthingswedothatnooneelsedoes">Interesting things we do that no one else does</h3>
+<p>The recent advanced features we wanted were:</p>
+<ul>
+<li>Query Minimization <a href="https://tools.ietf.org/html/rfc7816">RFC7816</a>,</li>
+<li>DNS-over-TLS (Transport Layer Security) <a href="https://tools.ietf.org/html/rfc7858">RFC7858</a>,</li>
+<li>DNS-over-HTTPS protocol <a href="https://datatracker.ietf.org/wg/doh/about/">DoH</a>,</li>
+<li>Aggressive negative answers <a href="https://tools.ietf.org/html/rfc8198">RFC8198</a>,</li>
+</ul>
+<p>Small disclaimer: the original main developer of Knot Resolver, <a href="https://blog.cloudflare.com/author/marek/">Marek Vavruša</a>, has been working on the Cloudflare DNS team for over two years.</p>
+<h3 id="howtomakeourresolverfaster">How to make our resolver faster</h3>
+<p>There are many factors that affect how fast a resolver is. The first and foremost is: can it answer from cache? If it can, then the time to answer is only the round-trip time for a packet from the client to the resolver.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/04/1.1.1.1-dns-resolver-performance.png" alt="1.1.1.1-dns-resolver-performance"></p>
+<p>When a resolver needs to get an answer from an authority, things get a bit more complicated. A resolver needs to follow the DNS hierarchy to resolve a name, which means it has to talk to multiple authoritative servers starting at the root. For example, our resolver in Buenos Aires, Argentina will take longer to follow a DNS hierarchy than our resolver in Frankfurt, Germany because of its proximity to the authoritative servers. In order to get around this issue we prefill our cache, out-of-band, for popular names, which means when an actual query comes in, responses can be fetched from cache which is much faster. Over the next few weeks we will post blogs about some of the other things we are doing to make the resolver faster and better, Including our fast caching.</p>
+<p>One issue with our expansive network is that the cache hit ratio is inversely proportional to the number of nodes configured in each data center. If there was only one node in a data center that’s nearest to you, you could be sure that if you ask the same query twice, you would get a cached answer the second time. However, as there’s hundreds of nodes in each of our data centers, you might get an uncached response, paying the latency-price for each request. One common solution is to put a caching load balancer in front of all your resolvers, which unfortunately introduces a single-point-of-failure. We don’t do single-point-of-failures.</p>
+<p>Instead of relying on a centralized cache, DNS resolver, 1.1.1.1, uses an innovative distributed cache, which we will talk about in a later blog.</p>
+<h3 id="datapolicy">Data Policy</h3>
+<p>Here’s the deal - we don’t store client IP addresses never, ever, and we only use query names for things that improve DNS resolver performance (such as prefill all caches based on popular domains in a region and/or after obfuscation, APNIC research).</p>
+<p>Cloudflare will never store any information in our logs that identifies an end user, and all logs collected by our public resolver will be deleted within 24 hours. We will continue to abide by our <a href="https://developers.cloudflare.com/1.1.1.1/commitment-to-privacy/privacy-policy/privacy-policy/">privacy policy</a> and ensure that no user data is sold to advertisers or used to target consumers.</p>
+<h3 id="settingitup">Setting it up</h3>
+<p>See <a href="https://1.1.1.1/">https://1.1.1.1/</a> because it's that simple!</p>
+<h3 id="aboutthoseaddresses">About those addresses</h3>
+<p>We are grateful to APNIC, our partner for the IPv4 addresses <code>1.0.0.1</code> and <code>1.1.1.1</code> (which everyone agrees is insanely easy to remember). Without their years of research and testing, these addresses would be impossible to bring into production. Yet, we still have a way to go with that. Stay tuned to hear about our adventures with those IPs in future blogs.</p>
+<p>For IPv6, we have chosen <code>2606:4700:4700::1111</code> and <code>2606:4700:4700::1001</code> for our service. It’s not as easy to get cool IPv6 addresses; however, we’ve picked an address that only uses digits.</p>
+<p>But why use easy to remember addresses? What’s special about public resolvers? While we use names for nearly everything we do; however, there needs to be that first step in the process and that’s where these number come in. We need a number entered into whatever computer or connected device you’re using in order to find a resolver service.</p>
+<p>Anyone on the internet can use our public resolver and you can see how to do that by visiting <a href="https://1.1.1.1/">https://1.1.1.1/</a> and clicking on <strong>GET STARTED</strong>.</p>
+<h3 id="whyannounceitonaprilfirst">Why announce it on April first?</h3>
+<p>For most of the world, Sunday is 1/4/2018 (in America the day/month is reversed as-in 4/1/2018). Do you see the <strong>4</strong> and the <strong>1</strong>? We did and that’s why we are announcing <strong>1.1.1.1</strong> today. Four ones! If it helps you remember <strong>1.1.1.1</strong>, then that’s a good thing!</p>
+<p>Sure, It’s also <a href="https://en.wikipedia.org/wiki/April_Fools%27_Day">April Fools' Day</a> and for a good portion of people it’s a day for jokes, foolishness, or harmless pranks. This is no joke, this is no prank, this is no foolish act. This is DNS Resolver, <a href="https://1.1.1.1/">1.1.1.1</a> ! Follow it at <a href="https://twitter.com/hashtag/1dot1dot1dot1">#1dot1dot1dot1</a></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+        <a href="/tag/1-1-1-1/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">1.1.1.1</a>
+        <a href="/tag/privacy/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Privacy</a>
+        <a href="/tag/resolver/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Resolver</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-20T14:00:00Z">March 20, 2021 2:00PM</p>
+        <a href="/moving-k8s-communication-to-grpc/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Moving k8s communication to gRPC</h2>
+        </a>
+
+        <p class="gray1 lh-copy">How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-fattouche/" class="fw5 f2 black no-underline">Alex Fattouche</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/grpc/" class="no-underline f1 fw2 blue3 underline-hover">gRPC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kubernetes/" class="no-underline f1 fw2 blue3 underline-hover">Kubernetes</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-08T14:00:00Z">March 08, 2021 2:00PM</p>
+        <a href="/the-benefits-of-serving-stale-dns-entries-when-using-consul/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The benefits of serving stale DNS entries when using Consul</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We use Consul for service discovery, and we’ve deployed a cluster that spans several of our data centers. We were aware from the start that the DNS query latencies were not great from certain parts of the world that were furthest away from these data centers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andre-cruz/" class="fw5 f2 black no-underline">André Cruz</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/unbound/" class="no-underline f1 fw2 blue3 underline-hover">Unbound</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-30T13:14:40Z">November 30, 2020 1:14PM</p>
+        <a href="/improving-the-resiliency-of-our-infrastructure-dns-zone/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving the Resiliency of Our Infrastructure DNS Zone</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've improved the resiliency and management of our infrastructure DNS zone. In this post, we guide you through some of the "whats", "whys" and "hows" we encountered along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-timken/" class="fw5 f2 black no-underline">Ryan Timken</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/kiran/" class="fw5 f2 black no-underline">Kiran Naidoo</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/availability/" class="no-underline f1 fw2 blue3 underline-hover">Availability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/octodns/" class="no-underline f1 fw2 blue3 underline-hover">OctoDNS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-13T19:06:13Z">November 13, 2020 7:06PM</p>
+        <a href="/sad-dns-explained/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SAD DNS Explained</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Researchers from UC Riverside and Tsinghua University found a new way to revive a decade-old DNS cache poisoning attack. Read our deep dive into how the SAD DNS attack on DNS resolvers works, how we protect against this attack in 1.1.1.1, and what the future holds for DNS cache poisoning attacks....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek/" class="fw5 f2 black no-underline">Marek Vavruša</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns-poisoning/" class="no-underline f1 fw2 blue3 underline-hover">DNS Poisoning</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/side-channels/" class="no-underline f1 fw2 blue3 underline-hover">Side Channels</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Randomness 101: LavaRand in Production</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="There&#x27;s a wall of lava lamps in the lobby of our San Francisco office. We use it for cryptography. Here&#x27;s how it works." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/randomness-101-lavarand-in-production/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Randomness 101: LavaRand in Production" />
+    <meta property="og:description" content="As some of you may know, there&#x27;s a wall of lava lamps in the lobby of our San Francisco office that we use for cryptography. In this post, we’re going to explore how that works." />
+    <meta property="og:url" content="https://blog.cloudflare.com/randomness-101-lavarand-in-production/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2017/11/lava-lamps-1.jpg" />
+    <meta property="article:published_time" content="2017-11-06T05:54:46.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T06:08:31.000Z" />
+    <meta property="article:tag" content="LavaRand" />
+    <meta property="article:tag" content="Entropy" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Crypto" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Randomness 101: LavaRand in Production" />
+    <meta name="twitter:description" content="As some of you may know, there&#x27;s a wall of lava lamps in the lobby of our San Francisco office that we use for cryptography. In this post, we’re going to explore how that works." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/randomness-101-lavarand-in-production/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2017/11/lava-lamps-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Joshua Liebow-Feeser" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="LavaRand, Entropy, Security, Crypto" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Joshua Liebow-Feeser",
+        "image": "https://blog.cloudflare.com/content/images/2017/04/1046063-1.jpg",
+        "url": "https://blog.cloudflare.com/author/joshlf/",
+        "sameAs": []
+    },
+    "headline": "Randomness 101: LavaRand in Production",
+    "url": "https://blog.cloudflare.com/randomness-101-lavarand-in-production/",
+    "datePublished": "2017-11-06T05:54:46.000Z",
+    "dateModified": "2018-08-29T06:08:31.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2017/11/lava-lamps-1.jpg",
+    "keywords": "LavaRand, Entropy, Security, Crypto",
+    "description": "As some of you may know, there&#x27;s a wall of lava lamps in the lobby of our San Francisco office that we use for cryptography. In this post, we’re going to explore how that works. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-lavarand tag-entropy tag-security tag-crypto sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-lavarand tag-entropy tag-security tag-crypto ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Randomness 101: LavaRand in Production</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-11-06T05:54:46Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">November 06, 2017 5:54AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/joshlf/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/04/1046063-1.jpg" alt="Joshua Liebow-Feeser" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/joshlf" class="fw5 f3 no-underline black mr3">Joshua Liebow-Feeser</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><img src="https://blog.cloudflare.com/content/images/2017/11/lava-lamps.jpg" alt=""><br>
+<small>Lava lamps in the Cloudflare lobby Courtesy of <a href="https://twitter.com/mahtin/status/888251632550424577">@mahtin</a><br>
+</small></p>
+<h3 id="introduction">Introduction</h3>
+<p>As some of you may know, <a href="https://www.fastcodesign.com/90137157/the-hardest-working-office-design-in-america-encrypts-your-data-with-lava-lamps">there's a wall of lava lamps</a> in the lobby of our San Francisco office that we use for cryptography. In this post, we’re going to explore how that works. This post assumes no technical background. For a more in-depth look at the technical details, see <a href="https://blog.cloudflare.com/lavarand-in-production-the-nitty-gritty-technical-details">LavaRand in Production: The Nitty-Gritty Technical Details</a>.</p>
+<h3 id="background">Background</h3>
+<h4 id="randomnessincryptography">Randomness in Cryptography</h4>
+<p>As we’ve <a href="https://blog.cloudflare.com/why-randomness-matters/">discussed in the past</a>, cryptography relies on the ability to generate random numbers that are both unpredictable and kept secret from any adversary.</p>
+<p>But “random” is a pretty tricky term; it’s used in many different fields to mean slightly different things. And like all of those fields, its use in cryptography is very precise. In some fields, a process is random simply if it has the right statistical properties. For example, the digits of pi are said to be random because all sequences of numbers appear with equal frequency (“15” appears as frequently as “38”, “426” appears as frequently as “297”, etc). But for cryptography, this isn’t enough - random numbers must be <em>unpredictable</em>.</p>
+<p>To understand what <em>unpredictable</em> means, it helps to consider that all cryptography is based on an asymmetry of information. If you’re trying to securely perform some cryptographic operation, then what you’re concerned about is that somebody - an <em>adversary</em> - will try to break your security. The only thing that distinguishes you from the adversary is that you know some things that the adversary does not, and the job of cryptography is to ensure that this asymmetry of information is enough to keep you secure.</p>
+<p>Let’s consider a simple example. Imagine that you and a friend are trying to go to a movie, but you don’t want your nemesis to figure out which movie you’re going to go to (lest she show up and thwart your movie watching!). This week, it’s your turn to choose the movie. Once you’ve made your choice, you’re going to need to send a message to your friend telling him which movie you’ve chosen, but you’re going to need to ensure that even if your nemesis intercepts the message, she won’t be able to figure out what it says.</p>
+<p>You devise the following scheme: since there are only two movies available to watch at the moment, you label one A and the other B. Then, while in the presence of your friend, you flip a coin. You agree on the following table outlining which message that you will send depending on your choice of what movie to watch and whether the coin comes up heads (H) or tails (T). Later, once you’ve made up your mind about which movie to see, you’ll use this table to send an encrypted message to your friend telling him which movie you’ve chosen.</p>
+<center>
+<div style="border: 1px solid black;">
+<table style="background-color: transparent;">
+<tr>
+  <th><div style="padding: 5px;"><b>Movie</b></div></th>
+  <th><div style="padding: 5px;"><b>Coin</b></div></th>
+  <th><div style="padding: 5px;"><b>Message</b></div></th>
+</tr>
+<tr>
+  <td>A</td>
+  <td>H</td>
+  <td>“The rain in Spain stays mainly on the plain.”</td>
+</tr>
+<tr>
+  <td>A</td>
+  <td>T</td>
+  <td>“In Hertford, Hereford, and Hampshire, hurricanes hardly ever happen.”</td>
+</tr>
+<tr>
+  <td>B</td>
+  <td>H</td>
+  <td>“In Hertford, Hereford, and Hampshire, hurricanes hardly ever happen.”</td>
+</tr>
+<tr>
+  <td>B</td>
+  <td>T</td>
+  <td>“The rain in Spain stays mainly on the plain.”</td>
+</tr>
+</table>
+</div>
+</center>
+<p>If you were to decide on movie B, and the coin came up heads, you would send the message, “In Hertford, Hereford, and Hampshire, hurricanes hardly ever happen.” Since your friend knows that the coin came up heads - he was there when it happened - he knows that you must have decided on movie B. But consider it from your nemesis’ perspective. She doesn’t know the result of the coin toss - all she knows is that there’s a 50% chance that the coin came up heads, and a 50% chance that it came up tails. Thus, seeing the message “In Hertford, Hereford, and Hampshire, hurricanes hardly ever happen” doesn’t help her at all! There’s a 50% chance that the coin came up heads (implying movie B), and a 50% chance that it came up tails (implying movie A). She doesn’t know anything more than she knew before!</p>
+<p>Let’s return now to the concept of <em>unpredictability</em>. Imagine that the result of the coin toss was completely predictable - say your nemesis planted a trick coin that always comes up heads on the first toss, tails on the second, heads on the third, and so on. Since she would know that there was a 100% chance of the first coin toss coming up heads, then regardless of which message you sent, she would know which movie you were going to see. While the trick coin still exhibits some basic properties of “randomness” as the term is used in the field of statistics - it comes up heads as often as it comes up tails - it’s <em>predictable</em>, which makes it useless for cryptography. The takeaway: when we say <em>random</em> in the context of cryptography, we mean <em>unpredictable</em>.</p>
+<h3 id="randomnessincomputing">Randomness in Computing</h3>
+<p>Unfortunately for cryptographers, if there’s one thing computers are good at, it’s being predictable. They can execute the same code a million times, and so long as they are given the same inputs each time, they’ll always come up with the same outputs. This is very good for reliability, but it’s tricky when it comes to cryptography - after all, we <em>need</em> unpredictability!</p>
+<p>The solution to this problem is <em>cryptographically-secure pseudorandom number generators</em> (CSPRNGs). CSPRNGs are algorithms which, provided an input which is itself unpredictable, produce a much larger stream of output which is also unpredictable. This stream can be extended indefinitely, producing as much output as required at any time in the future. In other words, if you were to flip a coin a number of times (a process which is known to be unpredictable) and then use the output of those coin flips as the input to a CSPRNG, an adversary who wasn’t able to predict the output of those coin flips would also be unable to predict the output of the CSPRNG - no matter how much output was consumed from the CSPRNG.</p>
+<p>But even though CSPRNGs are a very powerful tool, they’re only one half of the equation - they still need an unpredictable input to operate. But as we said, computers aren’t unpredictable, so aren’t we back at square one? Well, not quite. It turns out that computers do usually have sources of unpredictability that they can use, but they’re pretty slow. What we can do is combine that slow process of gathering unpredictable input with a CSPRNG, which can take that input and produce a much larger amount of input more quickly, and we can satisfy all of our randomness needs!</p>
+<p>But where can a computer get such unpredictable input, even slowly? The answer is <em>the real world</em>. While computers provide a nice simplification of the world for programmers to live in, real, physical computers still exist in the real, physical world. And that world is unpredictable. Computers have all sorts of ways of taking input from the real world - temperature sensors, keyboards, network interfaces, etc. All of these provide the ability to take measurements of the real world, and all of those measurements have some degree of inherent inaccuracy. As we’ll explain in a moment, that inaccuracy is the same thing as unpredictability, and this can be used! Common sources of unpredictable randomness include measuring the temperature of the CPU with high - and thus inaccurate - precision, measuring the timing of keystrokes on the keyboard with high precision, etc. To see how this can be used to produce unpredictable randomness, consider the question, “what’s the temperature of the room I’m sitting in right now?” You can probably estimate to within a couple of degrees - say, somewhere between 70 and 75 degrees Fahrenheit. But you probably have no idea what the temperature is to 2 decimal places of accuracy - is it 73.42 degrees or 73.47 degrees? By measuring the temperature with high precision and then using only the low-order digits of the measured value, you can get highly unpredictable randomness just by observing the world around you. And so can computers.</p>
+<p>So, to recap:</p>
+<ul>
+<li>Randomness used in cryptography needs to be unpredictable.</li>
+<li>Computers can slowly get a small amount of unpredictable randomness by measuring their environment.</li>
+<li>Computers can greatly extend this randomness by using a CSPRNG which can quickly turn it into a large amount of unpredictable randomness.</li>
+</ul>
+<h3 id="hedgingyourbets">Hedging Your Bets</h3>
+<p>If there’s one thing cryptographers are wary about, it’s certainty. Cryptographic systems are routinely shown to be less secure than they were originally thought to be, and we’re constantly updating our understanding of what algorithms are safe to use in what scenarios.</p>
+<p>So it shouldn’t be any surprise that cryptographers like to hedge their bets by using more security than they believe necessary in case it turns out that one of their assumptions was wrong. It’s sort of like the cryptographer’s version of the engineering practice of designing buildings to withstand far more weight or wind or heat than they think will arise in practice.</p>
+<p>When it comes to randomness, this hedging often takes the form of <em>mixing</em>. Unpredictable random values have the neat property that if they’re mixed in the right way with more unpredictable random values, then the result is at least as unpredictable as either of the inputs. That means that if you mix a random value which is highly unpredictability with a random value which is somewhat predictable, the result will be a highly unpredictable value.</p>
+<p>This mixing property is useful because it allows you to mix unpredictable random values from many sources, and if you later discover that one of those sources was less unpredictable than you’d originally thought, it’s still OK - the other sources come to the rescue.</p>
+<h3 id="lavarand">LavaRand</h3>
+<p>At Cloudflare, we have thousands of computers in data centers all around the world, and each one of these computers needs cryptographic randomness. Historically, they got that randomness using the default mechanism made available by the operating system that we run on them, Linux.</p>
+<p>But being good cryptographers, we’re always trying to hedge our bets. We wanted a system to ensure that even if the default mechanism for acquiring randomness was flawed, we’d still be secure. That’s how we came up with LavaRand.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/lava-lamps-camera.jpg" alt=""></p>
+<center><small>The view from the camera</small></center>
+<p>LavaRand is a system that uses lava lamps as a secondary source of randomness for our production servers. A wall of lava lamps in the lobby of our San Francisco office provides an unpredictable input to a camera aimed at the wall. A video feed from the camera is fed into a CSPRNG, and that CSPRNG provides a stream of random values that can be used as an extra source of randomness by our production servers. Since the flow of the “lava” in a lava lamp is very unpredictable,<sup>1</sup> “measuring” the lamps by taking footage of them is a good way to obtain unpredictable randomness. Computers store images as very large numbers, so we can use them as the input to a CSPRNG just like any other number.</p>
+<p>We're not the first ones to do this. Our LavaRand system was inspired by a similar system first <a href="https://en.wikipedia.org/wiki/Lavarand">proposed and built</a> by Silicon Graphics and <a href="https://www.google.com/patents/US5732138">patented</a> in 1996 (the patent has since expired).</p>
+<p>Hopefully we’ll never need it. Hopefully, the primary sources of randomness used by our production servers will remain secure, and LavaRand will serve little purpose beyond adding some flair to our office. But if it turns out that we’re wrong, and that our randomness sources in production are actually flawed, then LavaRand will be our hedge, making it just a little bit harder to hack Cloudflare.</p>
+<hr>
+<ol>
+<li>Noll, L.C. and Mende, R.G. and Sisodiya, S., <a href="https://www.google.com/patents/US5732138"><em>Method for seeding a pseudo-random number generator with a cryptographic hash of a digitization of a chaotic system</em></a></li>
+</ol>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/lavarand/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">LavaRand</a>
+        <a href="/tag/entropy/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Entropy</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-09-14T00:00:00+01:00">September 14, 2019 12:00AM</p>
+        <a href="/how-cloudflare-and-wall-street-are-helping-encrypt-the-internet-today/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How Cloudflare and Wall Street Are Helping Encrypt the Internet Today</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today has been a big day for Cloudflare, as we became a public company on the New York Stock Exchange (NYSE: NET). To mark the occasion, we decided to bring our favorite entropy machines to the floor of the NYSE....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/lavarand/" class="no-underline f1 fw2 blue3 underline-hover">LavaRand</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/entropy/" class="no-underline f1 fw2 blue3 underline-hover">Entropy</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/encryption/" class="no-underline f1 fw2 blue3 underline-hover">Encryption</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-11-06T06:07:00Z">November 06, 2017 6:07AM</p>
+        <a href="/lavarand-in-production-the-nitty-gritty-technical-details/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">LavaRand in Production: The Nitty-Gritty Technical Details</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As some of you may know, there's a wall of lava lamps in the lobby of our San Francisco office that we use for cryptography. In this post, we’re going to explore how that works in technical detail....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/joshlf/" class="fw5 f2 black no-underline">Joshua Liebow-Feeser</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/lavarand/" class="no-underline f1 fw2 blue3 underline-hover">LavaRand</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/entropy/" class="no-underline f1 fw2 blue3 underline-hover">Entropy</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

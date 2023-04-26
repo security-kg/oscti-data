@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>High Availability Load Balancers with Maglev</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="We own and operate physical infrastructure for our backend services. We need an effective way to route arbitrary TCP and UDP traffic between services and also from outside these data centers." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/high-availability-load-balancers-with-maglev/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="High Availability Load Balancers with Maglev" />
+    <meta property="og:description" content="We own and operate physical infrastructure for our backend services. We need an effective way to route arbitrary TCP and UDP traffic between services and also from outside these data centers." />
+    <meta property="og:url" content="https://blog.cloudflare.com/high-availability-load-balancers-with-maglev/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/06/image1-3.png" />
+    <meta property="article:published_time" content="2020-06-10T11:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-06-26T20:28:56.000Z" />
+    <meta property="article:tag" content="Load Balancing" />
+    <meta property="article:tag" content="Maglev" />
+    <meta property="article:tag" content="Availability" />
+    <meta property="article:tag" content="Product News" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="High Availability Load Balancers with Maglev" />
+    <meta name="twitter:description" content="We own and operate physical infrastructure for our backend services. We need an effective way to route arbitrary TCP and UDP traffic between services and also from outside these data centers." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/high-availability-load-balancers-with-maglev/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/06/image1-3.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Terin Stock" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Load Balancing, Maglev, Availability, Product News, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@terinjokes" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Terin Stock",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/4eb949e29b9cd44ec969d722dc941f3f?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/terin-stock/",
+        "sameAs": [
+            "https://twitter.com/terinjokes"
+        ]
+    },
+    "headline": "High Availability Load Balancers with Maglev",
+    "url": "https://blog.cloudflare.com/high-availability-load-balancers-with-maglev/",
+    "datePublished": "2020-06-10T11:00:00.000Z",
+    "dateModified": "2020-06-26T20:28:56.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/06/image1-3.png",
+    "keywords": "Load Balancing, Maglev, Availability, Product News, Speed & Reliability",
+    "description": "We own and operate physical infrastructure for our backend services. We need an effective way to route arbitrary TCP and UDP traffic between services and also from outside these data centers.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-loadbalancing tag-maglev tag-availability tag-product-news tag-speed-and-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-loadbalancing tag-maglev tag-availability tag-product-news tag-speed-and-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">High Availability Load Balancers with Maglev</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-06-10T12:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 10, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/terin-stock/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/4eb949e29b9cd44ec969d722dc941f3f?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Terin Stock" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/terin-stock" class="fw5 f3 no-underline black mr3">Terin Stock</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image1-4.png" class="kg-image"></figure><h2 id="background">Background</h2><p>We run many backend services that power our customer dashboard, APIs, and features available at our edge. We own and operate physical infrastructure for our backend services. We need an effective way to route arbitrary TCP and UDP traffic between services and also from outside these data centers.</p><p>Previously, all traffic for these backend services would pass through several layers of stateful TCP proxies and NATs before reaching an available instance. This solution worked for several years, but as we grew it caused our service and operations teams many issues. Our service teams needed to deal with drops of availability, and our operations teams had much toil when needing to do maintenance on load balancer servers.</p><h2 id="goals">Goals</h2><p>With the experience with our stateful TCP proxy and NAT solutions in mind, we had several goals for a replacement load balancing service, while remaining on our own infrastructure:</p><ol><li>Preserve source IPs through routing decisions to destination servers. This allows us to support servers that require client IP addresses as part of their operation, without workarounds such as X-Forwarded-For headers or the PROXY TCP extension.</li><li>Support an architecture where backends are located across many racks and subnets. This prevents solutions that cannot be routed by existing network equipment.</li><li>Allow operation teams to perform maintenance with zero downtime. We should be able to remove load balancers at any time without causing any connection resets or downtime for services.</li><li>Use Linux tools and features that are commonplace and well-tested. There are a lot of very cool networking features in Linux we could experiment with, but we wanted to optimize for least surprising behavior for operators who do not primarily work with these load balancers.</li><li>No explicit connection synchronization between load balancers. We found that communication between load balancers significantly increased the system complexity, allowing for more opportunities for things to go wrong.</li><li>Allow for staged rollout from the previous load balancer implementation. We should be able to migrate the traffic of specific services between the two implementations to find issues and gain confidence in the system.</li></ol><h2 id="reaching-zero-downtime">Reaching Zero Downtime</h2><h3 id="problems">Problems</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image6-1.png" class="kg-image"></figure><p>Previously, when traffic arrived at our backend data centers, our routers would pick and forward packets to one of the L4 load balancers servers it knew about.  These L4 load balancers would determine what service the traffic was for, then forward the traffic to one of the service's L7 servers.</p><p>This architecture worked fine during normal operations. However, issues would quickly surface whenever the set of load balancers changed. Our routers would forward traffic to the new set and it was very likely traffic would arrive to a different load balancer than before. As each load balancer maintained its own connection state, it would be unable to forward  traffic for these new in-progress connections. These connections would then be reset, potentially causing errors for our customers.</p><h3 id="consistent-hashing">Consistent Hashing</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image5-1.png" class="kg-image"></figure><p>During normal operations, our new architecture has similar behavior to the previous design. A L4 load balancer would be selected by our routers, which would then forward traffic to a service's L7 server.</p><p>There's a significant change when the set of load balancers changes. As our load balancers are now stateless, it doesn't matter which load balancer our router selects to forward traffic to, they'll end up reaching the same backend server.</p><h2 id="implementation">Implementation</h2><h3 id="bgp">BGP</h3><p>Our load balancer servers announce service IP addresses to our data centers’ routers using BGP, unchanged from the previous solution. Our routers choose which load balancers will receive packets based on a routing strategy called equal-cost multi-path routing (ECMP).</p><p>ECMP hashes information from packets to pick a path for that packet. The hash function used by routers is often fixed in firmware. Routers that chose a poor hashing function, or chose bad inputs, can create unbalanced network and server load, or break assumptions made by the protocol layer.</p><p>We worked with our networking team to ensure ECMP is configured on our routers to hash only based on the packet's 5-tuple—the protocol, source address and port, and destination address and port.</p><p>For maintenance, our operators can withdraw the BGP session and traffic will transparently shift to other load balancers. However, if a load balancer suddenly becomes unavailable, such as with a kernel panic or power failure, there is a short delay before the BGP keepalive mechanism fails and routers terminate the session.</p><p>It's possible for routers to terminate BGP sessions after a much shorter delay using the Bidirectional Forwarding Detection (BFD) protocol between the router and load balancers. Different routers have different limitations and restrictions on BFD that makes it difficult to use in an environment heavily using L2 link aggregation and VXLANs.</p><p>We're continuing to work with our networking team to find solutions to reduce the time to terminate BGP sessions, using tools and configurations they're most comfortable with.</p><h3 id="selecting-backends-with-maglev">Selecting Backends with Maglev</h3><p>To ensure all load balancers are sending traffic to the same backends, we decided to use the <a href="https://research.google/pubs/pub44824/">Maglev connection scheduler</a>. Maglev is a consistent hash scheduler hashing a 5-tuple of information from each packet—the protocol, source address and port, and destination address and port—to determine a backend server.</p><p>By being a consistent hash, the same backend server is chosen by every load balancer for a packet without needing to persist any connection state. This allows us to transparently move traffic between load balancers without requiring explicit connection synchronization between them.</p><h3 id="ipvs-and-foo-over-udp">IPVS and Foo-Over-UDP</h3><p>Where possible, we wanted to use commonplace and reliable Linux features. Linux has implemented a powerful layer 4 load balancer, the IP Virtual Server (IPVS), since the early 2000s. IPVS has supported the Maglev scheduler <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=039f32e8cdea29b4d0680df7a83817b5ec4166e1">since Linux 4.18</a>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image2-3.png" class="kg-image"></figure><p>Our load balancer and application servers are spread across multiple racks and subnets. To route traffic from the load balancer we opted to use Foo-Over-UDP encapsulation.</p><p>In Foo-Over-UDP encapsulation a new IP and UDP header are added around the original packet. When these packets arrive on the destination server, the Linux kernel removes the outer IP and UDP headers and inserts the inner payload back into the networking stack for processing as if the packet had originally been received on that server.</p><p>Compared to other encapsulation methods—such as IPIP, GUE, and GENEVE—we felt Foo-Over-UDP struck a nice balance between features and flexibility. Direct Server Return, where application servers reply directly to clients and bypass the load balancers, was implemented as a byproduct of the encapsulation. There was no state associated with the encapsulation, each server only required one encapsulation interface to receive traffic from all load balancers.</p><p><strong>Example Load Balancer Configuration</strong></p><!--kg-card-begin: markdown--><pre><code># Load in the kernel modules required for IPVS and FOU.
+$ modprobe ip_vs &amp;&amp; modprobe ip_vs_mh &amp;&amp; modprobe fou
+
+# Create one tunnel between the load balancer and
+# an application server. The IPs are the machines'
+# real IPs on the network.
+$ ip link add name lbtun1 type ipip \
+remote 192.0.2.1 local 192.0.2.2 ttl 2 \
+encap fou encap-sport auto encap-dport 5555
+
+# Inform the kernel about the VIPs that might be announced here.
+$ ip route add table local local 198.51.100.0/24 \
+dev lo proto kernel
+
+# Give the tunnel an IP address local to this machine.
+# Traffic on this machine destined for this IP address will
+# be sent down the tunnel.
+$ ip route add 203.0.113.1 dev lbtun1 scope link
+
+# Tell IPVS about the service, and that it should use the
+# Maglev scheduler.
+$ ipvsadm -A -t 198.51.100.1:80 -s mh
+
+# Tell IPVS about a backend for this service.
+$ ipvsadm -a -t 198.51.100.1:80 -r 203.0.113.1:80
+</code></pre>
+<!--kg-card-end: markdown--><p><strong>Example Application Server Configuration</strong></p><!--kg-card-begin: markdown--><pre><code># The kernel module may need to be loaded.
+$ modprobe fou
+
+# Setup an IPIP receiver.
+# ipproto 4 = IPIP (not IPv4)
+$ ip fou add port 5555 ipproto 4
+
+# Bring up the tunnel.
+$ ip link set dev tunl0 up
+
+# Disable reverse path filtering on tunnel interface.
+$ sysctl -w net.ipv4.conf.tunl0.rp_filter=0
+$ sysctl -w net.ipv4.conf.all.rp_filter=0
+</code></pre>
+<!--kg-card-end: markdown--><p>IPVS does not support Foo-Over-UDP as a packet forwarding method. To work around this limitation, we've created virtual interfaces that implement Foo-Over-UDP encapsulation. We can then use IPVS's direct packet forwarding method along with the kernel routing table to choose a specific interface.</p><p>Linux is often configured to ignore packets that arrive on an interface that is different from the interface used for replies. As packets will now be arriving on the virtual "tunl0" interface, we need to disable reverse path filtering on this interface. The kernel uses the higher value of the named and "all" interfaces, so you may need to decrease "all" and adjust other interfaces.</p><h3 id="mtus-and-encapsulation">MTUs and Encapsulation</h3><p>The maximum IPv4 packet size, or maximum transmission unit (MTU), we accept from the internet is 1500 bytes. To ensure we did not fragment these packets during encapsulation we increased our internal MTUs from the default to accommodate the IP and UDP headers.</p><p>The team had underestimated the complexity of changing the MTU across all our racks of equipment. We had to adjust the MTU across all our routers and switches, of our bonded and VXLAN interfaces, and finally our Foo-Over-UDP encapsulation. Even with a carefully orchestrated rollout, and we still uncovered MTU-related bugs with our switches and server stack, many of which manifested first as issues on other parts of the network.</p><h3 id="node-agent">Node Agent</h3><p>We've written a Go agent running on each load balancer that synchronizes with a control plane layer that's tracking the location of services. The agent then configures the system based on active services and available backend servers.</p><p>To configure IPVS and the routing table we're using packages built upon the <a href="https://github.com/mdlayher/netlink">netlink</a> Go package. We're <a href="https://github.com/cloudflare/ipvs">open sourcing</a> the IPVS netlink package we built today, which supports querying, creating and updating IPVS virtual servers, destinations, and statistics.</p><p>Unfortunately, there is no official programming interface for iptables, so we must instead execute the iptables binary. The agent computes an ideal set of iptables chains and rules, which is then reconciled with the live rules.</p><p><strong>Subset of iptables for a service</strong></p><!--kg-card-begin: markdown--><pre><code>*filter
+-A INPUT -d 198.51.100.0/24 -m comment --comment \
+&quot;leif:nhAi5v93jwQYcJuK&quot; -j LEIFUR-LB
+-A LEIFUR-LB -d 198.51.100.1/32 -p tcp -m comment --comment \
+&quot;leif:G4qtNUVFCkLCu4yt&quot; -m multiport --dports 80 -j LEIFUR-GQ4OKHRLCJYOWIN9
+-A LEIFUR-GQ4OKHRLCJYOWIN9 -s 10.0.0.0/8 -m comment --comment \
+&quot;leif:G4qtNUVFCkLCu4yt&quot; -j ACCEPT
+-A LEIFUR-GQ4OKHRLCJYOWIN9 -s 172.16.0.0/12 -m comment --comment \
+&quot;leif:0XxZ2OwlQWzIYFTD&quot; -j ACCEPT
+</code></pre>
+<!--kg-card-end: markdown--><p>The iptables output of a rule may differ significantly from the input given by our ideal rule. To avoid needing to parse the entire iptables rule in our comparisons, we store a hash of the rule, including the position in the chain, as an iptables comment. We then can compare the comment to our ideal rule to determine if we need to take any actions. On chains that are shared (such as INPUT) the agent ignores unmanaged rules.</p><h2 id="kubernetes-integration">Kubernetes Integration</h2><p>We use the network load balancer described here as a cloud load balancer for Kubernetes. A controller assigns virtual IP addresses to Kubernetes services requesting a load balancer IP. These IPs get configured by the agent in IPVS. Traffic is directed to a subset of cluster nodes for handling by kube-proxy, unless the External Traffic Policy is set to "Local" in which case the traffic is sent to the specific backends the workloads are running on.</p><p>This allows us to have internal Kubernetes clusters that better replicate the load balancer behavior of managed clusters on cloud providers. Services running Kubernetes, such as ingress controllers, API gateways, and databases, have access to correct client IP addresses of load balanced traffic.</p><h2 id="future-work">Future Work</h2><ul><li>Continuing a close eye on future developments of IPVS and alternatives, including nftlb and Express Data Path (XDP) and eBPF.</li><li>Migrate to nftables. The "flat priorities" and lack of programmable interface for iptables makes it ill-suited for including automated rules alongside rules added by operators. We hope as more projects and operations move to nftables we'll be able to switch without creating a "blind-spot" to operations.</li><li>Failures of a load balancer can result in temporary outages due to BGP hold timers. We'd like to improve how we're handling the failures with BGP sessions.</li><li>Investigate using Lightweight Tunnels to reduce the number of Foo-Over-UDP interfaces are needed on the load balancer nodes.</li></ul><h2 id="additional-reading">Additional Reading</h2><ul><li><a href="https://vincent.bernat.im/en/blog/2018-multi-tier-loadbalancer"><em>Multi-tier load-balancing with Linux</em></a>. Vincent Bernat (2018). Describes a network load balancer using IPVS and IPIP.</li><li><a href="https://githubengineering.com/introducing-glb/"><em>Introducing the GitHub Load Balancer</em></a>. Joe Williams, Theo Julienne (2017). Describes a similar split layer 4 and layer 7 architecture, using consistent hashing and Foo-Over-UDP. They seemed to have limitations with IPVS that looked to have been resolved.</li><li><a href="https://lwn.net/Articles/614348/"><em>Foo over UDP</em></a>. Jonathan Corbet (2014). Describes the basics of IPIP and Foo-Over-UDP, which was just introduced at the time.</li><li><a href="https://www.netdevconf.org/0.1/sessions/11.html"><em>UDP encapsulation, FOU, GUE, &amp; RCO</em></a>. Tom Herbert (2015). Describes the different UDP encapsulation options.</li><li><a href="https://archive.nanog.org/sites/default/files/1_Saino_Hashing_On_Broken_Assumptions.pdf"><em>Hashing on broken assumptions</em></a>. Lorenzo Saino (2017). Farther discussion on hashing difficulties with ECMP.</li><li><a href="https://archive.nanog.org/meetings/nanog45/presentations/Monday/Scholl_BFD_N45.pdf"><em>BFD (Bidirectional Forwarding Detection): Does it work and is it worth it?</em></a>. Tom School (2009). Discussion on BFD with common protocols and where it can become a problem.</li></ul>
+            </div>
+        </section>
+
+        <a href="/tag/loadbalancing/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Load Balancing</a>
+        <a href="/tag/maglev/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Maglev</a>
+        <a href="/tag/availability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Availability</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-21T12:00:00Z">March 21, 2020 12:00PM</p>
+        <a href="/adding-the-fallback-pool-to-the-load-balancing-ui/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Adding the Fallback Pool to the Load Balancing UI and other significant UI enhancements</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The Cloudflare Load Balancer was introduced over three years ago to provide our customers with a powerful, easy to use tool to intelligently route traffic to their origins across the world....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/brian/" class="fw5 f2 black no-underline">Brian Batraski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/loadbalancing/" class="no-underline f1 fw2 blue3 underline-hover">Load Balancing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dashboard-tag/" class="no-underline f1 fw2 blue3 underline-hover">Dashboard</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-07-21T16:51:48+01:00">July 21, 2018 4:51PM</p>
+        <a href="/i-wanna-go-fast-load-balancing-dynamic-steering/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">I Wanna Go Fast - Load Balancing Dynamic Steering</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Earlier this month we released Dynamic Steering for Load Balancing which allows you to have your Cloudflare load balancer direct traffic to the fastest pool for a given Cloudflare region or colo (Enterprise only)....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sergi/" class="fw5 f2 black no-underline">Sergi Isasi</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/sindu/" class="fw5 f2 black no-underline">Sindu Vijayakumar</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/tim-polich/" class="fw5 f2 black no-underline">Tim Polich</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/loadbalancing/" class="no-underline f1 fw2 blue3 underline-hover">Load Balancing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-05-14T16:00:00+01:00">May 14, 2017 4:00PM</p>
+        <a href="/introducing-load-balancing-intelligent-failover-with-cloudflare/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Load Balancing &amp; Intelligent Failover with Cloudflare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare's Enterprise customers have been using our Load Balancing service since March, and it has been helping them avoid website downtime caused by unreliable hosting providers, Internet outages, or servers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matt/" class="fw5 f2 black no-underline">Matt Silverlock</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/loadbalancing/" class="no-underline f1 fw2 blue3 underline-hover">Load Balancing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2013-03-06T17:43:00Z">March 06, 2013 5:43PM</p>
+        <a href="/cloudflares-architecture-eliminating-single-p/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Load Balancing without Load Balancers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">CloudFlare had an hour-long outage this last weekend. Thankfully, outages like this have been a relatively rare occurrance for our service....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matthew-prince/" class="fw5 f2 black no-underline">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/loadbalancing/" class="no-underline f1 fw2 blue3 underline-hover">Load Balancing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

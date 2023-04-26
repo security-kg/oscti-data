@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Migrating cdnjs to serverless with Workers KV</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="cdnjs, an open-source project that delivers popular JavaScript libraries to over 11% of websites has been migrated to a serverless infrastructure, using Cloudflare Workers and its distributed key-value store Workers KV!" />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/migrating-cdnjs-to-serverless-with-workers-kv/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Migrating cdnjs to serverless with Workers KV" />
+    <meta property="og:description" content="Cloudflare powers cdnjs, an open-source project that delivers popular JavaScript libraries to over 11% of websites. Today, we are excited to announce its migration to a serverless infrastructure using Cloudflare Workers and its distributed key-value store Workers KV!" />
+    <meta property="og:url" content="https://blog.cloudflare.com/migrating-cdnjs-to-serverless-with-workers-kv/" />
+    <meta property="og:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/09/image4-3.png" />
+    <meta property="article:published_time" content="2020-09-10T11:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-11-25T15:46:39.000Z" />
+    <meta property="article:tag" content="CDNJS" />
+    <meta property="article:tag" content="Cloudflare Workers KV" />
+    <meta property="article:tag" content="Open Source" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Serverless" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Migrating cdnjs to serverless with Workers KV" />
+    <meta name="twitter:description" content="Cloudflare powers cdnjs, an open-source project that delivers popular JavaScript libraries to over 11% of websites. Today, we are excited to announce its migration to a serverless infrastructure using Cloudflare Workers and its distributed key-value store Workers KV!" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/migrating-cdnjs-to-serverless-with-workers-kv/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/09/image4-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Tyler Caslin" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="CDNJS, Cloudflare Workers KV, Open Source, Speed &amp; Reliability, Serverless" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@tycaslin" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="713" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Tyler Caslin",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/pic.JPG",
+            "width": 960,
+            "height": 959
+        },
+        "url": "https://blog.cloudflare.com/author/tyler/",
+        "sameAs": [
+            "https://github.com/tc80",
+            "https://twitter.com/tycaslin"
+        ]
+    },
+    "headline": "Migrating cdnjs to serverless with Workers KV",
+    "url": "https://blog.cloudflare.com/migrating-cdnjs-to-serverless-with-workers-kv/",
+    "datePublished": "2020-09-10T11:00:00.000Z",
+    "dateModified": "2020-11-25T15:46:39.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/09/image4-1.png",
+    "keywords": "CDNJS, Cloudflare Workers KV, Open Source, Speed & Reliability, Serverless",
+    "description": "Cloudflare powers cdnjs, an open-source project that delivers popular JavaScript libraries to over 11% of websites. Today, we are excited to announce its migration to a serverless infrastructure using Cloudflare Workers and its distributed key-value store Workers KV!",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-cdnjs tag-workers-kv tag-open-source tag-speed-and-reliability tag-serverless sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-cdnjs tag-workers-kv tag-open-source tag-speed-and-reliability tag-serverless ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Migrating cdnjs to serverless with Workers KV</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-09-10T12:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">September 10, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/tyler/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/pic.JPG" alt="Tyler Caslin" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/tyler" class="fw5 f3 no-underline black mr3">Tyler Caslin</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>Cloudflare powers <a href="https://cdnjs.com/">cdnjs</a>, an open-source project that accelerates websites by delivering popular JavaScript libraries and resources via <a href="https://www.cloudflare.com/cdn/">Cloudflare’s network</a>. Since <a href="https://blog.cloudflare.com/an-update-on-cdnjs/">our major update in December</a>, we focused on remodelling cdnjs for scalability and resilience. Today, we are excited to announce how Cloudflare delivers cdnjs—a migration to a serverless infrastructure using <a href="https://developers.cloudflare.com/workers/">Cloudflare Workers</a> and its distributed key-value store <a href="https://developers.cloudflare.com/workers/reference/storage">Workers KV</a>!</p><h3 id="what-is-cdnjs">What is cdnjs?</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/09/imagesmall.png" class="kg-image"></figure><p>For those unfamiliar, cdnjs is an acronym describing a Content Delivery Network (CDN) for JavaScript (JS). A <a href="https://www.cloudflare.com/learning/cdn/what-is-a-cdn/">CDN</a> simply refers to a geographically distributed network of servers that provide Internet content, whether it is memes, cat videos, or HTML pages. In our case, the CDN refers to Cloudflare’s ever <a href="https://blog.cloudflare.com/cloudflare-network-expands-to-more-than-100-countries/">expanding network</a> of over 200 globally distributed data centers.</p><p>And here’s why this is relevant to you: it makes page load times lightning-fast. Virtually every website you visit needs to fetch JS libraries in order to load, including this one. Let’s say you visit a Sydney-based website that contains a local file from jQuery, a popular library found in <a href="https://w3techs.com/technologies/details/js-jquery">76.2%</a> of websites. If you are located in New York, you may notice a delay, as it can easily exceed 300ms to fetch the file—not to mention the time it takes for the round trips involved with the <a href="https://blog.cloudflare.com/tls-1-3-overview-and-q-and-a/">TLS handshake</a>. However, if the website references jQuery using <a href="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js">cdnjs.cloudflare.com</a>, you can retrieve the file from the closest Cloudflare data center in Buffalo, reducing the latency to a blazing 20ms.</p><p>While cdnjs operates behind the scenes, it is used by <a href="https://w3techs.com/technologies/overview/content_delivery">over 11%</a> of websites, making the Internet a much faster and more reliable place. In July, cdnjs served almost <a href="https://github.com/cdnjs/cf-stats/blob/master/2020/cdnjs_July_2020.md">190 billion requests</a>—an enormous 3.46PB of data.</p><h3 id="where-are-the-files-stored">Where are the files stored?</h3><!--kg-card-begin: html--><p><img style="border-width: 0px;" src="https://blog.cloudflare.com/content/images/2020/09/image5-2.png" alt="" width="400" height="333" /></p><!--kg-card-end: html--><p>While cdnjs speeds up the Internet, it certainly isn’t magic!</p><p>Historically, a number of <a href="https://www.cloudflare.com/load-balancing/">load-balanced</a> machines at one of Cloudflare’s core data centers would periodically pull cdnjs files from a backing store, acting as the origin for cdnjs.cloudflare.com. When a new file is requested, it is <a href="https://www.cloudflare.com/learning/cdn/what-is-caching/">cached</a> by Cloudflare, allowing it to be fetched quickly from any of our data centers.</p><p>The backing store is a catalogue of JS, CSS, and other web libraries in the form of an open-source <a href="https://github.com/">GitHub</a> repository. What this means is that anyone—including you—can contribute to it, subject to review and other processes.</p><p>However, until recently, these existing operations were very labor intensive and fragile. </p><p>This blog post will explain why we changed the infrastructure behind cdnjs to make it faster, more reliable, and easier to maintain. First, we will discuss how the community used to contribute to cdnjs, outlining the pains and concerns of the old system. Then, we will explore the benefits of migrating to Workers KV. After, we will dive into the new architecture, as well as upgrades to the website and cdnjs API. Finally, we will review the history of cdnjs, and where it is headed in the future.</p><h3 id="if-you-think-you-know-how-to-make-a-pr-think-again">If you think you know how to make a PR, think again<br></h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/09/image1-1.png" class="kg-image"></figure><p>For the non-technical reader, a pull request (PR) is a request to merge changes you’ve made to a repository. Traditionally, if you wanted to include your JavaScript library in cdnjs, you would first create a PR on GitHub to <a href="https://github.com/cdnjs/cdnjs">cdnjs/cdnjs</a> with a JSON file describing your package and additional files for any version you wished to include. Once your PR was approved by our <a href="https://github.com/PeterBot">old bot</a>, manually reviewed, and then merged by a maintainer, your package would be integrated with cdnjs.</p><p>Sounds easy, right? You can just fork the repo, clone it, and copy paste a few files, no?</p><p>Exactly. Contributing was easy if you had several hours to burn, a case-sensitive file system, and a couple hundred gigabytes of free disk space to <a href="https://git-scm.com/docs/git-clone">git clone</a> the 300GB repo. If you were short on time—no problem, you could always use your advanced knowledge of <a href="https://git-scm.com/docs/git-sparse-checkout">git sparse-checkout</a> to get the job done. Don’t know git? Just add one file at a time manually through GitHub’s UI.</p><p>I think you get the point. I know I certainly did when I naively spent 10 hours cloning the repo, only to discover that macOS is case-insensitive by default. </p><p>However, updating cdnjs was not only difficult for the contributors, but also the maintainers. Historically, the community was able to contribute version files directly, which could potentially be malicious. This created lots of work for maintainers, requiring them to inspect each file manually, <a href="https://man7.org/linux/man-pages/man1/diff.1.html">diffing</a> files against the official library source and running malware checks. <br>So how did packages update once they were in cdnjs? In the JSON file describing each package, there was an optional auto-update definition telling the bot where to look for new versions of the library. If present, when your package released a new version from npm or GitHub, the bot would download it, pushing the files to <a href="https://github.com/cdnjs/cdnjs">cdnjs/cdnjs</a> and computed <a href="https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity">Subresource Integrity</a> (SRI) hashes to <a href="https://github.com/cdnjs/SRIs">cdnjs/SRIs</a>. If the auto-update property was missing, it would be your responsibility to make manual PRs to update cdnjs with any future versions. </p><h3 id="a-wake-up-call-for-cdnjs">A wake-up call for cdnjs</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/image6-1-4.png" class="kg-image"></figure><p>In April, during maintenance at one of our core data centers, a technician accidentally disconnected the cables supplying all external connections to our other data centers, causing the data center to go offline for approximately four hours. <a href="https://blog.cloudflare.com/cloudflare-dashboard-and-api-outage-on-april-15-2020/">This incident</a> served as the first wake-up call for cdnjs, especially since the affected data center housed the primary cdnjs origin web servers. In this case, we did have a backup running on an external provider, but what really saved us was Cloudflare’s global cache, which minimized the impact of the outage as only uncached assets failed to load.</p><p>We started to think about how we can improve both the reliability and performance of how we serve cdnjs. We went straight to <a href="https://workers.cloudflare.com/">Cloudflare Workers</a>, our own platform for developing on the <a href="https://www.cloudflare.com/learning/cdn/glossary/edge-server/">edge</a>. One powerful tool built into Workers is <a href="https://developers.cloudflare.com/workers/reference/storage">Workers KV</a>—a low-latency, globally distributed key-value store optimized for high-read applications.</p><p>We put two and two together, realizing that instead of pulling the <a href="https://github.com/cdnjs/cdnjs">cdnjs/cdnjs</a> repository and serving files from disk, we could cut the physical machines out entirely, distributing the data around the world and serving files straight from the edge. That way, cdnjs would be able to recover from any origin data center failure, while also increasing its scalability.</p><h3 id="workers-kv-to-the-rescue">Workers KV to the rescue</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/09/image3-3.png" class="kg-image"></figure><p>At first glance, the decision to use Workers KV was a no-brainer. Since files in cdnjs never change but require frequent reads, Workers KV was a perfect fit.</p><p>However, as we planned our migration, we became concerned that with over 7 million assets in cdnjs, there would undoubtedly exist files that exceed <a href="https://developers.cloudflare.com/workers/about/limits/">Workers KV’s 10MiB value limit</a>. After investigating, we discovered that several hundred cdnjs files were oversized, the majority being <a href="https://developer.mozilla.org/en-US/docs/Tools/Debugger/How_to/Use_a_source_map">JavaScript Source Maps</a>. </p><p>Then the idea hit us. We could store compressed versions of cdnjs files in Workers KV, not only solving our oversized file issue, but also optimizing how we serve files.</p><p>If you pay the Internet bill, you’ll know that <a href="https://blog.cloudflare.com/the-relative-cost-of-bandwidth-around-the-world/">bandwidth is expensive</a>! For this reason, all modern browsers will try to <a href="https://blog.cloudflare.com/efficiently-compressing-dynamically-generated-53805/">fetch compressed web content</a> whenever it is available. Similarly, within Cloudflare we often <a href="https://blog.cloudflare.com/results-experimenting-brotli/">experiment with on-the-fly compression</a> to reduce our bandwidth, always serving compressed content to the eyeball when it is accepted. As a result, we decided to compress all cdnjs files ahead of time, writing them to Workers KV with both optimal <a href="https://github.com/google/brotli">Brotli</a> and <a href="https://www.gzip.org/">gzip</a> forms. That way, we could increase the compression level compared to on-the-fly compression as we no longer have the latency requirements. </p><p>This means we now serve cdnjs files faster and smaller!</p><h3 id="a-complete-makeover-for-cdnjs">A complete makeover for cdnjs</h3><!--kg-card-begin: html--><p><a href="https://blog.cloudflare.com/content/images/2020/09/image7-1.png" target="_blank" rel="noopener"><img style="border-width: 0px;" src="https://blog.cloudflare.com/content/images/2020/09/image7-1.png" width="800" height="498" /></a></p><!--kg-card-end: html--><p>Today, if you want to include your JavaScript library in cdnjs, you first create a PR on GitHub to our new repository <a href="https://github.com/cdnjs/packages">cdnjs/packages</a>. The repo is easily cloneable at 50MB and consists of thousands of JSON files, each describing a cdnjs package and how it is auto-updated from npm or git. Once your file is validated by our automated CI—powered by a <a href="https://github.com/cdnjs/tools">new bot</a>—and merged by a maintainer, your package would be automatically enrolled in our auto-update service.</p><p>In the new system, security and maintainability are prioritized. For starters, cdnjs version files are<em> </em>created by our bot, minimizing the possibility of human error when merging a new version. While the JSON files in <a href="https://github.com/cdnjs/packages">cdnjs/packages</a> are added by error-prone humans, they are inspected by our bot before being approved by a maintainer. Each file is automatically validated against a <a href="https://github.com/cdnjs/tools/blob/master/schema_human.json">JSON schema</a>, as well as checked for popularity on npm or GitHub.</p><p>When the bot discovers a new release, it pushes Brotli and gzip-compressed versions of the files to a files namespace in Workers KV. With each entry, the bot writes some <a href="https://blog.cloudflare.com/catching-up-with-workers-kv/">metadata in Workers KV</a> for the <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag">ETag</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified">Last-Modified</a> HTTP headers. Similar to before, the bot also computes <a href="https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity">Subresource Integrity</a> (SRI) hashes of the uncompressed files, but now pushes them instead to a SRIs namespace in Workers KV. </p><p>Then, when a new file is requested from cdnjs.cloudflare.com, a <a href="https://developers.cloudflare.com/workers/">Cloudflare Worker</a> will inspect the client’s <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding">Accept-Encoding</a> header, fetching either the Brotli or gzip-compressed version with its ETag and Last-Modified metadata from Workers KV. As the compressed file travels back through Cloudflare, it is cached for future requests and uncompressed on-the-fly if needed.</p><p>At the moment, there are still a handful of files exceeding Workers KV’s size limit. Consequently, if the Cloudflare Worker fails to retrieve a file from Workers KV, it is fetched from the origin backed by the original git repo. In the coming months, we plan on gradually removing this infrastructure.</p><h3 id="scaling-the-website-and-api">Scaling the website and API</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/09/image2.gif" class="kg-image"></figure><p>Besides the core cdnjs infrastructure, many of its other components received upgrades as well!</p><p>On the cdnjs project’s <a href="https://cdnjs.com/">homepage</a>, you will be greeted by a slick <a href="https://github.com/cdnjs/static-website">new beta website</a> built by <a href="https://github.com/mattipv4">Matt</a>. Constructed with <a href="https://vuejs.org/">Vue</a> and <a href="https://nuxtjs.org/">Nuxt</a>, the beta website is powered entirely by the <a href="https://cdnjs.com/api">cdnjs API</a>. As a result, it is always up-to-date with the latest package information and requires low resource usage to serve the site—which runs completely on the client-side after the first page load—helping us scale with cdnjs’s never-ending growth. </p><p>In fact, the cdnjs API also strengthened its scalability, benefitting from a serverless architecture close to the one we have seen with cdnjs and Workers KV. </p><p>Before migrating to Workers KV, the cdnjs API relied on a regularly scheduled process that involved generating about 300MB of metadata. The cdnjs API’s backend would then fetch this enormous “package.min.js” file into memory and use it to operate the API. If you are curious, the file is still being hosted <a href="https://storage.googleapis.com/cdnjs-assets/package.min.js">here</a>, but be warned—it may lag your browser! Similarly, file SRIs were pushed to <a href="https://github.com/cdnjs/SRIs">cdnjs/SRIs</a>, which was cloned by the API locally to serve SRI responses.</p><p>After all cdnjs files (within the permitted size limit) were moved to Workers KV, these legacy processes became unsustainable, requiring millions of reads and an unreasonable amount of time. Therefore, we decided to upload all metadata found into Workers KV. We split the metadata into four namespaces—one for package-level metadata, one for version-specific metadata, one containing aggregated metadata, and one for file SRIs.</p><p>Similar to cdnjs’s serverless design, a Cloudflare Worker sits on top of <a href="http://metadata.speedcdnjs.com/packages">metadata.speedcdnjs.com</a>, serving data from Workers KV using several public endpoints. Currently, the cdnjs API is fully integrated with these endpoints, which provide an elegant solution as cdnjs continues to scale.</p><h3 id="transparency-and-the-future-of-cdnjs">Transparency and the future of cdnjs</h3><p>Since its birth in January 2011, cdnjs has always been deeply rooted in transparency, deriving its strength from the community. Even when cdnjs exploded in size and its founders Ryan Kirkman and Thomas Davis <a href="https://blog.cloudflare.com/cdnjs-community-moderated-javascript-librarie/">teamed up with us in June 2011</a>, the project remained entirely open-source on <a href="https://github.com/cdnjs/">GitHub</a>.</p><p>As the years passed, it became harder for the founders to stay active, heavily depending on the community for support. With a nearly nonexistent budget and little access to the repository, core cdnjs maintainers were challenged every day to keep the project alive.</p><p>Last year, this led us to contact the founders, <a href="https://news.ycombinator.com/item?id=21416614">who were happy to have our assistance with the project</a>. With Cloudflare’s increased role, cdnjs is as stable as ever, with <a href="https://cdnjs.com/about">active members</a> from both Cloudflare and the community. </p><p>However, as we remove our reliance on the legacy system and store files in Workers KV, there are concerns that cdnjs will become proprietary. Don’t worry, we are working hard to ensure that cdnjs remains as transparent and open-source as possible. To help the community audit updates to Workers KV, there is a new repository, <a href="https://github.com/cdnjs/logs">cdnjs/logs</a>, which is used by the bot to log all Workers KV-related events. Furthermore, anyone can validate the integrity of cdnjs files by fetching SRIs from the cdnjs API. <br></p><h3 id="conclusion">Conclusion</h3><p>Overall, this past year has been a turbulent time for cdnjs, but all of its shortcomings have acted as red flags to help us build a better system. Most recently, we have mitigated the risks of depending on physical machines at a single location, migrating cdnjs to a serverless infrastructure where its files are stored in <a href="https://developers.cloudflare.com/workers/reference/storage">Workers KV</a>.</p><p>Today, cdnjs is in good hands, and is not going away anytime soon. Shout out especially to the maintainers <a href="https://github.com/xtuc">Sven</a> and <a href="https://github.com/mattipv4">Matt</a> for creating tons of momentum with the project, working on everything from scaling cdnjs to editing this post.</p><p>Moving forward, we are committed to making cdnjs as transparent as possible. As we continue to improve cdnjs, we will release more blog posts to keep the community up to date. If you are interested, please subscribe to our blog. After all, it is the community that makes cdnjs possible! A special thanks to our active GitHub contributors and members of the <a href="https://cdnjs.discourse.group/">cdnjs Community Forum</a> for sticking with us!</p>
+            </div>
+        </section>
+
+        <a href="/tag/cdnjs/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">CDNJS</a>
+        <a href="/tag/workers-kv/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers KV</a>
+        <a href="/tag/open-source/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Open Source</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-12-19T19:30:19Z">December 19, 2019 7:30PM</p>
+        <a href="/an-update-on-cdnjs/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">An Update on CDNJS</h2>
+        </a>
+
+        <p class="gray1 lh-copy">CDNJS powers over 10% of the web. A month ago it needed our help, now it needs yours....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/zack-bloom/" class="fw5 f2 black no-underline">Zack Bloom</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/cdnjs/" class="no-underline f1 fw2 blue3 underline-hover">CDNJS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/open-source/" class="no-underline f1 fw2 blue3 underline-hover">Open Source</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

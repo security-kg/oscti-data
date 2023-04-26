@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>A gentle introduction to Linux Kernel fuzzing</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/a-gentle-introduction-to-linux-kernel-fuzzing/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="A gentle introduction to Linux Kernel fuzzing" />
+    <meta property="og:description" content="For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It&#x27;s a good target: it&#x27;s an obscure part of kernel, and it&#x27;s relatively easy to automatically craft valid messages." />
+    <meta property="og:url" content="https://blog.cloudflare.com/a-gentle-introduction-to-linux-kernel-fuzzing/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/07/Screenshot-from-2019-07-10-11-44-50-1.png" />
+    <meta property="article:published_time" content="2019-07-10T13:07:21.000Z" />
+    <meta property="article:modified_time" content="2019-07-15T18:46:20.000Z" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Kernel" />
+    <meta property="article:tag" content="Developers" />
+    <meta property="article:tag" content="Deep Dive" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="A gentle introduction to Linux Kernel fuzzing" />
+    <meta name="twitter:description" content="For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It&#x27;s a good target: it&#x27;s an obscure part of kernel, and it&#x27;s relatively easy to automatically craft valid messages." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/a-gentle-introduction-to-linux-kernel-fuzzing/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/07/Screenshot-from-2019-07-10-11-44-50-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Linux, Kernel, Developers, Deep Dive" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "A gentle introduction to Linux Kernel fuzzing",
+    "url": "https://blog.cloudflare.com/a-gentle-introduction-to-linux-kernel-fuzzing/",
+    "datePublished": "2019-07-10T13:07:21.000Z",
+    "dateModified": "2019-07-15T18:46:20.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/07/Screenshot-from-2019-07-10-11-44-50-1.png",
+    "keywords": "Linux, Kernel, Developers, Deep Dive",
+    "description": "For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It&#x27;s a good target: it&#x27;s an obscure part of kernel, and it&#x27;s relatively easy to automatically craft valid messages.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-linux tag-kernel tag-developers tag-deep-dive sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-linux tag-kernel tag-developers tag-deep-dive ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">A gentle introduction to Linux Kernel fuzzing</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-07-10T14:07:21+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 10, 2019 2:07PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>For some time I’ve wanted to play with coverage-guided <a href="https://en.wikipedia.org/wiki/Fuzzing">fuzzing</a>. Fuzzing is a powerful testing technique where an automated program feeds semi-random inputs to a tested program. The intention is to find such inputs that trigger bugs. Fuzzing is especially useful in finding memory corruption bugs in C or C++ programs.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2019/07/4152779709_d1ea8dd3b4_z.jpg" alt="4152779709_d1ea8dd3b4_z"></p>
+<center><a href="https://www.flickr.com/photos/patrick_s/4152779709">Image</a> by <a href="https://www.flickr.com/photos/patrick_s/">Patrick Shannon</a> CC BY 2.0</center><br>
+<p>Normally it's recommended to pick a well known, but little explored, library that is heavy on parsing. Historically things like libjpeg, libpng and libyaml were perfect targets. Nowadays it's harder to find a good target - everything seems to have been fuzzed to death already. That's a good thing! I guess the software is getting better! Instead of choosing a userspace target I decided to have a go at the Linux Kernel netlink machinery.</p>
+<p><a href="https://en.wikipedia.org/wiki/Netlink">Netlink is an internal Linux facility</a> used by tools like &quot;ss&quot;, &quot;ip&quot;, &quot;netstat&quot;. It's used for low level networking tasks - configuring network interfaces, IP addresses, routing tables and such. It's a good target: it's an obscure part of kernel, and it's relatively easy to automatically craft valid messages. Most importantly, we can learn a lot about Linux internals in the process. Bugs in netlink aren't going to have security impact though - netlink sockets usually require privileged access anyway.</p>
+<p>In this post we'll run <a href="http://lcamtuf.coredump.cx/afl/">AFL fuzzer</a>, driving our netlink shim program against a custom Linux kernel. All of this running inside KVM virtualization.</p>
+<p>This blog post is a tutorial. With the easy to follow instructions, you should be able to quickly replicate the results. All you need is a machine running Linux and 20 minutes.</p>
+<h2 id="priorwork">Prior work</h2>
+<p>The technique we are going to use is formally called &quot;coverage-guided fuzzing&quot;. There's a lot of prior literature:</p>
+<ul>
+<li><a href="https://blog.trailofbits.com/2017/02/16/the-smart-fuzzer-revolution/">The Smart Fuzzer Revolution</a> by Dan Guido, and <a href="https://lwn.net/Articles/677764/">LWN article</a> about it</li>
+<li><a href="https://j00ru.vexillium.org/talks/blackhat-eu-effective-file-format-fuzzing-thoughts-techniques-and-results/">Effective file format fuzzing</a> by Mateusz “j00ru” Jurczyk</li>
+<li><a href="http://honggfuzz.com/">honggfuzz</a> by Robert Swiecki, is a modern, feature-rich coverage-guided fuzzer</li>
+<li><a href="https://google.github.io/clusterfuzz/">ClusterFuzz</a></li>
+<li><a href="https://github.com/google/fuzzer-test-suite">Fuzzer Test Suite</a></li>
+</ul>
+<p>Many people have fuzzed the Linux Kernel in the past. Most importantly:</p>
+<ul>
+<li><a href="https://github.com/google/syzkaller/blob/master/docs/syzbot.md">syzkaller (aka syzbot)</a> by Dmitry Vyukov, is a very powerful CI-style continuously running kernel fuzzer, which found hundreds of issues already. It's an awesome machine - it will even report the bugs automatically!</li>
+<li><a href="https://github.com/kernelslacker/trinity">Trinity fuzzer</a></li>
+</ul>
+<p>We'll use <a href="http://lcamtuf.coredump.cx/afl/">the AFL</a>, everyone's favorite fuzzer. AFL was written by <a href="http://lcamtuf.coredump.cx">Michał Zalewski</a>. It's well known for its ease of use, speed and very good mutation logic. It's a perfect choice for people starting their journey into fuzzing!</p>
+<p>If you want to read more about AFL, the documentation is in couple of files:</p>
+<ul>
+<li><a href="http://lcamtuf.coredump.cx/afl/historical_notes.txt">Historical notes</a></li>
+<li><a href="http://lcamtuf.coredump.cx/afl/technical_details.txt">Technical whitepaper</a></li>
+<li><a href="http://lcamtuf.coredump.cx/afl/README.txt">README</a></li>
+</ul>
+<h2 id="coverageguidedfuzzing">Coverage-guided fuzzing</h2>
+<p>Coverage-guided fuzzing works on the principle of a feedback loop:</p>
+<ul>
+<li>the fuzzer picks the most promising test case</li>
+<li>the fuzzer mutates the test into a large number of new test cases</li>
+<li>the target code runs the mutated test cases, and reports back code coverage</li>
+<li>the fuzzer computes a score from the reported coverage, and uses it to prioritize the interesting mutated tests and remove the redundant ones</li>
+</ul>
+<p>For example, let's say the input test is &quot;hello&quot;. Fuzzer may mutate it to a number of tests, for example: &quot;hEllo&quot; (bit flip), &quot;hXello&quot; (byte insertion), &quot;hllo&quot; (byte deletion). If any of these tests will yield an interesting code coverage, then it will be prioritized and used as a base for a next generation of tests.</p>
+<p>Specifics on how mutations are done, and how to efficiently compare code coverage reports of thousands of program runs is the fuzzer secret sauce. Read on the <a href="http://lcamtuf.coredump.cx/afl/technical_details.txt">AFL's technical whitepaper</a> for nitty gritty details.</p>
+<p>The code coverage reported back from the binary is very important. It allows fuzzer to order the test cases, and identify the most promising ones. Without the code coverage the fuzzer is blind.</p>
+<p>Normally, when using AFL, we are required to instrument the target code so that coverage is reported in an AFL-compatible way. But we want to fuzz the kernel! We can't just recompile it with &quot;afl-gcc&quot;! Instead we'll use a trick. We'll prepare a binary that will trick AFL into thinking it was compiled with its tooling. This binary will report back the code coverage extracted from kernel.</p>
+<h2 id="kernelcodecoverage">Kernel code coverage</h2>
+<p>The kernel has at least two built-in coverage mechanisms - GCOV and KCOV:</p>
+<ul>
+<li><a href="https://www.kernel.org/doc/html/v4.15/dev-tools/gcov.html">Using gcov with the Linux kernel</a></li>
+<li><a href="https://www.kernel.org/doc/html/latest/dev-tools/kcov.html">KCOV: code coverage for fuzzing</a></li>
+</ul>
+<p>KCOV was designed with fuzzing in mind, so we'll use this.</p>
+<p>Using KCOV is pretty easy. We must compile the Linux kernel with the right setting. First, enable the KCOV kernel config option:</p>
+<pre><code class="language-sh">cd linux
+./scripts/config \
+    -e KCOV \
+    -d KCOV_INSTRUMENT_ALL
+</code></pre>
+<p>KCOV is capable of recording code coverage from the whole kernel. It can be set with KCOV_INSTRUMENT_ALL option. This has disadvantages though - it would slow down the parts of the kernel we don't want to profile, and would introduce noise in our measurements (reduce &quot;stability&quot;). For starters, let's disable KCOV_INSTRUMENT_ALL and enable KCOV selectively on the code we actually want to profile. Today, we focus on netlink machinery, so let's enable KCOV on whole &quot;net&quot; directory tree:</p>
+<pre><code class="language-sh">find net -name Makefile | xargs -L1 -I {} bash -c 'echo &quot;KCOV_INSTRUMENT := y&quot; &gt;&gt; {}'
+</code></pre>
+<p>In a perfect world we would enable KCOV only for a couple of files we really are interested in. But netlink handling is peppered all over the network stack code, and we don't have time for fine tuning it today.</p>
+<p>With KCOV in place, it's worth to add &quot;kernel hacking&quot; toggles that will increase the likelihood of reporting memory corruption bugs. See the <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing/README.md">README</a> for the list of <a href="https://github.com/google/syzkaller/blob/master/docs/linux/kernel_configs.md">Syzkaller suggested options</a> - most importantly <a href="https://www.kernel.org/doc/html/latest/dev-tools/kasan.html">KASAN</a>.</p>
+<p>With that set we can compile our KCOV and KASAN enabled kernel. Oh, one more thing. We are going to run the kernel in a kvm. We're going to use <a href="https://github.com/amluto/virtme">&quot;virtme&quot;</a>, so we need a couple of toggles:</p>
+<pre><code class="language-sh">./scripts/config \
+    -e VIRTIO -e VIRTIO_PCI -e NET_9P -e NET_9P_VIRTIO -e 9P_FS \
+    -e VIRTIO_NET -e VIRTIO_CONSOLE  -e DEVTMPFS ...
+</code></pre>
+<p>(see the <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing/README.md">README</a> for full list)</p>
+<h2 id="howtousekcov">How to use KCOV</h2>
+<p>KCOV is super easy to use. First, note the code coverage is recorded in a per-process data structure. This means you have to enable and disable KCOV within a userspace process, and it's impossible to record coverage for non-task things, like interrupt handling. This is totally fine for our needs.</p>
+<p>KCOV reports data into a ring buffer. Setting it up is pretty simple, <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing/src/kcov.c">see our code</a>. Then you can enable and disable it with a trivial ioctl:</p>
+<pre><code class="language-c">ioctl(kcov_fd, KCOV_ENABLE, KCOV_TRACE_PC);
+/* profiled code */
+ioctl(kcov_fd, KCOV_DISABLE, 0);
+</code></pre>
+<p>After this sequence the ring buffer contains the list of %rip values of all the basic blocks of the KCOV-enabled kernel code. To read the buffer just run:</p>
+<pre><code class="language-c">n = __atomic_load_n(&amp;kcov_ring[0], __ATOMIC_RELAXED);
+for (i = 0; i &lt; n; i++) {
+    printf(&quot;0x%lx\n&quot;, kcov_ring[i + 1]);
+}
+</code></pre>
+<p>With tools like <code>addr2line</code> it's possible to resolve the %rip to a specific line of code. We won't need it though - the raw %rip values are sufficient for us.</p>
+<h2 id="feedingkcovintoafl">Feeding KCOV into AFL</h2>
+<p>The next step in our journey is to learn how to trick AFL. Remember, AFL needs a specially-crafted executable, but we want to feed in the kernel code coverage. First we need to understand how AFL works.</p>
+<p>AFL sets up an array of 64K 8-bit numbers. This memory region is called &quot;shared_mem&quot; or &quot;trace_bits&quot; and is shared with the traced program. Every byte in the array can be thought of as a hit counter for a particular (branch_src, branch_dst) pair in the instrumented code.</p>
+<p>It's important to notice that AFL prefers random branch labels, rather than reusing the %rip value to identify the basic blocks. This is to increase entropy - we want our hit counters in the array to be uniformly distributed. The algorithm AFL uses is:</p>
+<pre><code class="language-c">cur_location = &lt;COMPILE_TIME_RANDOM&gt;;
+shared_mem[cur_location ^ prev_location]++; 
+prev_location = cur_location &gt;&gt; 1;
+</code></pre>
+<p>In our case with KCOV we don't have compile-time-random values for each branch. Instead we'll use a hash function to generate a uniform 16 bit number from %rip recorded by KCOV. This is how to feed a KCOV report into the AFL &quot;shared_mem&quot; array:</p>
+<pre><code class="language-c">n = __atomic_load_n(&amp;kcov_ring[0], __ATOMIC_RELAXED);
+uint16_t prev_location = 0;
+for (i = 0; i &lt; n; i++) {
+        uint16_t cur_location = hash_function(kcov_ring[i + 1]);
+        shared_mem[cur_location ^ prev_location]++;
+        prev_location = cur_location &gt;&gt; 1;
+}
+</code></pre>
+<h2 id="readingtestdatafromafl">Reading test data from AFL</h2>
+<p>Finally, we need to actually write the test code hammering the kernel netlink interface! First we need to read input data from AFL. By default AFL sends a test case to stdin:</p>
+<pre><code class="language-c">/* read AFL test data */
+char buf[512*1024];
+int buf_len = read(0, buf, sizeof(buf));
+</code></pre>
+<h2 id="fuzzingnetlink">Fuzzing netlink</h2>
+<p>Then we need to send this buffer into a netlink socket. But we know nothing about how netlink works! Okay, let's use the first 5 bytes of input as the netlink protocol and group id fields. This will allow the AFL to figure out and guess the correct values of these fields. The code testing netlink (simplified):</p>
+<pre><code class="language-c">netlink_fd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK, buf[0]);
+
+struct sockaddr_nl sa = {
+        .nl_family = AF_NETLINK,
+        .nl_groups = (buf[1] &lt;&lt;24) | (buf[2]&lt;&lt;16) | (buf[3]&lt;&lt;8) | buf[4],
+};
+
+bind(netlink_fd, (struct sockaddr *) &amp;sa, sizeof(sa));
+
+struct iovec iov = { &amp;buf[5], buf_len - 5 };
+struct sockaddr_nl sax = {
+      .nl_family = AF_NETLINK,
+};
+
+struct msghdr msg = { &amp;sax, sizeof(sax), &amp;iov, 1, NULL, 0, 0 };
+r = sendmsg(netlink_fd, &amp;msg, 0);
+if (r != -1) {
+      /* sendmsg succeeded! great I guess... */
+}
+</code></pre>
+<p>That's basically it! For speed, we will wrap this in a short loop that mimics <a href="https://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html">the AFL &quot;fork server&quot; logic</a>. I'll skip the explanation here, <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing/src/forksrv.c">see our code for details</a>. The resulting code of our AFL-to-KCOV shim looks like:</p>
+<pre><code class="language-c">forksrv_welcome();
+while(1) {
+    forksrv_cycle();
+    test_data = afl_read_input();
+    kcov_enable();
+    /* netlink magic */
+    kcov_disable();
+    /* fill in shared_map with tuples recorded by kcov */
+    if (new_crash_in_dmesg) {
+         forksrv_status(1);
+    } else {
+         forksrv_status(0);
+    }
+}
+</code></pre>
+<p><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing/src/fuzznetlink.c">See full source code</a>.</p>
+<h2 id="howtorunthecustomkernel">How to run the custom kernel</h2>
+<p>We're missing one important piece - how to actually run the custom kernel we've built. There are three options:</p>
+<p><strong>&quot;native&quot;</strong>: You can totally boot the built kernel on your server and fuzz it natively. This is the fastest technique, but pretty problematic. If the fuzzing succeeds in finding a bug you will crash the machine, potentially losing the test data. Cutting the branches we sit on should be avoided.</p>
+<p><strong>&quot;uml&quot;</strong>: We could configure the kernel to run as <a href="http://user-mode-linux.sourceforge.net/">User Mode Linux</a>. Running a UML kernel requires no privileges. The kernel just runs a user space process. UML is pretty cool, but sadly, it doesn't support KASAN, therefore the chances of finding a memory corruption bug are reduced. Finally, UML is a pretty magic special environment - bugs found in UML may not be relevant on real environments. Interestingly, UML is used by <a href="https://source.android.com/devices/architecture/kernel/network_tests">Android network_tests framework</a>.</p>
+<p><strong>&quot;kvm&quot;</strong>: we can use kvm to run our custom kernel in a virtualized environment. This is what we'll do.</p>
+<p>One of the simplest ways to run a custom kernel in a KVM environment is to use <a href="https://github.com/amluto/virtme">&quot;virtme&quot; scripts</a>. With them we can avoid having to create a dedicated disk image or partition, and just share the host file system. This is how we can run our code:</p>
+<pre><code class="language-sh">virtme-run \
+    --kimg bzImage \
+    --rw --pwd --memory 512M \
+    --script-sh &quot;&lt;what to run inside kvm&gt;&quot; 
+</code></pre>
+<p>But hold on. We forgot about preparing input corpus data for our fuzzer!</p>
+<h2 id="buildingtheinputcorpus">Building the input corpus</h2>
+<p>Every fuzzer takes a carefully crafted test cases as input, to bootstrap the first mutations. The test cases should be short, and cover as large part of code as possible. Sadly - I know nothing about netlink. How about we don't prepare the input corpus...</p>
+<p>Instead we can ask AFL to &quot;figure out&quot; what inputs make sense. This is what <a href="https://lcamtuf.blogspot.com/2014/11/pulling-jpegs-out-of-thin-air.html">Michał did back in 2014 with JPEGs</a> and it worked for him. With this in mind, here is our input corpus:</p>
+<pre><code class="language-sh">mkdir inp
+echo &quot;hello world&quot; &gt; inp/01.txt
+</code></pre>
+<p>Instructions, how to compile and run the whole thing are in <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-07-kernel-fuzzing">README.md</a> on our github. It boils down to:</p>
+<pre><code class="language-sh">virtme-run \
+    --kimg bzImage \
+    --rw --pwd --memory 512M \
+    --script-sh &quot;./afl-fuzz -i inp -o out -- fuzznetlink&quot; 
+</code></pre>
+<p>With this running you will see the familiar AFL status screen:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2019/07/Screenshot-from-2019-07-10-11-44-50.png" alt="Screenshot-from-2019-07-10-11-44-50"></p>
+<h2 id="furthernotes">Further notes</h2>
+<p>That's it. Now you have a custom hardened kernel, running a basic coverage-guided fuzzer. All inside KVM.</p>
+<p>Was it worth the effort? Even with this basic fuzzer, and no input corpus, after a day or two the fuzzer found an interesting code path: <a href="https://lore.kernel.org/netdev/CAJPywTJWQ9ACrp0naDn0gikU4P5-xGcGrZ6ZOKUeeC3S-k9+MA@mail.gmail.com/T/#u">NEIGH: BUG, double timer add, state is 8</a>. With a more specialized fuzzer, some work on improving the &quot;stability&quot; metric and a decent input corpus, we could expect even better results.</p>
+<p>If you want to learn more about what netlink sockets actually do, see a blog post by my colleague Jakub Sitnicki <a href="http://codecave.cc/multipath-routing-in-linux-part-1.html">Multipath Routing in Linux - part 1</a>. Then there is a good chapter about it in <a href="https://books.google.pl/books?redir_esc=y&amp;hl=pl&amp;id=96V4AgAAQBAJ&amp;q=netlink#v=snippet&amp;q=netlink&amp;f=false">Linux Kernel Networking book by Rami Rosen</a>.</p>
+<p>In this blog post we haven't mentioned:</p>
+<ul>
+<li>details of AFL shared_memory setup</li>
+<li>implementation of AFL persistent mode</li>
+<li>how to create a network namespace to isolate the effects of weird netlink commands, and improve the &quot;stability&quot; AFL score</li>
+<li>technique on how to read dmesg (/dev/kmsg) to find kernel crashes</li>
+<li>idea to run AFL outside of KVM, for speed and stability - currently the tests aren't stable after a crash is found</li>
+</ul>
+<p>But we achieved our goal - we set up a basic, yet still useful fuzzer against a kernel. Most importantly: the same machinery can be reused to fuzz other parts of Linux subsystems - from file systems to bpf verifier.</p>
+<p>I also learned a hard lesson: tuning fuzzers is a full time job. Proper fuzzing is definitely not as simple as starting it up and idly waiting for crashes. There is always something to improve, tune, and re-implement. A quote at the beginning of the mentioned presentation by Mateusz Jurczyk resonated with me:</p>
+<blockquote>
+<p>&quot;Fuzzing is easy to learn but hard to master.&quot;</p>
+</blockquote>
+<p>Happy bug hunting!</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/kernel/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Kernel</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+        <a href="/tag/deep-dive/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Deep Dive</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-02T12:00:00Z">March 02, 2021 12:00PM</p>
+        <a href="/how-to-execute-an-object-file-part-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How to execute an object file: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Ever wondered if it is possible to execute an object file without linking? Or use any object file as a library? Follow along to learn how to decompose an object file and import code from it along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/compiler/" class="no-underline f1 fw2 blue3 underline-hover">Compiler</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/software/" class="no-underline f1 fw2 blue3 underline-hover">Software</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-08T12:00:00+01:00">July 08, 2020 12:00PM</p>
+        <a href="/sandboxing-in-linux-with-zero-lines-of-code/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Sandboxing in Linux with zero lines of code</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In this post we will review Linux seccomp and learn how to sandbox any (even a proprietary) application without writing a single line of code....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-25T12:00:00Z">March 25, 2020 12:00PM</p>
+        <a href="/speeding-up-linux-disk-encryption/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Speeding up Linux disk encryption</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Encrypting data at rest is vital for Cloudflare with more than 200 data centres across the world. In this post, we will investigate the performance of disk encryption on Linux and explain how we made it at least two times faster for ourselves and our customers!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-04-24T19:21:59+01:00">April 24, 2019 7:21PM</p>
+        <a href="/xdpcap/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">xdpcap: XDP Packet Capture</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Our servers process a lot of network packets, be it legitimate traffic or large denial of service attacks. To do so efficiently, we’ve embraced eXpress Data Path (XDP), a Linux kernel technology that provides a high performance mechanism for low level packet processing....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/arthur/" class="fw5 f2 black no-underline">Arthur Fabre</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

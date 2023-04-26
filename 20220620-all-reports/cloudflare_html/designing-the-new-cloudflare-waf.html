@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Designing the new Cloudflare Web Application Firewall</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=cdf514a7c3" />
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_package_v0.16/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_package_v0.16/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_package_v0.16/favicon-16x16.png">
+    <link rel="mask-icon" href="/favicon_package_v0.16/safari-pinned-tab.svg" color="#f78100">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
+    <script type="text/javascript" src="/assets/built/index.js?v=cdf514a7c3"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="The Cloudflare Web Application Firewall (WAF) protects websites and applications from malicious traffic attempting to exploit vulnerabilities in server software. It’s a critical piece of the broader security posture of your application." />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://blog.cloudflare.com/designing-the-new-cloudflare-waf/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Designing the new Cloudflare Web Application Firewall" />
+    <meta property="og:description" content="The Cloudflare Web Application Firewall (WAF) protects websites and applications from malicious traffic attempting to exploit vulnerabilities in server software. It’s a critical piece of the broader security posture of your application." />
+    <meta property="og:url" content="https://blog.cloudflare.com/designing-the-new-cloudflare-waf/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/05/Designing-the-new-Cloudflare-Web-Application-Firewall-OG-1.png" />
+    <meta property="article:published_time" content="2021-05-11T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-05-11T13:00:00.000Z" />
+    <meta property="article:tag" content="Design" />
+    <meta property="article:tag" content="Product Design" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Designing the new Cloudflare Web Application Firewall" />
+    <meta name="twitter:description" content="The Cloudflare Web Application Firewall (WAF) protects websites and applications from malicious traffic attempting to exploit vulnerabilities in server software. It’s a critical piece of the broader security posture of your application." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/designing-the-new-cloudflare-waf/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/05/Designing-the-new-Cloudflare-Web-Application-Firewall-OG.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Syeef Karim" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Design, Product Design" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Syeef Karim",
+        "image": "https://blog.cloudflare.com/content/images/2021/05/600x600-ProfilePhotoSyeef-1.png",
+        "url": "https://blog.cloudflare.com/404/",
+        "sameAs": []
+    },
+    "headline": "Designing the new Cloudflare Web Application Firewall",
+    "url": "https://blog.cloudflare.com/designing-the-new-cloudflare-waf/",
+    "datePublished": "2021-05-11T13:00:00.000Z",
+    "dateModified": "2021-05-11T13:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/05/Designing-the-new-WAF-1.png",
+    "keywords": "Design, Product Design",
+    "description": "The Cloudflare Web Application Firewall (WAF) protects websites and applications from malicious traffic attempting to exploit vulnerabilities in server software. It’s a critical piece of the broader security posture of your application.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://tr.www.cloudflare.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-design tag-product-design tag-hash-blog-453 sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="zero-trust">
+            <a href="/tag/zero-trust/" class="no-underline gray1 f2 fw5 pv3">Zero Trust</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=cdf514a7c3" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=cdf514a7c3" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/zero-trust/" class="no-underline gray1 f4 fw7">Zero Trust</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-design tag-product-design tag-hash-blog-453 ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Designing the new Cloudflare Web Application Firewall</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-05-11T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">May 11, 2021 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/404/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2021/05/600x600-ProfilePhotoSyeef-1.png" alt="Syeef Karim" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/syeef" class="fw5 f3 no-underline black mr3">Syeef Karim</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/Designing-the-new-WAF.png" class="kg-image"></figure><p>The Cloudflare Web Application Firewall (WAF) protects websites and applications from malicious traffic attempting to exploit vulnerabilities in server software. It’s a critical piece of the broader security posture of your application. With that in mind, we made sure improvements to the Web Application Firewall dashboard experience made it easier to enable the WAF and configure rules to match the specific requirements of an application. In this post, I’ll share parts of the process we followed and the rationale behind the decisions we took when designing the <a href="https://blog.cloudflare.com/new-cloudflare-waf/">new Web Application Firewall</a> dashboard experience.</p><p>I’ve separated out my design process into three stages:</p><ol><li>Identify the tasks customers are trying to complete using the WAF</li><li>Prioritise the tasks in such a way that it’s clear what the most common tasks are vs what the more involved tasks are</li><li>Define, create, and refine the interface and interactions</li></ol><h2 id="identifying-the-tasks-customers-are-trying-to-complete">Identifying the tasks customers are trying to complete</h2><p>We support a range of customers — individual developers or hobbyists, small/medium-sized businesses where it’s common for a developer to fulfil multiple roles and responsibilities, through to large global enterprises where often there is an entire department dedicated to information security. Traditionally, product development teams use techniques such as the use of a user persona or a user story to help them focus on a specific problem they’re trying to solve; however each of these methods have their own inefficiencies and importantly aren’t able to scale to match the breadth of our customers. For example, a user persona is typically made by taking the average from a group or a specific selection of demographic indicators (such as age, gender, marital status, and hobbies), presenting it in a document and referring to it as one of multiple user archetypes of the application, but crucially fails to explain why the user decided to use or not use a specific feature. Similarly, user stories make use of user personas, but conflate them with implementation details and desired outcomes all the while failing to describe the situation the user is in.<br><br>To help the product development team better empathise with our range of customers, we use a technique known as Job Stories. Job Stories, unlike user persona or user stories allow us to focus on the users situation, motivation, and desired outcome.<br><br>We conducted interviews with a handful of customers directly, but we also supplemented them by interviewing members of our Solutions Engineering team. They help customers configure Cloudflare to meet their requirements and therefore have a direct connection to multiple customers themselves. They are in a position of being able to aggregate feedback from multiple customers. From the various interviews we identified the following job stories among many:</p><ul><li>When onboarding with Cloudflare, I want to quickly turn on the WAF and use the default settings so I can proceed to configuring the rest of the Cloudflare features.</li><li>When refining and tuning the configuration of my zone, I only want to configure the rules I’m interested in so I can reduce the potential number of false positive results.</li></ul><p>Next, we began to analyse each of these uses further. We wanted to understand what was working well from the existing interface and more importantly, what was causing confusion or impacting efficiency.</p><h3 id="-i-want-to-turn-on-the-waf-and-use-the-default-settings-"><em>“I want to turn on the WAF and use the default settings.”</em></h3><p>With the legacy dashboard experience, a customer had a choice of different managed rulesets (Cloudflare Managed Ruleset or OWASP ModSecurity Core Rule Set.) Making a ruleset actually run however required some tedious configuration. The specific groups within a ruleset would need to be enabled and a separate switch controlling the overall WAF would also need to be enabled. Now, imagine the use case of wanting to use the Cloudflare Managed Ruleset. The current experience would require the user to enable at least two switches:</p><ol><li>The overall Web Application Firewall switch must be enabled</li><li>At least a single group from Cloudflare Managed Ruleset must be enabled</li></ol><p>As two distinct options needed to be configured, we concluded that this could cause customers to put their applications at an increased risk of being unprotected. They might have enabled the particular groups they’re interested in from the Cloudflare Managed Ruleset. However, if the switch of the Web Application Firewall is in the off position, the configuration of the Cloudflare Managed Ruleset is ignored. Essentially, they’ve misconfigured the WAF into a vulnerable state.</p><p>This is where we identified our first opportunity of improvement. The existing user journey had too many opportunities for misconfiguration and should have been very straightforward.</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/image4-2.png" class="kg-image"><figcaption>The legacy UI of the Web Application Firewall.</figcaption></figure><h3 id="-i-only-want-to-configure-the-rules-i-m-interested-in-"><em>“I only want to configure the rules I’m interested in.”</em></h3><p>On the legacy Managed Rules page, all the groups for each of the rulesets were listed beneath the card. This made it super easy to enable or disable specific rule groups and, from our user research sessions, we learned it was actually a very common workflow. However, scratch beneath the surface slightly and you’ll start to see the complexities of the system. Each group is made up of individual rules. By clicking on a group, a new modal would appear listing all the rules belonging to that group. The legacy UI was built to make it easy to change the action of a single rule — select an option from the dropdown and off you go. Simple. Most users probably even have the patience to change the action of a couple of rules like this. But what if it isn’t just a couple? Some groups contain hundreds of rules. A particularly complicated setup of the WAF could mean having to change the action of each rule. With the capabilities of the legacy UI, that would require hundreds of clicks and waste invaluable time. I’m embarrassed to admit that this was the suggested workflow and users were often required to use our APIs instead.</p><p>We now identified our next area of improvement — create the tools necessary for completing bulk edits and easy rule selection.</p><p>In summary, users want to easily turn on the WAF and move along. However, the legacy UI had a cumbersome and error-prone process to do so. Secondly, if a user wanted to enable or disable a specific rule of a ruleset, the legacy UI actually made that very simple. However, when it came to changing the action of multiple rules at once, the legacy UI was a time sink.</p><h2 id="prioritising-the-identified-tasks">Prioritising the identified tasks</h2><p>We’ve identified the tasks or jobs customers are trying to accomplish and understand where the current difficulties and inefficiencies are within the experience. Using our telemetry and analytics tools, such as Amplitude, we determine how often customers are performing each of the job stories. This is a critical step, as the output will help us decide which job stories we should be optimising the interface for. About 76% of zones that are using the WAF today are doing so with its default configuration. From this we can infer that most customers simply turn on the WAF and continue on with their business, potentially continuing to configure other Cloudflare features.</p><p>It’s worth pointing out the importance of having sensible defaults within applications. Oftentimes users will continue down the path of least resistance or to whatever helps them complete their goal the quickest — ergo, they’ll usually stick to the default settings of an application as these are usually created with the most common use cases in mind. For this reason, the default state of the Cloudflare Managed Ruleset is such that it exceeds the security requirements of most applications whilst balancing a relatively low false positive rate.</p><h2 id="define-create-and-refine-the-interface-and-interactions">Define, create, and refine the interface and interactions</h2><p>We use Figma to design the user interface of the dashboard. Using our Component Library, it allows us to quickly create mockups of what an interface could look like. At this stage of the project, a tool like Figma makes it easy for us to iterate through numerous ideas or permutations of a particular interaction.</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/image3-1.png" class="kg-image"><figcaption>The Figma file used during the development of the new UI.</figcaption></figure><p>From the user research and data collection we conducted earlier, it’s clear that we needed to make enabling a particular ruleset better than the legacy experience. It is a very common workflow, but prone to potentially dangerous errors — certainly not a good combination.</p><p>Part of our job as designers at Cloudflare is to make the complex and intricate aspects of configuration ridiculously simple and increasing the confidence customers have with the UI and the actions they’re performing. With that in mind, to enable a ruleset like the Cloudflare Managed Ruleset with the new Managed Rules a customer only needs to do a single click.</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/image1-2.png" class="kg-image"><figcaption>The new Web Application Firewall page.</figcaption></figure><p>We wanted to improve the method of having all rules execute the same specific action. With the legacy UI, this required customers to select from a drop-down menu on all the individual rules. This was an extremely tedious and time-consuming process. Sticking to our design principles of maintaining ease of use and increasing simplicity and efficiency, the new Managed Rules allows for a single action to execute across the entire ruleset. We call this a Ruleset Action. A Ruleset Action is an action which all the rules within a ruleset will adhere to.</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/image2-1.png" class="kg-image"><figcaption>Review page with Ruleset Action configured.</figcaption></figure><p>The next capability we focused on was having all the rules execute the same specific action. In the legacy UI, changing the mode of multiple rules at once wasn’t possible. With the new dashboard experience, customers can browse through all the rules within the ruleset. Multiple rules can be selected at once using the select box on the left-hand side and the action or status can be set for the entire selection.</p><figure class="kg-card kg-image-card kg-width-wide kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/image5-1.png" class="kg-image"><figcaption>Rule Browser page with multiple rules selected and Set Action drop-down menu open.</figcaption></figure><h2 id="we-re-just-getting-started">We’re just getting started</h2><p>We didn’t get to these interactions straightaway, but rather by taking part in numerous design critiques and constantly evaluating the effectiveness of the new interactions against the identified job stories. We’ll be utilising our telemetry and analytics tools to understand how customers are using the new features and continuing to refine the experience further. Watch this space, because more updates are on the way!</p>
+            </div>
+        </section>
+
+        <a href="/tag/design/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Design</a>
+        <a href="/tag/product-design/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product Design</a>
+    </article>
+</main>
+
+<div class="pv4 ph3 mw7 center" id="social-buttons">
+    <h2>Comments</h2>
+    <div class="mt5-l mt4 flex flex-row-ns flex-column flex-wrap">
+        <a id="social-button-twitter" title="Discuss on Twitter" href="https://twitter.com/Cloudflare" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Twitter</span>
+        </a>
+        <a id="social-button-hn" title="Discuss on Hacker News" href="https://hn.algolia.com/?dateRange=all&page=0&prefix=false&query=blog.cloudflare.com&sort=byDate&type=story" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Hacker News</span>
+        </a>
+        <a id="social-button-reddit" title="Discuss on Reddit" href="https://www.reddit.com/r/CloudFlare/" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Reddit</span>
+        </a>
+    </div>
+</div>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-18T12:00:00Z">March 18, 2021 12:00PM</p>
+        <a href="/teams-dashboard-design-story/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The Teams Dashboard: The Design Story</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Here is the story of how we took Cloudflare for Teams from initial concepts, to an MVP, to now a comprehensive security platform that secures networks, users, devices, and applications....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/bethany/" class="fw5 f2 black no-underline">Bethany Sonefeld</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/design/" class="no-underline f1 fw2 blue3 underline-hover">Design</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-design/" class="no-underline f1 fw2 blue3 underline-hover">Product Design</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/teams-dashboard/" class="no-underline f1 fw2 blue3 underline-hover">Teams Dashboard</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-for-teams/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare for Teams</a>
+        </div>
+    </article>
+
+</div>
+
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript">
+    (function () {
+        // Social media, make request to worker
+        var urlObj = new URL(window.location.href);
+        var currenturl = urlObj.origin + urlObj.pathname;
+        try {
+            $.get("https://api.blog.cloudflare.com/social?u=" + currenturl, function( res ) {
+                if (!res.data.twitter && !res.data.hn && !res.data.reddit) {
+                    $("#social-buttons").hide();
+                }
+
+                if (res.data.twitter) {
+                    var twitterurl = "https://twitter.com/intent/tweet?in_reply_to=" + res.data.twitter.id;
+                    $("#social-button-twitter").attr("href", twitterurl);
+                    $("#social-button-twitter").show()
+                }
+
+                if (!res.data.hn) {
+                    $("#social-button-hn").attr("href", "https://news.ycombinator.com/submitlink?u=" + currenturl);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.hn) {
+                    $("#social-button-hn").attr("href", res.data.hn.comments_link);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.reddit) {
+                    $("#social-button-reddit").attr("href", res.data.reddit.comments_link);
+                    $("#social-button-reddit").show();
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            $("#social-buttons").hide();
+        }
+    })();
+</script>
+
+<script type="text/javascript" src="/assets/built/prism.js?v=cdf514a7c3"></script>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://tr.www.cloudflare.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

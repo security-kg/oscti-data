@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Introducing CFSSL - CloudFlare&#x27;s PKI toolkit</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/introducing-cfssl/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Introducing CFSSL - CloudFlare&#x27;s PKI toolkit" />
+    <meta property="og:description" content="Today we’re proud to introduce CFSSL—our open source toolkit for everything TLS/SSL. CFSSL is used internally by CloudFlare for bundling TLS/SSL certificates chains, and for our internal Certificate Authority infrastructure." />
+    <meta property="og:url" content="https://blog.cloudflare.com/introducing-cfssl/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/image00_2.jpg" />
+    <meta property="article:published_time" content="2014-07-10T04:00:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-27T21:10:52.000Z" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="Crypto" />
+    <meta property="article:tag" content="CFSSL" />
+    <meta property="article:tag" content="Encryption" />
+    <meta property="article:tag" content="Product News" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="SSL" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Introducing CFSSL - CloudFlare&#x27;s PKI toolkit" />
+    <meta name="twitter:description" content="Today we’re proud to introduce CFSSL—our open source toolkit for everything TLS/SSL. CFSSL is used internally by CloudFlare for bundling TLS/SSL certificates chains, and for our internal Certificate Authority infrastructure." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/introducing-cfssl/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/image00_2.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Nick Sullivan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TLS, Crypto, CFSSL, Encryption, Product News, Security, SSL" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@grittygrease" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Nick Sullivan",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg",
+            "width": 400,
+            "height": 400
+        },
+        "url": "https://blog.cloudflare.com/author/nick-sullivan/",
+        "sameAs": [
+            "https://crypto.dance",
+            "https://twitter.com/grittygrease"
+        ]
+    },
+    "headline": "Introducing CFSSL - CloudFlare&#x27;s PKI toolkit",
+    "url": "https://blog.cloudflare.com/introducing-cfssl/",
+    "datePublished": "2014-07-10T04:00:00.000Z",
+    "dateModified": "2018-08-27T21:10:52.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/image00_2.jpg",
+    "keywords": "TLS, Crypto, CFSSL, Encryption, Product News, Security, SSL",
+    "description": "Today we’re proud to introduce CFSSL—our open source toolkit for everything TLS/SSL. CFSSL is used internally by CloudFlare for bundling TLS/SSL certificates chains, and for our internal Certificate Authority infrastructure.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tls tag-crypto tag-cfssl tag-encryption tag-product-news tag-security tag-ssl sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tls tag-crypto tag-cfssl tag-encryption tag-product-news tag-security tag-ssl ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Introducing CFSSL - CloudFlare&#x27;s PKI toolkit</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2014-07-10T05:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 10, 2014 5:00AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/nick-sullivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg" alt="Nick Sullivan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/nick-sullivan" class="fw5 f3 no-underline black mr3">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Today we’re proud to introduce CFSSL—our open source toolkit for everything TLS/SSL. CFSSL is used internally by CloudFlare for bundling TLS/SSL certificates chains, and for our internal Certificate Authority infrastructure. We use this tool for all our TLS certificates.</p>
+<p>Creating a certificate bundle is a common pain point for website operators, and doing it right is important for website security AND speed (CloudFlare does both). Getting the correct bundle together is a black art, and can quickly become a debugging nightmare if it's not done correctly. We wrote CFSSL to make bundling easier. By picking the right chain of certificates, CFSSL solves the balancing act between performance, security, and compatibility.</p>
+<p>Staying true to our <a href="http://blog.cloudflare.com/what-we-just-did-to-make-ssl-even-faster">promise</a> to make the web fast and safe, we’re open sourcing CFSSL. We believe CFSSL will be useful for anyone building a site using HTTPS—from website owners to large software-as-a-service companies. CFSSL is written in Go and available on the <a href="https://github.com/cloudflare/cfssl">CloudFlare Github account</a>. It can be used as a web service with a JSON API, and as a handy command line tool.</p>
+<p>CFSSL is the result of real-world expertise about how the TLS ecosystem on the Web works that you can gain by working at CloudFlare’s scale. These are hard-won lessons, applied in code. The rest of this blog post serves as an under-the-hood look at how and why CFSSL works, and how you can use it as a certificate bundler or as a lightweight CA.</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/image02_2.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/image02_2.png"></noscript></p>
+<p>As you can see in the above image, the key is owned by CloudFlare, Inc., and the issuer is GlobalSign (a well-known CA). GlobalSign has issued a certificate named “GlobalSign Extended Validation CA - SHA256 - G2”; this G2 certificate is signed by another certificate called “GlobalSign Root CA - R2”. Note that the root certificate does not have an issuer—it is signed by its own private key. In other words, the root vouches for itself.</p>
+<p>The reason your browser trusts a root certificate is because browsers have a list of root certificates that they implicitly trust, and when a site is trusted it will show the lock icon to the left of the web address (see image below). Certain certificates are on the list typically because they have been around for some time, and they belong to certificate authorities that have gone through a rigorous security audit. GlobalSign is one of these trusted authorities; therefore, its root certificate is in the list of trusted root certificates for nearly every browser.</p>
+<h3 id="whataresslcertificates">What Are SSL Certificates?</h3>
+<p>SSL certificates form the core of trust on the web by assuring the identity of websites. This trust is built by digitally binding a cryptographic key to an organization’s identity. An SSL certificate will bind domain names to server names, and company names to locations. This ensures that if you go to your bank’s web site, for example, you know for sure it is your bank, and you are not giving out your information to a phishing scam.</p>
+<p>A certificate is a file that contains a public key which is bound to a record of its owner. The mechanism that makes this binding trustworthy is called the <a href="http://en.wikipedia.org/wiki/Public_key_infrastructure">Public Key Infrastructure</a> and public-key cryptography is the glue that makes this possible.</p>
+<p>A certificate is associated with a private key that corresponds to the certificate's public key, which is stored separately. The certificate comes with a digital signature from a trusted third-party called a certificate authority or CA. Let's examine the <a href="https://www.cloudflare.com/">cloudflare.com</a> certificate.</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/image00_2.jpg"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/image00_2.jpg"></noscript></p>
+<p>The length of intermediate certificates in a chain can vary, but chains will always have one leaf and one root.</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/image01_4.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/image01_4.png"></noscript></p>
+<p>Unfortunately, there is a catch for the owner of the leaf certificate: presenting only the leaf certificate to the browser is usually not enough. The intermediate certificates are not always known to the browser, requiring the website to include them with the leaf certificate. The list of certificates that the browser needs to validate a certificate is called a certificate bundle. It should contain all the certificates in the chain up to the first certificate known to the browser. In the case of the CloudFlare website, this bundle contains both the cloudflare.com certificate and the GlobalSign G2 intermediate.</p>
+<p>CFSSL was written to make certificate bundling easier.</p>
+<h3 id="howcfsslmakescertificatebundlingeasier">How CFSSL Makes Certificate Bundling Easier</h3>
+<p>If you are running a website (or perhaps some other TLS-based service) and need to install a certificate, CFSSL can create the certificate bundle for you. Start with the following command:</p>
+<pre>$ cfssl bundle -cert mycert.crt
+</pre>
+<p>This will output a JSON blob containing the chain of certificates along with relevant information extracted from that chain. Alternatively, you can run the CFSSL service that responds to requests with a JSON API:</p></p>
+<pre>$ cfssl serve
+</pre>
+<p>This command opens up an HTTP service on localhost that accepts requests. To bundle using this API, send a POST request to this service, <code><a href="http://localhost:8888/api/v1/cfssl/bundle">http://localhost:8888/api/v1/cfssl/bundle</a></code>, using a JSON request such as:</p>
+<pre>{
+    &quot;certificate&quot;: &lt;PEM-encoded certificate&gt;
+}
+</pre>
+<p>CloudFlare’s SSL service will return a JSON response of the form:</p></p>
+<pre>{
+    &quot;result&quot;: {&lt;certificate bundle JSON&gt;},
+    &quot;success&quot;: true,
+    &quot;errors&quot;: [],
+    &quot;messages&quot;: [],
+}
+</pre>
+<p><em>(Developers take note: this response format is a preview of our upcoming CloudFlare API rewrite; with this API, we can use CFSSL as a service for certificate bundling and more—stay tuned.)</em></div></p>
+<p>If you upload your certificate to CloudFlare, this is what is used to create a certificate bundle for your website.</p>
+<p>To create a certificate bundle with CFSSL, you need to know which certificates are trusted by the browsers you hope to display content to. In a controlled corporate environment, this is usually easy since every browser is set up with the same configuration; however, it becomes more difficult when creating a bundle for the web.</p>
+<h3 id="differentcertsfordifferentfolks">Different Certs for Different Folks</h3>
+<p>Each browser has unique capabilities and configurations, and a certificate bundle that’s trusted in one browser might not be trusted in another; this can happen for several reasons:</p>
+<ol>
+<li>
+<p><em>Different browsers trust different root certificates.</em><br>
+Some browsers trust more root certificates than others. For example, the NSS root store used in Firefox trusts 143 certificates; however, Windows 8.1 trusts 391 certificates. So a bundle with a chain that expects the browser to trust a certificate exclusive to the Windows root store will appear as untrusted in Firefox.</p>
+</li>
+<li>
+<p><em>Older systems might have old root stores.</em><br>
+Some browsers run on older systems that have not been updated to trust recently-created certificate authorities. For example, Android 2.2 and earlier don't trust the “GoDaddy Root Certificate Authority G2” because that root certificate was created after they were released.</p>
+</li>
+<li>
+<p><em>Older systems don't support modern cryptography.</em><br>
+Users on Windows XP SP2 and earlier can't validate certificates signed by certain intermediates. This includes the “DigiCert SHA2 High Assurance Server CA” because the hash function SHA-2 used in this certificate was standardised after Windows XP was released.</p>
+</li>
+</ol>
+In order to provide maximum compatibility between SSL chains and browsers, you often have to pick a different certificate chain than the one originally provided to you by your CA. This alternate chain might contain a different set of intermediates that are signed by a different root certificate. Alternate chains can be troublesome. They tend to contain a longer list of certificates than the default chain from the CA, and longer chains cause site connections to be slower. This lag is because the web server needs to send more certificates (i.e. more data) to the browser, and the browser has to spend time verifying more certificates on its end. Picking the right chain can be tricky.
+<p>CFSSL helps pick the right certificate chain, selecting for performance, security, and compatibility.</p>
+<h3 id="howtopickthebestchain">How to Pick the Best Chain</h3>
+<p>The chain of trust works by following the keys used to sign certificates, and there can be multiple chains of trust for the same keys.</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/image03_4.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/image03_4.png"></noscript></p>
+<p>In this diagram, all of the intermediates have the same public key and represent the same identity (GlobalSign's intermediate signing certificate), and they are signed by the GlobalSign root key; however, the issuance date for each chain and signature type are different.</p>
+<p>For some outdated browsers, the current GlobalSign root certificate is not trusted, so GlobalSign used an older CA (GlobalSign nv-sa) to sign their root certificate. This allows older browsers to trust certificates issued by GlobalSign.</p>
+<p>Each of these are valid chains for some browsers, but each has drawbacks:</p>
+<ul>
+<li>
+<p><em>CloudFlare leaf → GlobalSign SHA2 Intermediate.</em><br>
+This chain is trusted by any browser that trusts the GS root G2 and supports SHA2 (i.e., this chain would not be trusted by a browser on Windows XP SP2).</p></p>
+</li>
+<li>
+<p><em>CloudFlare leaf → 2012 GlobalSign Intermediate → GS Root G2.</em><br>
+This chain is trusted by any browser that trusts GS Root G2, but does not benefit from the stronger cryptographic properties of the SHA-2 hashing algorithm.</p>
+</li>
+<li>
+<p><em>CloudFlare leaf → 2012 GlobalSign Intermediate → GS cross-signed root.</em><br>
+This chain is trusted by any browser that trusts the GlobalSign nv-sa root, but uses the older (and weaker) GlobalSign nv-sa root certificate.</p>
+</li>
+</ul>
+<p>This last chain is the most common because it’s trusted by more browsers; however, it’s also the longest, and has weaker cryptography.</p>
+<p>CFSSL can create either the most common or the optimal bundle, and if you need help deciding, the documentation that ships with CFSSL has tips on choosing.</p>
+<p>If you decide to create the optimal bundle, there’s a chance it might not work in some browsers; however, CFSSL is configured to let you know specifically which browsers it will not work with. For example, it will warn the user about bundles that contains certificates signed with advanced hash functions such as SHA2; they can be problematic for certain operating systems like Windows XP SP2.</p>
+<h3 id="cfsslatcloudflare">CFSSL at CloudFlare</h3>
+<p>All paid CloudFlare accounts receive HTTPS service automatically; to make this happen, our engineers do a lot of work behind scenes.</p>
+<p>CloudFlare must obtain a certificate for each site on the service, and we want these certificates to be valid on as many browsers as possible; getting a certificate that works in multiple browsers is a challenge, but CFSSL makes things easier.</p>
+<p>To start, a key-pair is created for the customer through a call to CFSSL's <code>genkey</code> API with the required certificate information:</p>
+<pre>{
+    &quot;CN&quot;: &quot;customer.com&quot;,
+    &quot;hosts&quot;: [
+             &quot;customer.com&quot;,
+             &quot;www.customer.com&quot;
+    ],
+    &quot;key&quot;: {
+           &quot;algo&quot;: &quot;rsa&quot;,
+           &quot;size&quot;: 2048
+    },
+    &quot;names&quot;: [
+             {
+                    &quot;C&quot;: &quot;US&quot;,
+                    &quot;L&quot;: &quot;San Francisco&quot;,
+                    &quot;O&quot;: &quot;Customer&quot;,
+                    &quot;OU&quot;: &quot;Website&quot;,
+                    &quot;ST&quot;: &quot;California&quot;
+             }
+    ]
+}
+</pre>
+<p>Next, the CFSSL service responds with a key and a Certificate Signature Request (CSR). The CSR is sent to the CA to verify a site’s identity. Once the CA has validated the CSR, and the identity of the site, they then return a certificate signed by one of their issuing intermediates.</p>
+<p>Once we have a certificate for a site (whether created by our CA partner or uploaded by the customer), we send the certificate to CFSSL's bundler to create a certificate bundle for the customer.</p>
+<p>By default, we pick the most common chain. For customers who prefer performance to compatibility, we’ll soon introduce an option to rebundle certificates for optimum chains.</p>
+<h3 id="cfsslasacertificateauthority">CFSSL as a Certificate Authority</h3>
+<p>CFSSL is not only a tool for bundling a certificate, it can also be used as a CA. This is possible because it covers the basic features of certificate creation including creating a private key, building a certificate signature request, and signing certificates.</p>
+<p>You can create a brand new CA with CFSSL using the <code>-initca</code> option. As we saw above, this takes a JSON blob with the certificate request, and creates a new CA key and certificate:</p>
+<pre>$ cfssl gencert -initca ca_csr.json
+</pre>
+<p>This will return a CA certificate and CA key that is valid for signing. The CA is meant to function as an internal tool for creating certificates. CFSSL should be used behind a middle layer that processes incoming requests, and ensures they conform to policy; we use it behind the CloudFlare site as an internal service.</p>
+<p>Here’s an example of signing a certificate with CFSSL on the command line:</p>
+<pre>$ cfssl sign -ca-key=test-key.pem -ca=test-cert.pem www.example.com example.csr
+</pre>
+<p>Alternatively, a POST request containing the CSR and hostname can be sent to the CFSSL service via the <code>/api/v1/cfssl/sign</code> endpoint. To run the service call the <code>serve</code> command as follows:</p>
+<pre>$ cfssl serve -address=localhost -port=8888 -ca-key=test-key.pem -ca=test-cert.pem
+</pre>
+<p>If you already have a CFSSL instance running (in this case on localhost, but it can be anywhere), you can automate certificate creation with the gencert command’s <code>-remote</code> option. For example, if CFSSL is running on localhost, running the following gives you a private key and a certificate signed by the CA:</p>
+<pre>$ cfssl gencert -remote=&quot;localhost:8888&quot; www.example.com csr.json
+</pre>
+<p>At CloudFlare we use CFSSL heavily for <a href="https://www.cloudflare.com/railgun">Railgun</a> and other internal services. Special thanks go to <a href="https://twitter.com/kyleisom">Kyle Isom</a>, <a href="https://twitter.com/lziest">Zi Lin</a>, <a href="https://twitter.com/sebp">Sebastien Pahl</a>, and <a href="https://twitter.com/dok2001">Dane Knecht</a>, and the rest of the CloudFlare team for making this release possible.</p>
+<h3 id="lookingahead">Looking Ahead</h3>
+<p>CloudFlare’s mission is to help build a better web, and we believe that improved certificate bundling and certificate authority tools are a step in the right direction. Encrypted sites create a safer, more private internet for everyone; by open-sourcing CFSSL, we’re making this process easier.</p>
+<p>We have big plans for the CA part of this tool. Currently, we run CFSSL on secure locked-down machines, but plan to add stronger hardware security. Adding stronger hardware security involves integrating CFSSL with low-cost Trusted Platform Modules (TPMs). This ensures that private keys stay private, even in the event of a breach.</p>
+<p>For additional information on CFSSL and our other open source projects, check out our <a href="https://cloudflare.github.io">Github page</a>. We encourage users to file issues on Github as they find bugs.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+        <a href="/tag/cfssl/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">CFSSL</a>
+        <a href="/tag/encryption/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Encryption</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-07-26T16:04:36+01:00">July 26, 2018 4:04PM</p>
+        <a href="/the-road-to-quic/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The Road to QUIC</h2>
+        </a>
+
+        <p class="gray1 lh-copy">QUIC (Quick UDP Internet Connections) is a new encrypted-by-default Internet transport protocol, that provides a number of improvements designed to accelerate HTTP traffic as well as make it more secure, with the intended goal of eventually replacing TCP and TLS on the web....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alessandro-ghedini/" class="fw5 f2 black no-underline">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-05-16T18:28:07+01:00">May 16, 2018 6:28PM</p>
+        <a href="/you-get-tls-1-3-you-get-tls-1-3-everyone-gets-tls-1-3/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">You get TLS 1.3! You get TLS 1.3! Everyone gets TLS 1.3!</h2>
+        </a>
+
+        <p class="gray1 lh-copy">It's no secret that Cloudflare has been a big proponent of TLS 1.3, the newest edition of the TLS protocol that improves both speed and security, since we have made it available to our customers starting in 2016....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alessandro-ghedini/" class="fw5 f2 black no-underline">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls-1-3/" class="no-underline f1 fw2 blue3 underline-hover">TLS 1.3</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-03-12T16:00:47Z">March 12, 2018 4:00PM</p>
+        <a href="/deprecating-old-tls-versions-on-cloudflare-dashboard-and-api/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Deprecating TLS 1.0 and 1.1 on api.cloudflare.com</h2>
+        </a>
+
+        <p class="gray1 lh-copy">On June 4, Cloudflare will be dropping support for TLS 1.0 and 1.1 on api.cloudflare.com. Additionally, the dashboard will be moved from www.cloudflare.com/a to dash.cloudflare.com and will require a browser that supports TLS 1.2 or higher....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/patrick/" class="fw5 f2 black no-underline">Patrick R. Donahue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-07-03T17:21:24+01:00">July 03, 2017 5:21PM</p>
+        <a href="/pal-a-container-identity-bootstrapping-tool/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A container identity bootstrapping tool</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Everybody has secrets. Software developers have many. Often these secrets—API tokens, TLS private keys, database passwords, SSH keys, and other sensitive data—are needed to make a service run properly and interact securely with other services....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/github/" class="no-underline f1 fw2 blue3 underline-hover">GitHub</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

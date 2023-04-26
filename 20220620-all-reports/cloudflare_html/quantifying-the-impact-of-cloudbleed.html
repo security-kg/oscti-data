@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Quantifying the Impact of &quot;Cloudbleed&quot;</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/quantifying-the-impact-of-cloudbleed/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Quantifying the Impact of &quot;Cloudbleed&quot;" />
+    <meta property="og:description" content="Last Thursday we released details on a bug in Cloudflare&#x27;s parser impacting our customers. It was an extremely serious bug that caused data flowing through Cloudflare&#x27;s network to be leaked onto the Internet." />
+    <meta property="og:url" content="https://blog.cloudflare.com/quantifying-the-impact-of-cloudbleed/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/example-leak.png" />
+    <meta property="article:published_time" content="2017-03-01T15:27:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-28T22:12:54.000Z" />
+    <meta property="article:tag" content="Bugs" />
+    <meta property="article:tag" content="Post Mortem" />
+    <meta property="article:tag" content="Privacy" />
+    <meta property="article:tag" content="Security" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Quantifying the Impact of &quot;Cloudbleed&quot;" />
+    <meta name="twitter:description" content="Last Thursday we released details on a bug in Cloudflare&#x27;s parser impacting our customers. It was an extremely serious bug that caused data flowing through Cloudflare&#x27;s network to be leaked onto the Internet." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/quantifying-the-impact-of-cloudbleed/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/example-leak.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Matthew Prince" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Bugs, Post Mortem, Privacy, Security" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@eastdakota" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Matthew Prince",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/49221151a644a624a8ddff8aebe89e8f?d=404&s=250",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/matthew-prince/",
+        "sameAs": [
+            "https://twitter.com/eastdakota"
+        ]
+    },
+    "headline": "Quantifying the Impact of &quot;Cloudbleed&quot;",
+    "url": "https://blog.cloudflare.com/quantifying-the-impact-of-cloudbleed/",
+    "datePublished": "2017-03-01T15:27:00.000Z",
+    "dateModified": "2018-08-28T22:12:54.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/example-leak.png",
+    "keywords": "Bugs, Post Mortem, Privacy, Security",
+    "description": "Last Thursday we released details on a bug in Cloudflare&#x27;s parser impacting our customers. It was an extremely serious bug that caused data flowing through Cloudflare&#x27;s network to be leaked onto the Internet.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-bugs tag-postmortem tag-privacy tag-security sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-bugs tag-postmortem tag-privacy tag-security ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Quantifying the Impact of &quot;Cloudbleed&quot;</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-03-01T15:27:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 01, 2017 3:27PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/matthew-prince/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/49221151a644a624a8ddff8aebe89e8f?d&#x3D;404&amp;s&#x3D;250" alt="Matthew Prince" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/matthew-prince" class="fw5 f3 no-underline black mr3">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Last Thursday we <a href="https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/">released details</a> on a bug in Cloudflare's parser impacting our customers. It was an extremely serious bug that caused data flowing through Cloudflare's network to be leaked onto the Internet. We fully patched the bug within hours of being notified. However, given the scale of Cloudflare, the impact was potentially massive.</p>
+<p>The bug has been dubbed “Cloudbleed.” Because of its potential impact, the bug has been written about extensively and generated a lot of uncertainty. The burden of that uncertainty has been felt by our partners, customers, and our customers’ customers. The question we’ve been asked the most often is: what risk does Cloudbleed pose to me?</p>
+<p>We've spent the last twelve days using log data on the actual requests we’ve seen across our network to get a better grip on what the impact was and, in turn, provide an estimate of the risk to our customers. This post outlines our initial findings.</p>
+<p>The summary is that, while the bug was very bad and had the potential to be much worse, based on our analysis so far: 1) we have found no evidence based on our logs that the bug was maliciously exploited before it was patched; 2) the vast majority of Cloudflare customers had no data leaked; 3) after a review of tens of thousands of pages of leaked data from search engine caches, we have found a large number of instances of leaked internal Cloudflare headers and customer cookies, but we have not found any instances of passwords, credit card numbers, or health records; and 4) our review is ongoing.</p>
+<p>To make sense of the analysis, it's important to understand exactly how the bug was triggered and when data was exposed. If you feel like you've already got a good handle on how the bug got triggered, <a href="#skip">click here</a> to skip to the analysis.</p>
+<h2 id="triggeringthebug">Triggering the Bug</h2>
+<p>One of Cloudflare's core applications is a stream parser. The parser scans content as it is delivered from Cloudflare's network and is able to modify it in real time. The parser is used to enable functions like automatically rewriting links from HTTP to HTTPS (Automatic HTTPS Rewrites), hiding email addresses on pages from email harvesters (Email Address Obfuscation), and other similar features.</p>
+<p>The Cloudbleed bug was triggered when a page with two characteristics was requested through Cloudflare's network. The two characteristics were: 1) the HTML on the page needed to be broken in a specific way; and 2) a particular set of Cloudflare features needed to be turned on for the page in question.</p>
+<p>The specific HTML flaw was that the page had to end with an unterminated attribute. In other words, something like:</p>
+<pre><code>&lt;IMG HEIGHT=&quot;50px&quot; WIDTH=&quot;200px&quot; SRC=&quot;
+</code></pre>
+<p>Here's why that mattered. When a page for a particular customer is being parsed it is stored in memory on one of the servers that is a part of our infrastructure. Contents of the other customers' requests are also in adjacent portions of memory on Cloudflare's servers.</p>
+<p>The bug caused the parser, when it encountered unterminated attribute at the end of a page, to not stop when it reached the end of the portion of memory for the particular page being parsed. Instead, the parser continued to read from adjacent memory, which contained data from other customers' requests. The contents of that adjacent memory was then dumped onto the page with the flawed HTML.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/03/example-leak.png" alt=""><br>
+<small>The screenshot above is an example of how data was dumped on pages. Most of the data was random binary data which the browser is trying to interpret as largely Asian characters. That is followed by a number of internal Cloudflare headers.</small></p>
+<p>If you had accessed one of the pages that triggered the bug you would have seen what likely looked like random text at the end of the page. The amount of data dumped was of random lengths limited to the size of the heap or when the parser happened across a character that caused the output to terminate.</p>
+<h2 id="codepathandanewparser">Code Path and a New Parser</h2>
+<p>In addition to a page with flawed HTML, the particular set of Cloudflare features that were enabled mattered because it determined the version of the parser that was used. We rolled out a new version of the parser code on 22 September 2016. This new version of the parser exposed the bug.</p>
+<p>Initially, the new parser code would only get executed under a very limited set of circumstances. Fewer than 180 sites from 22 September 2016 through 13 February 2017 had the combination of the HTML flaw and the set of features that would trigger the new version of the parser. During that time period, pages that had both characteristics and therefore would trigger the bug were accessed an estimated 605,037 times.</p>
+<p>On 13 February 2017, not aware of the bug, we expanded the circumstances under which the new parser would get executed. That expanded the number of sites where the bug could get triggered from fewer than 180 to 6,457. From 13 February 2017 through 18 February 2017, when we patched the bug, the pages that would trigger the bug were accessed an estimated 637,034 times. In total, between 22 September 2016 and 18 February 2017 we now estimate based on our logs the bug was triggered 1,242,071 times.</p>
+<p>The pages that typically triggered the bug tended to be on small and infrequently accessed sites. When one of these vulnerable pages was accessed and the bug was triggered, it was random what other customers would have content in memory adjacent that would then get leaked. Higher traffic Cloudflare customers would be more probable to have some data in memory because they received more requests and so, probabilistically, they're more likely to have their content in memory at any given time.</p>
+<p>To be clear, customers that had data leak did not need to have flawed HTML or any particular Cloudflare features enabled. They just needed to be unlucky and have their data in memory immediately following a page that triggered the bug.</p>
+<h2 id="anameskipahowamaliciousactorwouldexploitthebug"><a name="skip"></a><br>
+How a Malicious Actor Would Exploit the Bug</h2>
+<p>The Cloudbleed bug wasn't like a typical data breach. To analogize to the physical world, a typical data breach would be like a robber breaking into your office and stealing all your file cabinets. The bad news in that case is that the robber has all your files. The good news is you know exactly what they have.</p>
+<p>Cloudbleed is different. It's more akin to learning that a stranger may have listened in on two employees at your company talking over lunch. The good news is the amount of information for any conversation that's eavesdropped is limited. The bad news is you can't know exactly what the stranger may have heard, including potentially sensitive information about your company.</p>
+<p>If a stranger were listening in on a conversation between two employees, the vast majority of what they would hear wouldn't be harmful. But, every once in awhile, the stranger may overhear something confidential. The same is true if a malicious attacker knew about the bug and were trying to exploit it. Given that the data that leaked was random on a per request basis, most requests would return nothing interesting. But, every once in awhile, the data that leaked may return something of interest to a hacker.</p>
+<p>If a hacker were aware of the bug before it was patched and trying to exploit it then the best way for them to do so would be to send as many requests as possible to a page that contained the set of conditions that would trigger the bug. They could then record the results. Most of what they would get would be useless, but some would contain very sensitive information.</p>
+<p>The nightmare scenario we have been worried about is if a hacker had been aware of the bug and had been quietly mining data before we were notified by Google's Project Zero team and were able to patch it. For the last twelve days we've been reviewing our logs to see if there's any evidence to indicate that a hacker was exploiting the bug before it was patched. We’ve found nothing so far to indicate that was the case.</p>
+<h2 id="identifyingpatternsofmaliciousbehavior">Identifying Patterns of Malicious Behavior</h2>
+<p>For a limited period of time we keep a debugging log of requests that pass through Cloudflare. This is done by sampling 1% of requests and storing information about the request and response. We are then able to look back in time for anomalies in HTTP response codes, response or request body sizes, response times, or other unusual behavior from specific networks or IP addresses.</p>
+<p>We have the logs of 1% of all requests going through Cloudflare from 8 February 2017 up to 18 February 2017 (when the vulnerability was patched) giving us the ability to look for requests leaking data during this time period. Requests prior to 8 February 2017 had already been deleted. Because we have a representative sample of the logs for the 6,457 vulnerable sites, we were able to parse them in order to look for any evidence someone was exploiting the bug.</p>
+<p>The first thing we looked for was a site we knew was vulnerable and for which we had accurate data. In the early hours of 18 February 2017, immediately after the problem was reported to us, we set up a vulnerable page on a test site and used it to reproduce the bug and then verify it had been fixed.</p>
+<p>Because we had logging on the test web server itself we were able to quickly verify that we had the right data. The test web server had received 31,874 hits on the vulnerable page due to our testing. We had captured very close to 1% of those requests (316 were stored). From the sampled data, we were also able to look at the sizes of responses which showed a clear bimodal distribution. Small responses were from when the bug was fixed, large responses from when the leak was apparent.</p>
+<p>This gave us confidence that we had captured the right information to go hunting for exploitation of the vulnerability.</p>
+<p>We wanted to answer two questions:</p>
+<ol>
+<li>Did any individual IP hit a vulnerable page enough times that a meaningful amount of data was extracted? This would capture the situation where someone had discovered the problem on a web page and had set up a process to repeatedly download the page from their machine. For example, something as simple as running <code>curl</code> in a loop would show up in this analysis.<br>
+<br/></li>
+<li>Was any vulnerable page accessed enough times that a meaningful amount of data could have been extracted by a botnet? A more advanced hacker would have wanted to cover their footprints by using a wide range of IP addresses rather than repeatedly visiting a page from a single IP. To identify that possibility we wanted to see if any individual page had been accessed enough times and returned enough data for us to suspect that data was being extracted.</li>
+</ol>
+<h2 id="reviewingthelogs">Reviewing the Logs</h2>
+<p>To answer #1, we looked for any IP addresses that had hit a single page on a vulnerable site more than 1,000 times and downloaded more data than the site would normally deliver. We found 7 IP addresses with those characteristics.</p>
+<p>Six of the seven IP addresses were accessing three sites with three pages with very large HTML. Manual inspection showed that these pages did not contain the broken HTML that would have triggered the bug. They also did not appear in a database of potentially vulnerable pages that our team gathered after the bug was patched.</p>
+<p>The other IP address belonged to a mobile network and was traffic for a ticket booking application. The particular page was very large even though it was not leaking data, however, it did not contain broken HTML, and was not in our database of vulnerable pages.</p>
+<p>To look for evidence of #2, we retrieved every page on a vulnerable site that was requested more than 1,000 times during the period. We then downloaded those pages and ran them through the vulnerable version of our software in a test environment to see if any of them would cause a leak. This search turned up the sites we had created to test the vulnerability. However, we found no vulnerable pages, outside of our own test sites, that had been accessed more than 1,000 times.</p>
+<p>This leads us to believe that the vulnerability had not been exploited between 8 February 2017 and 18 February 2017. However, we also wanted to look for signs of exploitation between 22 September 2016 and 8 February 2017 — a time period for which we did not have sampled log data. To do that, we turned to our customer analytics database.</p>
+<h2 id="reviewingcustomeranalytics">Reviewing Customer Analytics</h2>
+<p>We store customer analytics data with one hour granularity in a large datastore. For every site on Cloudflare and for each hour we have the total number of requests to the site, number of bytes read from the origin web server, number of bytes sent to client web browsers, and the number of unique IP addresses accessing the site.</p>
+<p>If a malicious attacker were sending a large number of requests to exploit the bug then we hypothesized that a number of signals would potentially appear in our logs. These include:</p>
+<ul>
+<li>The ratio of requests per unique IP would increase. While an attacker could use a botnet or large number of machines to harvest data, we speculated that, at least initially, upon discovering the bug the hacker would send a large number of requests from a small set of IPs to gather initial data.</li>
+</ul>
+<p/>
+* The ratio of bandwidth per request would increase. Since the bug leaks a large amount of data onto the page, if the bug were being exploited then the bandwidth per request would increase.
+<p/>
+* The ratio of bandwidth per unique IP would also increase. Since you’d expect that more data was going to the smaller set of IPs the attacker would use to pull down data then the bandwidth per IP would increase.
+<p>We used the data from before the bug impacted sites to set the baseline for each site for each of these three ratios. We then tracked the ratios above across each site individually during the period for which it was vulnerable and looked for anomalies that may suggest a hacker was exploiting the vulnerability ahead of its public disclosure.</p>
+<p>This data is much more noisy than the sampled log data because it is rolled up and averaged over one hour windows. However, we have not seen any evidence of exploitation of this bug from this data.</p>
+<h2 id="reviewingcrashdata">Reviewing Crash Data</h2>
+<p>Lastly, when the bug was triggered it would, depending on what was read from memory, sometimes cause our parser application to crash. We have technical operations logs that record every time an application running on our network crashes. These logs cover the entire period of time the bug was in production (22 September 2016 – 18 February 2017).</p>
+<p>We ran a suite of known-vulnerable HTML through our test platform to establish the percentage of time that we would expect the application to crash.</p>
+<p>We reviewed our application crash logs for the entire period the bug was in production. We did turn up periodic instances of the parser crashing that align with the frequency of how often we estimate the bug was triggered. However, we did not see a signal in the crash data that would indicate that the bug was being actively exploited at any point during the period it was present in our system.</p>
+<h2 id="purgingsearchenginecaches">Purging Search Engine Caches</h2>
+<p>Even if an attacker wasn’t actively exploiting the bug prior to our patching it, there was still potential harm because private data leaked and was cached by various automated crawlers. Because the 6,457 sites that could trigger the bug were generally small, the largest percentage of their traffic comes from search engine crawlers. Of the 1,242,071 requests that triggered the bug, we estimate more than half came from search engine crawlers.</p>
+<p>Cloudflare has spent the last 12 days working with various search engines — including Google, Bing, Yahoo, Baidu, Yandex, DuckDuckGo, and others — to clear their caches. We were able to remove the majority of the cached pages before the disclosure of the bug last Thursday.</p>
+<p>Since then, we’ve worked with major search engines as well as other online archives to purge cached data. We’ve successfully removed more than 80,000 unique cached pages. That underestimates the total number because we’ve requested search engines purge and recrawl entire sites in some instances. Cloudflare customers who discover leaked data still online can report it by sending a link to the cache to <a href="/cdn-cgi/l/email-protection#7202130001170010071532111e1d0716141e1300175c111d1f"><span class="__cf_email__" data-cfemail="c7b7a6b5b4a2b5a5b2a087a4aba8b2a3a1aba6b5a2e9a4a8aa">[email&#160;protected]</span></a> and our team will work to have it purged.</p>
+<h2 id="analysisofwhatdataleaked">Analysis of What Data Leaked</h2>
+<p>The search engine caches provide us an opportunity to analyze what data leaked. While many have speculated that any data passing through Cloudflare may have been exposed, the way that data is structured in memory and the frequency of GET versus POST requests makes certain data more or less likely to be exposed. We analyzed a representative sample of the cached pages retrieved from search engine caches and ran a thorough analysis on each of them. The sample included thousands of pages and was statistically significant to a confidence level of 99% with a margin of error of 2.5%. Within that sample we would expect the following data types to appear this many times in any given leak:</p>
+<pre><code>  67.54 Internal Cloudflare Headers
+   0.44 Cookies
+   0.04 Authorization Headers / Tokens
+      0 Passwords
+      0 Credit Cards / Bitcoin Addresses
+      0 Health Records
+      0 Social Security Numbers
+      0 Customer Encryption Keys
+</code></pre>
+<p>The above can be read to mean that in any given leak you would expect to find 67.54 Cloudflare internal headers. You’d expect to find a cookie in approximately half of all leaks (0.44 cookies per leak). We did not find any passwords, credit cards, health records, social security numbers, or customer encryption keys in the sample set.</p>
+<p>Since this is just a sample, it is <em>not correct</em> to conclude that no passwords, credit cards, health records, social security numbers, or customer encryption keys were ever exposed. However, if there was any exposure, based on the data we’ve reviewed, it does not appear to have been widespread. We have also not had any confirmed reports of third parties discovering any of these sensitive data types on any cached pages.</p>
+<p>These findings generally make sense given what we know about traffic to Cloudflare sites. Based on our logs, the ratio of GET to POST requests across our network is approximately 100-to-1. Since POSTs are more likely to contain sensitive data like passwords, we estimate that reduces the potential exposure of the most sensitive data from 1,242,071 requests to closer to 12,420. POSTs that contain particularly sensitive information would then represent only a fraction of the 12,420 we would expect to have leaked.</p>
+<p>This is not to downplay the seriousness of the bug. For instance, depending on how a Cloudflare customer’s systems are implemented, cookie data, which would be present in GET requests, could be used to impersonate another user’s session. We’ve seen approximately 150 Cloudflare customers’ data in the more than 80,000 cached pages we’ve purged from search engine caches. When data for a customer is present, we’ve reached out to the customer proactively to share the data that we’ve discovered and help them work to mitigate any impact. Generally, if customer data was exposed, invalidating session cookies and rolling any internal authorization tokens is the best advice to mitigate the largest potential risk based on our investigation so far.</p>
+<h2 id="howtounderstandyourrisk">How to Understand Your Risk</h2>
+<p>We have tried to quantify the risk to individual customers that their data may have leaked. Generally, the more requests that a customer sent to Cloudflare, the more likely it is that their data would have been in memory and therefore exposed. This is anecdotally confirmed by the 150 customers whose data we’ve found in third party caches. The customers whose data appeared in caches are typically the customers that send the most requests through Cloudflare’s network.</p>
+<p>Probabilistically, we are able to estimate the likelihood of data leaking for a particular customer based on the number of requests per month (RPM) that they send through our network since the more requests sent through our network the more likely a customer’s data is to be in memory when the bug was triggered. Below is a chart of the number of total anticipated data leak events from 22 September 2016 – 18 February 2017 that we would expect based on the average number of requests per month a customer sends through Cloudflare’s network:</p>
+<pre><code> Requests per Month       Anticipated Leaks
+ ------------------       -----------------
+        200B – 300B         22,356 – 33,534
+        100B – 200B         11,427 – 22,356
+         50B – 100B          5,962 – 11,427
+          10B – 50B           1,118 – 5,926
+           1B – 10B             112 – 1,118
+          500M – 1B                56 – 112
+        250M – 500M                 25 – 56
+        100M – 250M                 11 – 25
+         50M – 100M                  6 – 11
+          10M – 50M                   1 – 6
+              &lt; 10M                     &lt; 1
+</code></pre>
+<p>More than 99% of Cloudflare’s customers send fewer than 10 million requests per month. At that level, probabilistically we would expect that they would have no data leaked during the period the bug was present. For further context, the 100th largest website in the world is estimated to handle fewer than 10 billion requests per month, so there are very few of Cloudflare’s 6 million customers that fall into the top bands of the chart above. Cloudflare customers can find their own RPM by logging into the Cloudflare Analytics Dashboard and looking at the number of requests per month for their sites.</p>
+<p>The statistics above assume that each leak contained only one customer’s data. That was true for nearly all of the leaks we reviewed from search engine caches. However, there were instances where more data may have been leaked. The probability table above should be considered just an estimate to help provide some general guidance on the likelihood a customer’s data would have leaked.</p>
+<h2 id="interimconclusion">Interim Conclusion</h2>
+<p>We are continuing to work with third party caches to expunge leaked data and will not let up until every bit has been removed. We also continue to analyze Cloudflare’s logs and the particular requests that triggered the bug for anomalies. While we were able to mitigate this bug within minutes of it being reported to us, we want to ensure that other bugs are not present in the code. We have undertaken a full review of the parser code to look for any additional potential vulnerabilities. In addition to our own review, we're working with the outside code auditing firm <a href="https://www.veracode.com/">Veracode</a> to review our code.</p>
+<p>Cloudflare’s mission is to help build a better Internet. Everyone on our team comes to work every day to help our customers — regardless of whether they are businesses, non-profits, governments, or hobbyists — run their corner of the Internet a little better. This bug exposed just how much of the Internet puts its trust in us. We know we disappointed you and we apologize. We will continue to share what we discover because we believe trust is critical and transparency is the foundation of that trust.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/bugs/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Bugs</a>
+        <a href="/tag/postmortem/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Post Mortem</a>
+        <a href="/tag/privacy/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Privacy</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-01-08T18:57:00Z">January 08, 2018 6:57PM</p>
+        <a href="/meltdown-spectre-non-technical/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">An Explanation of the Meltdown/Spectre Bugs for a Non-Technical Audience</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Last week the news of two significant computer bugs was announced. They've been dubbed Meltdown and Spectre and they take advantage of very technical systems that modern CPUs have implemented to make computers extremely fast....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/bugs/" class="no-underline f1 fw2 blue3 underline-hover">Bugs</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-09-08T10:55:03+01:00">September 08, 2015 10:55AM</p>
+        <a href="/weird-bug-of-the-day-twitter-in-app-browser-cant-visit-site/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Weird bug of the day: Twitter in-app browser can&#x27;t visit site</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We keep a close eye on tweets that mention CloudFlare because sometimes we get early warning about odd errors that we are not seeing ourselves through our monitoring systems. Towards the end of August we saw a small number of tweets like this one:...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/bugs/" class="no-underline f1 fw2 blue3 underline-hover">Bugs</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-03-19T15:15:54Z">March 19, 2015 3:15PM</p>
+        <a href="/openssl-security-advisory-of-19-march-2015/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">OpenSSL Security Advisory of 19 March 2015</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today there were multiple vulnerabilities released in OpenSSL, a cryptographic library used by CloudFlare (and most sites on the Internet)....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rdl/" class="fw5 f2 black no-underline">Ryan Lackey</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/bugs/" class="no-underline f1 fw2 blue3 underline-hover">Bugs</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/openssl/" class="no-underline f1 fw2 blue3 underline-hover">OpenSSL</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ssl/" class="no-underline f1 fw2 blue3 underline-hover">SSL</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2011-11-18T23:08:00Z">November 18, 2011 11:08PM</p>
+        <a href="/cloudflare-tips-troubleshooting-common-problems/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare Tips: Troubleshooting Common Problems</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Debugging technical issues online can be tricky. There are many moving pieces; it can be an isolated network connection with the ISP, an issue with your server or one of CloudFlare's data centers could be temporarily having a problem....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/damon-billian/" class="fw5 f2 black no-underline">Damon Billian</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/bugs/" class="no-underline f1 fw2 blue3 underline-hover">Bugs</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tips/" class="no-underline f1 fw2 blue3 underline-hover">Tips</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ninjas/" class="no-underline f1 fw2 blue3 underline-hover">Ninjas</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

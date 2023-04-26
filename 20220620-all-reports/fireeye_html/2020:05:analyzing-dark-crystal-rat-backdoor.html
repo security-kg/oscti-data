@@ -1,0 +1,2022 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+
+<script>
+    var companyDetails6Sense = localStorage.getItem('_6senseCompanyDetails');
+
+    if(null != companyDetails6Sense || companyDetails6Sense != "" || companyDetails6Sense != undefined){
+		var jsonVal = JSON.parse(companyDetails6Sense);
+
+        var companyRevenueRange = jsonVal.company.revenue_range;
+        var companyCountry = jsonVal.company.country;
+        var companyIndustry = jsonVal.company.industry;
+        var companyName = jsonVal.company.name;
+        var companyRegion = jsonVal.company.region;
+        var companyDomain = jsonVal.company.domain;
+    	var segments = JSON.stringify(jsonVal.segments);
+    	
+        window.dataLayer=window.dataLayer ||[];
+        window.dataLayer.push({
+                "company_industry" : companyIndustry,
+                "company_name" : companyName,
+                "company_revenue" : companyRevenueRange,
+                "company_country" : companyCountry,
+                "company_region" : companyRegion,
+            	"company_domain" : companyDomain,
+            	"segments" : segments
+        });
+    }
+
+</script>
+
+<style>.async-hide { opacity: 0 !important} </style>
+<script>(function(a,s,y,n,c,h,i,d,e){s.className+=' '+y;h.start=1*new Date;
+h.end=i=function(){s.className=s.className.replace(RegExp(' ?'+y),'')};
+(a[n]=a[n]||[]).hide=h;setTimeout(function(){i();h.end=null},c);h.timeout=c;
+})(window,document.documentElement,'async-hide','dataLayer',4000,
+{"GTM-5ZX7QTZ":true});</script>
+
+<title>Analyzing Dark Crystal RAT, a C# Backdoor | FireEye Inc</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="alternate" type="application/atom+xml" title="Atom Feed for &#39;Analyzing Dark Crystal RAT, a C# Backdoor&#39;" href="/content/fireeye-www/en_US/blog/threat-research/2020/05/analyzing-dark-crystal-rat-backdoor/_jcr_content.feed">
+<link rel="canonical" href="https://www.fireeye.com/blog/threat-research/2020/05/analyzing-dark-crystal-rat-backdoor.html">
+<meta name="language" content="en">
+<meta name="locale" content="en_US">
+<meta http-equiv="cleartype" content="on">
+<meta name="HandheldFriendly" content="True">
+<meta name="MobileOptimized" content="320">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="We recently worked on a new C# variant of Dark Crystal RAT and now aim to help defenders look for indicators of compromise and other telltale signs of this malware.
+">
+
+<meta itemprop="name" content="Analyzing Dark Crystal RAT, a C# Backdoor">
+<meta itemprop="description" content="We recently worked on a new C# variant of Dark Crystal RAT and now aim to help defenders look for indicators of compromise and other telltale signs of this malware.
+">
+<meta itemprop="image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta name="twitter:site" content="@FireEye">
+<meta name="twitter:title" content="Analyzing Dark Crystal RAT, a C# Backdoor">
+<meta name="twitter:description" content="We recently worked on a new C# variant of Dark Crystal RAT and now aim to help defenders look for indicators of compromise and other telltale signs of this malware.
+">
+<meta name="twitter:creator" content="@FireEye">
+<meta name="twitter:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta property="og:title" content="Analyzing Dark Crystal RAT, a C# Backdoor">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.fireeye.com/blog/threat-research/2020/05/analyzing-dark-crystal-rat-backdoor.html">
+<meta property="og:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+<meta property="og:description" content="We recently worked on a new C# variant of Dark Crystal RAT and now aim to help defenders look for indicators of compromise and other telltale signs of this malware.
+">
+<meta property="og:site_name" content="FireEye">
+<meta property="fb:admins" content="45127269202">
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery.min.js"></script>
+
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MVGC8KK');</script>
+
+
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite/csrf.min.js"></script>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_nav.min.js"></script>
+<script type="text/javascript">
+var cookiesOK = $.cookie("ec-privacy");
+var fdc =fdc || {};
+var onAccept = function () {
+	$.cookie("ec-privacy", "accept", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var onDecline = function () {
+	$.cookie("ec-privacy", "decline", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var ipLocation = (function () {
+	var banner ="#cookie-privacy-banner";
+
+	/* Show the privacy notification banner. */
+	var showBanner = function (banner) {
+		jQuery(banner).show();
+	};
+
+	/* Suppress the privacy notification banner. */
+	var hideBanner = function (banner) {
+		jQuery(banner).hide();
+	};
+
+	/* These are the country codes for the countries subject to EC privacy laws.
+	 * We will check to see if a visitor is coming from one of these countries.
+	 * If they are, we display a privacy notification banner. If not, we
+	 * do nothing. */
+	var countries = {
+		"AT": true,"BE": true,"BG": true,"HR": true,"CY": true,"CZ": true,"DK": true,
+		"EE": true,"FI": true,"FR": true,"DE": true,"GR": true,"HU": true,"IE": true,
+		"IT": true,"LV": true,"LT": true,"LU": true,"MT": true,"NL": true,"PL": true,
+		"PT": true,"RO": true,"SK": true,"SI": true,"ES": true,"SE": true,"GB": true
+	};
+	var defaultSite = "US";
+
+	var onSuccess = function (geoipResponse) {
+		fdc.geoipresponse=geoipResponse;
+		/* There's no guarantee that a successful response object
+		 * has any particular property, so we need to code defensively. */
+		if (!geoipResponse.country.iso_code) {
+			hideBanner(banner);
+			return;
+		}
+		//
+		if (location.host.indexOf("stage") >= 0 && geoipResponse.country.iso_code === "SG") {
+            geoipResponse.country.iso_code = "ES"
+        }
+		/* ISO country codes are in upper case. */
+		var code = geoipResponse.country.iso_code;
+			
+		
+		if ((countries[code]) && (cookiesOK == undefined)) {
+			showBanner(banner);
+		}
+		else {
+			hideBanner(banner);
+		}
+	};
+
+	/* We don't really care what the error is. */
+	var onError = function (error) {
+		hideBanner(banner);
+	};
+
+	return function () {
+		geoip2.country( onSuccess, onError );
+	};
+}());
+ipLocation();
+</script>
+<div class="htmlpassthru_836d htmlpassthru">
+
+<script type="text/javascript">
+    if (!String.prototype.includes) {
+        String.prototype.includes = function() {
+            return String.prototype.indexOf.apply(this, arguments) !== -1;
+        };
+    }
+var userAgent = navigator.userAgent,
+gomezAgent = userAgent.includes("GomezAgent"),
+prtgAgent = userAgent.includes("PRTG Network Monitor");
+
+if (gomezAgent || prtgAgent) {
+    cookiesOK = "decline";
+}
+
+if (cookiesOK != "decline") {
+    // Google Analytics was here. Now it's in Tealium and GTM.
+}
+// Temporary patch for AA issue.
+if(typeof _satellite == "undefined") {
+    _satellite = {};
+    _satellite.track = function(){};
+}
+</script>
+<style>
+@media ( max-width : 959px) {
+    .g04 .megamenu .n03-sub_table .n03-sub_cell, .g04 .megamenu .separator {
+        display: block;
+    }
+    .g04 .megamenu .n03_list-item-sub>.megamenu-cta {
+        padding: 0;
+    }
+    .g04 .megamenu .n03-sub_cell.n03-sub_cell-utility {
+        padding: 11px 0 11px 10px;
+    }
+}
+
+@media ( min-width : 48em) {
+    .cta-bar .n01 .n01_cell {
+        width: auto;
+    }
+}
+
+/* styles for the CTA bar test */
+.n01.n01v1 .n01_cell {
+    background-color: #222;
+    border: 1px solid #444;
+}
+
+.n01.n01v1 .n01_cell .ficon, .n01.n01v1 .n01_cell .n01_label, .n01.n01v1 .n01_text
+    {
+    color: #fff;
+}
+
+@media ( min-width : 48em) {
+    .n01.n01v1 .n01_cell {
+        background-color: transparent;
+        border: none;
+    }
+    .n01.n01v1 .n01_link {
+        background-color: #222;
+        border: 1px solid #444;
+        border-right: 0;
+    }
+}
+/* fix for new footer */
+.g03v1 .g03-s-i:after {
+    left: -3px;
+}
+/* fix for tables */
+span.nowrap {
+    white-space: nowrap;
+}
+/* fix for blog cta */
+.blog-cta {
+    border: 1px solid #dadadb;
+    background-color: #ebebed;
+    margin-bottom: 10px;
+    line-height: 0;
+}
+</style>
+<link rel="stylesheet" type="text/css" href="https://cloud.typography.com/6746836/6977592/css/fonts.css" />
+<link rel="stylesheet" type="text/css" href="/content/dam/fireeye-www/fw/css/patch.css?v=1" />
+<script type="text/javascript">
+var addthis_config = addthis_config||{};
+    addthis_config.data_track_clickback = false;
+var addthis_share = {
+   url: window.location.href
+};
+</script>
+<style>
+/* fix for IE */
+.uc-he01v1 .uc-he01_container .background {
+    max-height: 470px;
+    position: absolute;
+}
+.uc-he01v2 .uc-he01_container .background {
+    position: absolute;
+}
+@media (max-width: 48em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 320px;
+    }
+}
+@media (min-width: 54em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 600px;
+    }
+}
+</style>
+<style>
+/* Update the images used in the Table component. */
+.c09v1 .tablesorter-default .header, .c09v1 .tablesorter-default .tablesorter-header {
+background-position-x: calc(100% - 4px);
+background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjc2NDE0RUUyNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjc2NDE0RUUzNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkY2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI1MDA2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz567IGQAAAApklEQVR42mL8//8/A0kApAELlgJiG2xyTDjMcQFiayDmRJfApkEbiJWgiq2J0eCCxLYBYkF8GjAUAIEvLg2C2JwAdZ42Ng022DyJ7kwmJFOM8YS+INRABkZSI45sDSAnxRFQuweIj8D8cA+Iz+JR/B6kGD2UQALf8ZiOEawgU45iUQyy/SqumD4C1YgMNhNKS3vwGYBNw1WoM75jdSKpGYjkiAMIMAAPu279CuYueAAAAABJRU5ErkJggg==)
+}
+.c09v1 .tablesorter-default thead .headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerAsc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEY5Njc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZBNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0Rjc2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0Rjg2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5TuQesAAAAp0lEQVR42mL8//8/A0kApAELNgbicmxyuDTsBuJ3QCxIjIbQ/wjQQYyGu/9RgRI+DeX/McFuXBqUoO7GBkKxaZj5Hze4i67B5T9hAA5mRlIjjmwNSkAcR0DtHiA+wgTl3APis3gUvwcpBjGYkARBAt/xmM6ArgFkylEsikG2X8WmAWbLezSxzcgcJnzWYzMAm4arUGd8x+pEHPlBCohtsMmRHHEAAQYAbP+KkOIl8zUAAAAASUVORK5CYII=)}
+.c09v1 .tablesorter-default thead .headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerDesc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEZENjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZFNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkI2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0RkM2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6nOhWUAAAAqElEQVR42mL8//8/AymACYe4FBDbkKLBBYitgZiTGA3aQKwEVWxNjAYXJDbIWYL4NGAoAAJfXBoEsTkB6jxtbBpssHkS3ZlMSKYY4wl+QVgwM1Ir4ghqALnxPwFcDlYJchIUz/yPG9yFqUPWoATE73BoCMWmAYTLsSjejawGXQMD1HpkoERIQyiS4g50eWwaGKDOAPlHEF2OBUdwV0CD+j26BMkxDRBgALvSCpUQlZEGAAAAAElFTkSuQmCC)}
+.c09v1 .tablesorter-default thead .sorter-false {
+    background-image: none;
+}
+@media (max-width: 41.9125em){
+    .c09.c09v1.has-data-label tr>:not(:first-child):before {
+        width: auto; min-width: 35%;
+    }
+}
+</style>
+<script>
+$(document).ready(function(){
+    if(typeof(ipLocation) !== "undefined" && typeof fdc.geoipResponse === "undefined"){ipLocation();}
+    if(typeof fdc.geoipResponse !== "undefined"){showCountryNotification(fdc.geoipResponse);}
+    if(typeof fdc.geoipResponse !== "undefined" && typeof fdc.geoipResponse.country !== "undefined" && fdc.geoipResponse.country.is_in_european_union && ($.cookie("ec-privacy") == undefined)){jQuery("#cookie-privacy-banner").show();}
+});
+function showCountryNotification(geoipResponse) {
+	if (!geoipResponse.country || !geoipResponse.country.iso_code) {
+        return;
+    }
+	var code = geoipResponse.country.iso_code,
+	    langIndex = code === "FR" ? 2 : code === "DE" ? 3 : code === "JP" ? 4 : code === "KR" ? 5 : 1;
+	if (langIndex > 1) {
+		$('.c08_modal.lang').addClass("is-open");
+		$('.c08_modal.lang .col:nth-child(' + (langIndex - 1) + ')').show();
+		$('.c08_modal.lang, .c08_modal.lang [data-behavior="dismiss-c08"]').click(function(){
+		    $.cookie("country-notification", "decline", { path: "/", expires: 365 });
+		    closec08();
+		});
+		$('.c08_modal.lang .c08').click(function(e){
+		    e.stopPropagation();
+		});
+		if (($.cookie("country-notification") === "decline") || $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href").indexOf(".html") < 0) {
+		    closec08();
+		} else {
+		    $(".c08_modal.lang .btn").eq(langIndex - 2).attr("href", $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href"));
+		}
+	}
+}
+</script>
+<script>    
+     var _6SenseJsonObj = localStorage.getItem('_6senseCompanyDetails'),
+         _6SenseTime = localStorage.getItem('_6senseCompanyDetails-timestamp'),
+         isJsonStale = _6SenseTime === null ? true : Date.now() - parseInt(_6SenseTime) > 86400000; // 86400000 = 1 day in ms
+     
+     window._6si = window._6si || [];
+     window._6si.push(['enableEventTracking', true]);
+     window._6si.push(['setToken', '1322340356018696d853e0ac6f7ce3a2']);
+     window._6si.push(['setEndpoint', 'b.6sc.co']);
+     if(_6SenseJsonObj === null || isJsonStale){
+       window._6si.push(['enableCompanyDetails', true]);
+       window._6si.push(['setEpsilonKey', '325d6d60e24c7cfc3a782839d85ce08c8d3bb27c']);
+       localStorage.setItem('_6senseCompanyDetails-timestamp', Date.now());
+     }  
+    (function () {
+          var gd = document.createElement('script');
+      gd.type = 'text/javascript';
+      gd.async = true;
+      gd.src = '//j.6sc.co/6si.min.js';
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(gd, s);
+     })();
+</script>
+<script>
+    var jsonObj;
+
+    function targetPageParams() { 
+        jsonObj = localStorage.getItem('_6senseCompanyDetails');
+        if(jsonObj) {
+        	var jsonVal = JSON.parse(jsonObj);
+            return { 
+                "companyRevenueRange": jsonVal.company.revenue_range, 
+                "companyCountry": jsonVal.company.country, 
+                "companyIndustry": jsonVal.company.industry,
+                "companyName": jsonVal.company.name,
+                "companyRegion": jsonVal.company.region,
+                "companyDomain": jsonVal.company.domain,
+                "segments": JSON.stringify(jsonVal.segments)
+            }; 
+        }
+     }; 
+</script>
+<script>
+$(document).ready(function(){
+    $(".loadmore").on("click", function(){$(".list.parbase").addClass("no-max-height");});
+    // Don't show title text for textures.
+    $(".texture img").attr("title", "");
+});
+</script>
+<style>
+.no-max-height .c11v9 h4{
+    max-height: none !important;
+}
+.g04 #header-search .search-field_submit:after {
+    font-size: 9px;
+}
+.c11v8.hideLinkText .btn {
+    display: inline-block;
+}
+/* CTA fix */
+.g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+    padding: 0;
+    margin: 0 0 0 10px;
+    max-width: 1210px;
+}
+.g04 .megamenu-tab .has-inner-cta .col-wrap {
+    padding: 40px 0;
+}
+.g04 .n03-sub_container[data-columns="1"] .megamenu-cta {
+    width: 50%;
+}
+.g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+    width: 33.9%;
+}
+.g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell {
+    width: calc(50% - 60px);
+}
+.g04 .n03-sub_container[data-columns="3"] .megamenu-cta {
+    width: 25%;
+}
+.g04 .n03-sub_container[data-columns="4"] .megamenu-cta {
+    width: 20%;
+}
+.g04 .megamenu-cta h5 {
+    line-height: 1.4;
+}
+html .g04 header .megamenu-cta h5 {
+    font-weight: 500;
+    font-size: 15px;
+    color: #44474d;
+}
+html .g04 header .megamenu-cta p {
+    font-weight: 300;
+    color: #44474d;
+}
+.g04 .n03-sub_table > .megamenu-cta {
+    background: none;
+    padding: 0;
+}
+.g04 .megamenu-cta .n03_utility {
+    border: none;
+    height: 100%;
+}
+.g04 .megamenu-cta .n03_utility_cell {
+    display: block;
+    width: auto;
+    margin-left: 30px;
+}
+/* Un/re-comment to add/remove in the line to the left of the CTA in the megamenu. */
+.g04 .n03-sub_table .col-wrap:not(:last-child) .separator.disabled {
+    border-right-color: #ebebed;
+}
+
+/* Put a grid over the texture from a neighboring grid. */
+.force {
+    z-index: 15;
+    position: relative;
+}
+/* Remove the gradient above the tiles on blog pages and reduce the space there. */
+.iparsys + .l_container>div.gradient-top {
+    background-image: none;
+}
+.iparsys + .l_container>.gradient-top>div>.g {
+    padding: 0;
+}
+@media (min-width: 35em) {
+    .entries .highlightFirst .c11v9 .c11-image-div {
+        border-left: 1px solid #dadadb;
+        border-right: 1px solid #dadadb;
+    }
+}
+@media (max-width: 1024px) {
+    .uc-he01v2 .panel .asset .image img {
+        max-height: 200px;
+	max-width: 300px;
+    }
+}
+/* mobile view for MegaMenu CTA. */
+@media (max-width: 1024px) {
+    .g04 .megamenu-tab.open .n03_list-item-sub.has-inner-cta {
+        padding-bottom: 0;
+    }
+    .g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell,
+    .g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+        width: 100%;
+        display: block;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+        margin: 0;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container .col-wrap {
+        padding: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell {
+        margin-left: 15px;
+        margin-right: 22px;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(1) {
+        padding-bottom: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(2) {
+        padding-top: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell h5,
+    .g04 .megamenu-cta .n03_utility_cell p {
+        font-size: 12px;
+    }
+    .content-2-par .megamenus .n03-sub_table .megamenu-cta {
+        border-radius: 0;
+    }
+}
+/* Training pages side design. */
+  .training-side-box {background: url('/content/dam/fireeye-www/brand/homepage-banner-images/hpb-bg-testimonial-red.jpg') left no-repeat; background-size: cover; padding:30px; border: 1px solid #dadadb; margin-bottom: 20px;}
+  .training-side-text {color: #ffffff;}
+  .training-side-text a:hover {color: #ffffff; text-decoration: underline;}
+
+/* Avoid column breaks in ordered lists. */
+  .c00 ol > li {page-break-inside: avoid; margin-bottom: 15px;}
+
+/* Safari needs this on html to stop side scrolling, not just on the body. */
+html {overflow-x:hidden;}
+/* Make sure the footer is above a texture that precedes it. */
+#g03-footer {z-index: 725;}
+/* Allow border for linked images. */
+.border>a>img {border: 1px solid #dadadb;}
+/* Allows for easy scrollable text boxes on blog pages right in the Blog Text component. */
+table.limitedHeight td {
+    height: 350px;
+    display: block;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding-bottom: 0;
+}
+/* Fix for edge case in Safari where page title in breadcrumbs wraps when the title is just the right length. */
+.g02_list_item:last-child span {
+    min-width: 360px;
+    display: block;
+}
+</style></div>
+
+<link rel="stylesheet" href="/etc/designs/fireeye-www/clientlibs_fw-2019.min.css" type="text/css">
+<link rel="stylesheet" href="/etc/clientlibs/fireeye-blog/clientlibs_base.min.css" type="text/css">
+<link rel="icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+<link rel="shortcut icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" data-redesign="redesign-2019"><script type="text/javascript">window.Granite = window.Granite || {}; window.Granite.csrf = true;</script>
+
+
+<div class="clientcontext parbase"><script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/utils.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/jquery.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/shared.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/lodash/modern.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/cq/personalization/clientlib/personalization/kernel.min.js"></script>
+<script type="text/javascript">
+    $CQ(function() {
+        CQ_Analytics.SegmentMgr.loadSegments("\/etc\/segmentation");
+        CQ_Analytics.ClientContextUtils.init("\/etc\/clientcontext\/default", "\/content\/fireeye\u002Dwww\/en_US\/blog\/threat\u002Dresearch\/2020\/05\/analyzing\u002Ddark\u002Dcrystal\u002Drat\u002Dbackdoor");
+
+        
+    });
+</script>
+</div>
+
+
+<div class="masthead_v2 masthead-v2">
+<div class="g04 masthead g04v1">
+
+
+<div class="bottom-bar">
+<div class="tab">
+<span class="ficon ficon-warning"></span>
+<p><a class="contact_bar" href="/company/incident-response.html">Report an Incident</a></p>
+</div>
+<div class="tab">
+<span class="ficon ficon-phone2"></span>
+<p><a class="contact_bar" href="/company/contact-us.html">Contact Us</a></p>
+</div>
+</div>
+<div class="cta-bar">
+<div class="content-well">
+<ul>
+<li>
+<a class="contact_bar" href="/company/contact-us.html">
+<span class="g04_label">Contact Us</span><span class="g04_icon"><span class="ficon ficon-phone3"></span></span>
+</a>
+</li>
+<li style="display: none;" id="liveagent_button_online_573a00000008kP3">
+<a class="contact_bar" href="javascript://Chat" onclick="liveagent.startChat('573a00000008kP3')">
+<span class="g04_label">Chat with an Expert</span><span class="g04_icon"><span class="ficon ficon-chat"></span></span>
+</a>
+</li>
+<li class="red">
+<a class="contact_bar" href="/company/incident-response.html">
+<span class="g04_label">Report an Incident</span><span class="g04_icon"><span class="ficon ficon-incident"></span></span>
+</a>
+</li>
+</ul>
+</div>
+</div>
+
+<script type="text/javascript">
+    if (!window._laq) { window._laq = []; }
+    window._laq.push(function(){
+    	liveagent.showWhenOnline('573a00000008kP3', document.getElementById('liveagent_button_online_573a00000008kP3'));
+    });
+</script>
+<script type="text/javascript" src="https://c.la2c2.salesforceliveagent.com/content/g/js/34.0/deployment.js"></script>
+<script type="text/javascript">
+    liveagent.init("https://d.la2c2.salesforceliveagent.com/chat", "572a0000000H8aJ", "00D3000000063LS");
+</script><header role="banner" itemscope itemtype="http://schema.org/WPHeader">
+<div class="language-and-search"> <div class="search">
+<div class="content-searchbox searchbox">
+<a class="g01_options-option option-search" href="#header-search" data-for="q" data-behavior="showHeaderMenu focusField">Search</a>
+<div class="option-menu option-menu_search" id="header-search">
+<form method="get" action="/search.html">
+<fieldset class="search-field" title="Search FireEye.com">
+<label class="search-field_label" for="q">Search FireEye.com</label>
+<input class="input-text search-field_text" type="text" name="q" id="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-locale="en_US" placeholder="Search FireEye.com">
+<div id="searchboxsuggestions"></div>
+<button class="btn btn-secondary search-field_submit" type="submit">Go</button>
+</fieldset>
+</form>
+</div>
+</div>
+</div>
+</div>
+<div class="logo-and-megamenu">
+<div class="logo" itemscope itemtype="https://schema.org/Brand">
+<a href="https://www.fireeye.com"><img src="/content/dam/fireeye-www/fw/images/fe-logo-color.svg" alt="FireEye" itemprop="logo" class="fireeye" /></a>
+</div>
+<nav class="megamenu">
+<ul><li class="megamenu-tab" data-curry="/blog.html" data-link="/products.html">
+<h4 class="megamenu-title">
+<a href="/products.html" itemprop="url" class="MegaMenus">Products</a>
+</h4>
+<div class="content-0-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Enterprise Security</h4><ul><li itemprop="url"><a href="/products/helix.html" itemprop="name" class="MegaMenus">Helix Security Platform</a></li>
+<li itemprop="url"><a href="/products/network-security.html" itemprop="name" class="MegaMenus">Network Security and Forensics</a></li>
+<li itemprop="url"><a href="/products/endpoint-security.html" itemprop="name" class="MegaMenus">Endpoint Security</a></li>
+<li itemprop="url"><a href="/products/email-security.html" itemprop="name" class="MegaMenus">Email Security</a></li>
+<li itemprop="url"><a href="/products/cloudvisory.html" itemprop="name" class="MegaMenus">Cloudvisory</a></li>
+<li itemprop="url"><a href="/products/detection-on-demand.html" itemprop="name" class="MegaMenus">Detection On Demand</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Security For:</h4><ul><li itemprop="url"><a href="/products/cloud-security.html" itemprop="name" class="MegaMenus">Cloud</a></li>
+<li itemprop="url"><a href="/products/financial-services.html" itemprop="name" class="MegaMenus">Financial Services</a></li>
+<li itemprop="url"><a href="/products/government.html" itemprop="name" class="MegaMenus">Government</a></li>
+<li itemprop="url"><a href="/products/healthcare.html" itemprop="name" class="MegaMenus">Healthcare</a></li>
+<li itemprop="url"><a href="/products/industrial-systems-and-critical-infrastructure-security.html" itemprop="name" class="MegaMenus">Industrial Control Systems</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  @media (max-width: 1024px) {
+    .megamenu-tab .parsys .megamenus .megamenu-cta {
+      display: none;
+    }
+  }
+  .content-0-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-customers.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 0 60px;
+    border: 0 solid #ffffff;
+  }
+  .content-0-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Customer Stories</h5>
+<p>Explore some of the companies who are succeeding with&nbsp;FireEye.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-2E5799 compact" href="/customers.html" id="learn-more-intel">Read the Stories</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="view-all-bar">
+<a href="/products.html" class="MegaMenus">
+VIEW ALL PRODUCTS</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/mandiant.html">
+<h4 class="megamenu-title">
+<a href="/mandiant.html" itemprop="url" class="MegaMenus">Mandiant Solutions</a>
+</h4>
+<div class="content-1-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<ul><li itemprop="url"><a href="/mandiant/threat-intelligence.html" itemprop="name" class="MegaMenus">Threat Intelligence</a></li>
+<li itemprop="url"><a href="/mandiant/security-validation.html" itemprop="name" class="MegaMenus">Security Validation</a></li>
+<li itemprop="url"><a href="/mandiant/managed-detection-and-response.html" itemprop="name" class="MegaMenus">Managed Defense</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<ul><li itemprop="url"><a href="/mandiant/incident-response.html" itemprop="name" class="MegaMenus">Incident Response</a></li>
+<li itemprop="url"><a href="/mandiant/cyber-security-consulting.html" itemprop="name" class="MegaMenus">Cyber Security Consulting</a></li>
+<li itemprop="url"><a href="/mandiant/expertise-on-demand.html" itemprop="name" class="MegaMenus">Expertise On Demand</a></li>
+<li itemprop="url"><a href="/services/training.html" itemprop="name" class="MegaMenus">Cyber Security Training</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-1-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-mandiant.jpg) center no-repeat;
+    background-size: cover;
+    background-position: bottom;
+    border-radius: 60px 0 0 60px;
+    border: 0 solid #ffffff;}
+  .content-1-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Mandiant Advantage</h5>
+<p>The new standard in threat intelligence.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-B2282D expand" href="/mandiant/advantage.html">Learn More</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="view-all-bar">
+<a href="/mandiant.html" class="MegaMenus">
+VIEW ALL Mandiant Solutions</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/customers.html">
+<h4 class="megamenu-title">
+<a href="/company/customers.html" itemprop="url" class="MegaMenus">Customers</a>
+</h4>
+<div class="content-2-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+ <div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Customers</h4><ul><li itemprop="url"><a href="/customers.html" itemprop="name" class="MegaMenus">Customer Stories</a></li>
+<li itemprop="url"><a href="/company/customers.html" itemprop="name" class="MegaMenus">Customer Success</a></li>
+<li itemprop="url"><a href="https://fireeyecommunity.force.com/CustomerCommunity/s/" target="_blank" itemprop="name" class="MegaMenus">Customer Portal</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Get Support</h4><ul><li itemprop="url"><a href="/support/contacts.html" itemprop="name" class="MegaMenus">Contact Support</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Find Answers</h4><ul><li itemprop="url"><a href="/support/programs.html" itemprop="name" class="MegaMenus">Support Programs</a></li>
+<li itemprop="url"><a href="/support/notices.html" itemprop="name" class="MegaMenus">Support Notices</a></li>
+<li itemprop="url"><a href="/support/products.html" itemprop="name" class="MegaMenus">Supported Products</a></li>
+<li itemprop="url"><a href="https://community.fireeye.com/s/support-community" target="_blank" itemprop="name" class="MegaMenus">Communities</a></li>
+<li itemprop="url"><a href="https://docs.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">Documentation Portal</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-2-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-support.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-2-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Support</h5>
+<p>A global network of support experts available 24x7. We offer simple and flexible support programs to maximize the value of your FireEye products and services.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-2E5799 compact" href="/support.html">Get Support</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/partners.html">
+<h4 class="megamenu-title">
+<a href="/partners.html" itemprop="url" class="MegaMenus">Partners</a>
+</h4>
+<div class="content-3-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Partners</h4><ul><li itemprop="url"><a href="/partners.html" itemprop="name" class="MegaMenus">Partners Overview</a></li>
+<li itemprop="url"><a href="/partners/resellers.html" itemprop="name" class="MegaMenus">FireEye Affinity Resellers</a></li>
+<li itemprop="url"><a href="/partners/strategic-technology-partners.html" itemprop="name" class="MegaMenus">Technology Partners</a></li>
+<li itemprop="url"><a href="/partners/strategic-technology-partners/cyber-risk-insurance.html" itemprop="name" class="MegaMenus">Cyber Risk Partners</a></li>
+<li itemprop="url"><a href="/partners/global-solution-providers.html" itemprop="name" class="MegaMenus">Global Solution Providers</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Partner Resources</h4><ul><li itemprop="url"><a href="https://partners.fireeye.com/directory/" target="_blank" itemprop="name" class="MegaMenus">Partner Locator</a></li>
+<li itemprop="url"><a href="http://training.fireeye.com/" target="_blank" itemprop="name" class="MegaMenus">Partner Education Center</a></li>
+<li itemprop="url"><a href="/support.html" itemprop="name" class="MegaMenus">Support</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Partnering with FireEye</h4><ul><li itemprop="url"><a href="https://www2.fireeye.com/Partner-Request-LP-New.html" target="_blank" itemprop="name" class="MegaMenus">Become a Partner</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-3-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-partners.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-3-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Partner Portal</h5>
+<p>Access for our registered Partners to help you be successful with FireEye.
+Collateral, deal registration, request for funds, training, enablement, and more.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-F99B1C compact mm-cta" href="https://partners.fireeye.com/" target="_blank">Partner Portal</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/current-threats.html">
+<h4 class="megamenu-title">
+<a href="/current-threats.html" itemprop="url" class="MegaMenus">Resources</a>
+</h4>
+<div class="content-4-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub " id="mandiant-mega-menu">
+<div class="n03-sub_container" data-columns="3">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Intelligence Briefings and Bulletins</h4><ul><li itemprop="url"><a href="/current-threats/annual-threat-report.html" itemprop="name" class="MegaMenus">Annual Threat Reports</a></li>
+<li itemprop="url"><a href="/current-threats/threat-intelligence-reports.html" itemprop="name" class="MegaMenus">Threat Intelligence Reports</a></li>
+<li itemprop="url"><a href="/current-threats/reports-by-industry.html" itemprop="name" class="MegaMenus">Threat Intelligence Reports by Industry</a></li>
+<li itemprop="url"><a href="/current-threats/apt-groups.html" itemprop="name" class="MegaMenus">APT Groups</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Blogs</h4><ul><li itemprop="url"><a href="/blog.html" itemprop="name" class="MegaMenus">Read the FireEye Blogs</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Cyber Security</h4><ul><li itemprop="url"><a href="/current-threats/what-is-cyber-security.html" itemprop="name" class="MegaMenus">What is Cyber Security?</a></li>
+<li itemprop="url"><a href="/campaigns/clarity-in-the-cloud.html" itemprop="name" class="MegaMenus">Clarity in the Cloud</a></li>
+<li itemprop="url"><a href="/campaigns/security-effectiveness.html" itemprop="name" class="MegaMenus">Security Effectiveness and Validation</a></li>
+<li itemprop="url"><a href="https://vision.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">The Vision – Digital Magazine</a></li>
+<li itemprop="url"><a href="/company/webinars.html" itemprop="name" class="MegaMenus">Webinars</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Free Tools & Apps</h4><ul><li itemprop="url"><a href="/services/freeware.html" itemprop="name" class="MegaMenus">Free Software Downloads</a></li>
+<li itemprop="url"><a href="https://fireeye.market" target="_blank" itemprop="name" class="MegaMenus">FireEye Market</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Training</h4><ul><li itemprop="url"><a href="/services/training.html" itemprop="name" class="MegaMenus">Education and Training</a></li>
+</ul></div>
+</div>
+</div><div class="separator disabled"></div></div></div>
+</div>
+<div class="view-all-bar">
+<a href="/current-threats.html" class="MegaMenus">
+VIEW ALL RESOURCES</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/company.html">
+<h4 class="megamenu-title">
+<a href="/company.html" itemprop="url" class="MegaMenus">Company</a>
+</h4>
+<div class="content-5-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">About Us</h4><ul><li itemprop="url"><a href="/company.html" itemprop="name" class="MegaMenus">Why FireEye?</a></li>
+<li itemprop="url"><a href="/company/awards.html" itemprop="name" class="MegaMenus">Awards and Honors</a></li>
+<li itemprop="url"><a href="/company/leadership.html" itemprop="name" class="MegaMenus">Leadership</a></li>
+<li itemprop="url"><a href="/company/board-of-directors.html" itemprop="name" class="MegaMenus">Board of Directors</a></li>
+<li itemprop="url"><a href="http://investors.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">Investor Relations</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Contact</h4><ul><li itemprop="url"><a href="/company/contact-us.html" itemprop="name" class="MegaMenus">Contact FireEye</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>.g04 .megamenu-list a{padding-right:38px;line-height:1.358;padding-bottom:2px}@media (min-width:60em){.g04 .n03-sub_container{padding-bottom:23px}}@media(min-width:64em) and (max-width:64.5em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:14px}}@media (min-width:68em) and (max-width:69em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:30px}}</style></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">News and Events</h4><ul><li itemprop="url"><a href="/company/newsroom.html" itemprop="name" class="MegaMenus">Newsroom</a></li>
+<li itemprop="url"><a href="/company/press-releases.html" itemprop="name" class="MegaMenus">Press Releases</a></li>
+<li itemprop="url"><a href="/company/events.html" itemprop="name" class="MegaMenus">Events</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Careers</h4><ul><li itemprop="url"><a href="/company/jobs.html" itemprop="name" class="MegaMenus">Job Opportunities</a></li>
+<li itemprop="url"><a href="/company/jobs/internships.html" itemprop="name" class="MegaMenus">Internships</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-5-par .megamenus .megamenu-cta {
+    background: url(/content/dam/fireeye-www/global/en/nav/bg-nav-vision.jpg) center no-repeat;
+    background-size: cover;
+    border-radius: 60px 0 12px 60px;
+    border: 0 solid #ffffff;}
+  .content-5-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>The Vision</h5>
+<p>Read our digital magazine providing expert-authored stories, information, unique insights, and advice on cyber security.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><div class="text-center"><a class="btn btn-B2282D compact" href="https://vision.fireeye.com/" target="_blank">Get Your Copy</a></div></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li></ul>
+</nav>
+</div>
+<span class="burger ficon ficon-menu"></span>
+</header>
+</div>
+</div>
+
+
+<div id="cookie-privacy-banner" style="display:none;">
+<div class="l_container">
+<div class="g">
+<div class="g-u-1">
+<div class="g-content">
+<div class="cookie-banner">
+<p class="cookie-text">
+To give you the best possible experience, this site uses cookies.&nbsp; Find out more on <a href='/company/privacy.html' target='_blank'>how we use cookies</a>.<button type="button" class="cookie-button highlighted" onclick='javascript:onAccept();'>Accept</button>
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="breadcrumbs breadcrumb">
+<div class="l_container is-full">
+<div class="g02 g02v0" id="g02-breadcrumbs">
+<div class="g02_container">
+<div class="g02_content">
+<ul class="list-inline g02_list" itemscope itemtype="http://schema.org/BreadcrumbList">
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/"><span itemprop="name">Home</span></a><meta itemprop="position" content="1" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog.html"><span itemprop="name">FireEye Blogs</span></a><meta itemprop="position" content="2" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog/threat-research.html"><span itemprop="name">Threat Research</span></a><meta itemprop="position" content="3" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><span itemprop="name">Analyzing Dark Crystal RAT, a C# Backdoor<meta itemprop="position" content="6" /></span>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<main class="l_main" role="main">
+<div class="l_container">
+<div class="g g-alt ">
+<div class="g-u-17-24 l_g-u-1">
+<div class="g-content">
+<div class="blog main"><div itemscope itemtype="http://schema.org/BlogPosting">
+<div class="summary entrytextteaser">
+</div>
+<div class="title entrytitle">
+<h2 class="category-name">Threat Research</h2>
+<h1 class="blogpostlanding red" itemprop="headline">Analyzing Dark Crystal RAT, a C# Backdoor</h1>
+<div class="c00 c00v0 entry-meta-block selfClear">
+<time class="entry-date" itemprop="datePublished" content="2020-05-12T14:30:00Z">May 12, 2020</time>
+<span class="sep"> | </span>
+<span class="by-author" itemscope itemptype="http://schema.org/Person">by <a href="/blog/threat-research.html/category/etc/tags/fireeye-blog-authors/jacob-thompson" title="View all entries filed under 'Fireeye - Authors : Jacob Thompson'">Jacob Thompson</a><meta itemprop="author" content="Jacob Thompson" /></span>
+<div class="tags-section">
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/malware-analysis"> <span class="tagbutton">Malware Analysis</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/intelligence"> <span class="tagbutton">Intelligence</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/FLARE"> <span class="tagbutton">FLARE</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/rat"> <span class="tagbutton">Rat</span></a><br class="on-mobile" />
+</div>
+</div>
+</div>
+<div class="par parsys"><div class="entrytext section"><div class="c00 c00v0" itemprop="articleBody">
+<p>The <a adhocenable="false" href="/mandiant/threat-intelligence.html">FireEye Mandiant Threat Intelligence Team</a> helps protect our customers by tracking cyber attackers and the malware they use. The FLARE Team helps augment our threat intelligence by reverse engineering malware samples. Recently, FLARE worked on a new C# variant of Dark Crystal RAT (DCRat) that the threat intel team passed to us. We reviewed open source intelligence and prior work, performed sandbox testing, and reverse engineered the Dark Crystal RAT to review its capabilities and communication protocol. Through publishing this blog post we aim to help defenders look for indicators of compromise and other telltale signs of Dark Crystal RAT, and to assist fellow malware researchers new to .NET malware, or who encounter future variants of this sample.</p>
+<h4>Discovering Dark Crystal RAT</h4>
+<p>The threat intel team provided FLARE with an EXE sample, believed to contain Dark Crystal RAT, and having the MD5 hash b478d340a787b85e086cc951d0696cb1. Using sandbox testing, we found that this sample produced two executables, and in turn, one of those two executables produced three more. Figure 1 shows the relationships between the malicious executables discovered via sandbox testing.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure1.png" alt=""><span class="type-XS"><br>
+Figure 1: The first sample we began analyzing ultimately produced five executables.</span></p>
+<p>Armed with the sandbox results, our next step was to perform a triage analysis on each executable. We found that the original sample and mnb.exe were droppers, that dal.exe was a clean-up utility to delete the dropped files, and that daaca.exe and fsdffc.exe were variants of Plurox, a family with existing reporting. Then we moved to analyzing the final dropped sample, which was dfsds.exe. We found brief public reporting by @<i>James_inthe_box </i>on the same sample, <a href="https://twitter.com/James_inthe_box/status/1178275531692756992?s=20">identifying it as DCRat and as a RAT and credential stealer</a>. We also found a <a href="https://app.any.run/tasks/01a715ca-6a34-4350-b3ba-d1daae1e3d16/">public sandbox run</a> that included the same sample. Other public reporting <a href="https://tccontre.blogspot.com/2019/10/dcrat-malware-evades-sandbox-that-use.html">described DCRat, but actually analyzed the daaca.exe Plurox component</a> bundled along with DCRat in the initial sample.</p>
+<p>Satisfied that dfsds.exe was a RAT lacking detailed public reporting, we decided to perform a deeper analysis.</p>
+<h4>Analyzing Dark Crystal RAT</h4>
+<h5>Initial Analysis</h5>
+<p>Shifting aside from our sandbox for a moment, we performed static analysis on dfsds.exe. We chose to begin static analysis using CFF Explorer, a good tool for opening a PE file and breaking down its sections into a form that is easy to view. Having viewed dfsds.exe in CFF Explorer, as shown in Figure 2, the utility showed us that it is a .NET executable. This meant we could take a much different path to analyzing it than we would on a native C or C++ sample. Techniques we might have otherwise used to start narrowing down a native sample’s functionality, such as looking at what DLLs it imports and what functions from those DLLs that it uses, yielded no useful results for this .NET sample. As shown in Figure 3, dfsds.exe imports only the function <span class="code">_CorExeMain</span> from mscoree.dll. We could have opened dfsds.exe in IDA Pro, but IDA Pro is usually not the most effective way of analyzing .NET samples; in fact, the free version of IDA Pro cannot handle .NET Common Language Infrastructure (CLI) intermediate code.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure2.png" alt=""><span class="type-XS"><br>
+Figure 2: CFF Explorer shows that dfsds.exe is a .NET executable.</span></p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure3.png" alt=""><span class="type-XS"><br>
+Figure 3: The import table for dfsds.exe is not useful as it contains only one function.</span></p>
+<p>Instead of using a disassembler like IDA Pro on dfsds.exe, we used a .NET decompiler. Luckily for the reverse engineer, decompilers operate at a higher level and often produce a close approximation of the original C# code. dnSpy is a great .NET decompiler. dnSpy’s interface displays a hierarchy of the sample’s namespaces and classes in the Assembly Explorer and shows code for the selected class on the right. Upon opening dfsds.exe, dnSpy told us that the sample’s original name at link time was DCRatBuild.exe, and that its entry point is at <span class="code">&lt;PrivateImplementationDetails&gt;{63E52738-38EE-4EC2-999E-1DC99F74E08C}.Main</span>, shown in Figure 4. When we browsed to the Main method using the Assembly Explorer, we found C#-like code representing that method in Figure 5. Wherever dnSpy displays a call to another method in the code, it is possible to click on the target method name to go to it and view its code. By right-clicking on an identifier in the code, and clicking Analyze in the context menu, we caused dnSpy to look for all occurrences where the identifier is used, similar to using cross-references in IDA Pro.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure4.png" alt=""><br>
+<span class="type-XS">Figure 4: dnSpy can help us locate the sample's entry point</span></p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure5.png" alt=""><br>
+<span class="type-XS">Figure 5: dnSpy decompiles the Main method into C#-like code</span></p>
+<p>We went to the <span class="code">SchemaServerManager.Main</span> method that is called from the entry point method, and observed that it makes many calls to <span class="code">ExporterServerManager.InstantiateIndexer</span> with different integer arguments, as shown in Figure 6. We browsed to the <span class="code">ExporterServerManager.InstantiateIndexer</span> method, and found that it is structured as a giant switch statement with many goto statements and labels; Figure 7 shows an excerpt. This does not look like typical dnSpy output, as dnSpy often reconstructs a close approximation of the original C# code, albeit with the loss of comments and local variable names. This code structure, combined with the fact that the code refers to the <span class="code">CipherMode.CBC</span> constant, led us to believe that <span class="code">ExporterServerManager.InstantiateIndexer</span> may be a decryption or deobfuscation routine. Therefore, dfsds.exe is likely obfuscated. Luckily, .NET developers often use obfuscation tools that are somewhat reversible through automated means.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure6.png" alt=""><br>
+<span class="type-XS">Figure 6: SchemaServerManager.Main makes many calls to ExporterServerManager.InstantiateIndexer</span></p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure7.png" alt=""><br>
+<span class="type-XS">Figure 7: ExporterServerManager.InstantiateIndexer looks like it may be a deobfuscation routine</span></p>
+<h5>Deobfuscation</h5>
+<p>De4dot is a .NET deobfuscator that knows how to undo many types of obfuscations. Running de4dot -d (for detect) on dfsds.exe (Figure 8) informed us that .NET Reactor was used to obfuscate it.</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><p><span class="code">&gt; de4dot -d dfsds.exe</span></p>
+<p><span class="code">de4dot v3.1.41592.3405 Copyright (C) 2011-2015 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2642431242495266414b474f4a0845494b">[email&#160;protected]</a><br>
+Latest version and source code: https://github.com/0xd4d/de4dot</span></p>
+<p><span class="code">Detected .NET Reactor (C:\...\dfsds.exe)</span></p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 8: dfsds.exe is obfuscated with .NET Reactor</span></p>
+<p>After confirming that de4dot can deobfuscate dfsds.exe, we ran it again to deobfuscate the sample into the file dfsds_deob.exe (Figure 9).</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><p><span class="code">&gt; de4dot -f dfsds.exe -o dfsds_deob.exe</span></p>
+<p><span class="code">de4dot v3.1.41592.3405 Copyright (C) 2011-2015 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="54303160303b20143339353d387a373b39">[email&#160;protected]</a><br>
+Latest version and source code: https://github.com/0xd4d/de4dot</span></p>
+<p><span class="code">Detected .NET Reactor (C:\Users\user\Desktop\intelfirst\dfsds.exe)<br>
+Cleaning C:\Users\user\Desktop\intelfirst\dfsds.exe<br>
+Renaming all obfuscated symbols<br>
+Saving C:\Users\user\Desktop\intelfirst\dfsds_deob.exe</span></p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 9: de4dot successfully deobfuscates dfsds.exe</span></p>
+<p>After deobfuscating dfsds.exe, we ran dnSpy again on the resulting dfsds_deob.exe. When we decompiled <span class="code">SchemaServerManager.Main</span> again, the results were much different, as shown in Figure 10. Contrasting the new output with the obfuscated version shown previously in Figure 6, we found the deobfuscated code much more readable. In the deobfuscated version, all the calls to <span class="code">ExporterServerManager.InstantiateIndexer</span> were removed; as suspected, it was apparently a string decoding routine. In contrast, the class names shown in the Assembly Explorer did not change; the obfuscator must have irrecoverably replaced the original class names with meaningless ones obtained from a standard list. Next, we noted that ten lines in Figure 10 hold base64-encoded data. Once the sample was successfully deobfuscated, it was time to move on to extracting its configuration and to follow the sample’s code path to its persistence capabilities and initial beacon.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure10.png" alt=""><br>
+<span class="type-XS">Figure 10: Deobfuscating dfsds.exe shows that the method begins with some path manipulation and then accesses Base64-encoded data</span></p>
+<h5>Configuration, Persistence and Initial Beacon</h5>
+<p>Recall that in Figure 10 we found that the method <span class="code">SchemaServerManager.Main</span> has a local variable containing Base64-encoded data; decoding that data revealed what it contains. Figure 11 shows the decoded configuration (with C2 endpoint URLs de-fanged):</p>
+<table cellpadding="1" cellspacing="0" border="1">
+<tbody><tr><td><p><span class="code">&gt; echo TUhvc3Q6aHR0cDovL2RvbWFsby5vbmxpbmUva3NlemJseGx2b3Uza2NtYnE4bDdoZjNmNGN5NXhnZW<br>
+80dWRsYTkxZHVldTNxYTU0LzQ2a3FianZ5a2x1bnAxejU2dHh6a2hlbjdnamNpM2N5eDhnZ2twdHgy<br>
+NWk3NG1vNm15cXB4OWtsdnYzL2FrY2lpMjM5bXl6b24weHdqbHhxbm4zYjM0dyxCSG9zdDpodHRwOi<br>
+8vZG9tYWxvLm9ubGluZS9rc2V6Ymx4bHZvdTNrY21icThsN2hmM2Y0Y3k1eGdlbzR1ZGxhOTFkdWV1<br>
+M3FhNTQvNDZrcWJqdnlrbHVucDF6NTZ0eHpraGVuN2dqY2kzY3l4OGdna3B0eDI1aTc0bW82bXlxcH<br>
+g5a2x2djMvYWtjaWkyMzlteXpvbjB4d2pseHFubjNiMzR3LE1YOkRDUl9NVVRFWC13TGNzOG8xTlZF<br>
+VXRYeEo5bjl5ZixUQUc6VU5ERUY= | base64 -d</span></p>
+<p><span class="code">MHost:hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/<br>
+46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xwjl<br>
+xqnn3b34w,BHost:hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91<br>
+dueu3qa54/46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239<br>
+myzon0xwjlxqnn3b34w,MX:DCR_MUTEX-wLcs8o1NVEUtXxJ9n9yf,TAG:UNDEF</span></p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Figure 11: Decoding the base64 data in SchemaServerManager.Main reveals a configuration string</span></p>
+<p>Figure 11 shows that the data decoded to a configuration string containing four values: MHost, BHost, MX, and TAG. We analyzed the code that parses this string and found that MHost and BHost were used as its main and backup command and control (C2) endpoints. Observe that the MHost and BHost values in Figure 11 are identical, so this sample did not have a backup C2 endpoint.</p>
+<p>In dnSpy it is possible to give classes and methods meaningful names just as it is possible to name identifiers in IDA Pro. For example, the method <span class="code">SchemaServerManager.StopCustomer</span> picks the name of a random running process. By right-clicking the <span class="code">StopCustomer</span> identifier and choosing Edit Method, it is possible to change the method name to <span class="code">PickRandomProcessName</span>, as shown in Figure 12.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure12.png" alt=""><br>
+<span class="type-XS">Figure 12: Assigning meaningful names to methods makes it easier to keep analyzing the program</span></p>
+<p>Continuing to analyze the <span class="code">SchemaServerManager.Main</span> method revealed that the sample persists across reboots. The persistence algorithm can be summarized as follows:</p>
+<ol>
+<li>The malware picks the name of a random running process, and then copies itself to <span class="code">%APPDATA%</span> and <span class="code">C:\</span>. For example, if svchost.exe is selected, then the malware copies itself to <span class="code">%APPDATA%\svchost.exe</span> and <span class="code">C:\svchost.exe</span>.</li>
+<li>The malware creates a shortcut <span class="code">%APPDATA%\dotNET.lnk</span> pointing to the copy of the malware under <span class="code">%APPDATA%</span>.</li>
+<li>The malware creates a shortcut named dotNET.lnk in the logged-on user’s Startup folder pointing to <span class="code">%APPDATA%\dotNET.lnk</span>.</li>
+<li>The malware creates a shortcut <span class="code">C:\Sysdll32.lnk</span> pointing to the copy of the malware under <span class="code">C:\</span>.</li>
+<li>The malware creates a shortcut named Sysdll32.lnk in the logged-on user’s Startup folder pointing to <span class="code">C:\Sysdll32.lnk</span>.</li>
+<li>The malware creates the registry value <span class="code">HKCU\Software\Microsoft\Windows\CurrentVersion\Run\scrss</span> pointing to <span class="code">%APPDATA%\dotNET.lnk</span>.</li>
+<li>The malware creates the registry value <span class="code">HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Wininit</span> pointing to <span class="code">C:\Sysdll32.lnk</span>.</li>
+</ol>
+<p>After its persistence steps, the malware checks for multiple instances of the malware:</p>
+<ol>
+<li>The malware sleeps for a random interval between 5 and 7 seconds.</li>
+<li>The malware takes the MD5 hash of the still-base64-encoded configuration string, and creates the mutex whose name is the hexadecimal representation of that hash. For this sample, the malware creates the mutex <span class="code">bc2dc004028c4f0303f5e49984983352</span>. If this fails because another instance is running, the malware exits.</li>
+</ol>
+<p>The malware then beacons, which also allows it to determine whether to use the main host (MHost) or backup host (BHost). To do so, the malware constructs a beacon URL based on the MHost URL, makes a request to the beacon URL, and then checks to see if the server responds with the HTTP response body “ok.” If the server does not send this response, then the malware unconditionally uses the BHost; this code is shown in Figure 13. Note that since this sample has the same MHost and BHost value (from Figure 11), the malware uses the same C2 endpoint regardless of whether the check succeeds or fails.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure13.png" alt=""><br>
+<span class="type-XS">Figure 13: The malware makes an HTTP request based on the MHost URL to determine whether to use the MHost or BHost</span></p>
+<p>The full algorithm to obtain the beacon URL is as follows:</p>
+<ol>
+<li>Obtain the MHost URL, i.e., <span class="code">hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54<br>
+/46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239my<br>
+zon0xwjlxqnn3b34w</span>.</li>
+<li>Calculate the SHA1 hash of the full MHost URL, i.e., 56743785cf97084d3a49a8bf0956f2c744a4a3e0.</li>
+<li>Remove the last path component from the MHost URL, and then append the SHA1 hash from above, and ?data=active. The full beacon URL is therefore <span class="code">hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54<br>
+/46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/56743785cf<br>
+97084d3a49a8bf0956f2c744a4a3e0.php?data=active</span>.</li>
+</ol>
+<p>After beaconing the malware proceeds to send and receive messages with the configured C2.</p>
+<h3>Messages and Capabilities</h3>
+<p>After performing static analysis of dfsds.exe to determine how it selects the C2 endpoint and confirming the C2 endpoint URL, we shifted to dynamic analysis in order to collect sample C2 traffic and make it easier to understand the code that generates and accepts C2 messages. Luckily for our analysis, the malware continues to generate requests to the C2 endpoint even if the server does not send a valid response. To listen for and intercept requests to the C2 endpoint (domalo[.]online) without allowing the malware Internet access, we used <a href="https://github.com/fireeye/flare-fakenet-ng">FLARE’s FakeNet-NG tool</a>. Figure 14 shows some of the C2 requests that the malware made being captured by FakeNet-NG.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure14.png" alt=""><br>
+<span class="type-XS">Figure 14: FakeNet-NG can capture the malware's HTTP requests to the C2 endpoint</span></p>
+<p>By comparing the messages generated by the malware and captured in FakeNet-NG with the malware’s decompiled code, we determined its message format and types. Observe that the last HTTP request visible in Figure 14 contains a list of running processes. By tracing through the decompiled code, we found that the method <span class="code">SchemaServerManager.ObserverWatcher.NewMerchant</span> generated this message. We renamed this method to taskThread and assigned meaningful names to the other methods it calls; the resulting code for this method appears in Figure 15.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure15.png" alt=""><br>
+<span class="type-XS">Figure 15: The method that generates the list of running processes and sends it to the C2 endpoint</span></p>
+<p>By analyzing the code further, we identified the components of the URLs that the malware used to send data to the C2 endpoint, and how they are constructed.</p>
+<p><i>Beacons</i></p>
+<p>The first type of URL is a beacon, sent only once when the malware starts up. For this sample, the beacon URL was always hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqbjvyklunp1z56txzk<br>
+hen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/&lt;hash&gt;.php?data=active, where &lt;hash&gt; is the SHA1 hash of the MHost URL, as described earlier.</p>
+<p><i>GET requests, format 1</i></p>
+<p>When the malware needs to send data to or receive data from the C2, it sends a message. The first type of message, which we denote as “format 1,” is a GET request to URLs of the form <span class="code">hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqb<br>
+jvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xwjlxqnn<br>
+3b34w/<i>&lt;hash&gt;</i>.php? type=__ds_setdata&amp;__ds_setdata_user=<i>&lt;user_hash&gt;</i>&amp;__ds_setdata_ext=<i>&lt;message_hash&gt;</i>&amp;__ds_setdata_data=<i>&lt;message&gt;</i></span>, where:</p>
+<ul>
+<li><i><span class="code">&lt;hash&gt;</span></i> is <span class="code">MD5(SHA1(MHost))</span>, which for this sample, is <span class="code">212bad81b4208a2b412dfca05f1d9fa7</span>.</li>
+<li><i><span class="code">&lt;user_hash&gt;</span></i> is a unique identifier for the machine on which the malware is running. It is always calculated as <span class="code">SHA1(OS_version + machine_name + user_name)</span> as provided by the .NET System.Environment class.</li>
+<li><i><span class="code">&lt;message_hash&gt;</span></i> identifies what kind of message the malware is sending to the C2 endpoint. The <span class="code">&lt;message_hash&gt;</span> is calculated as <span class="code">MD5(&lt;message_type&gt; + &lt;user_hash&gt;)</span>, where <span class="code">&lt;message_type&gt;</span> is a short keyword identifying the type of message, and <span class="code">&lt;user_hash&gt;</span> is as calculated above.<ul>
+<li>Values for &lt;message_type&gt; exist for each command that the malware supports; for possible values, see the “msgs” variable in the code sample shown in Figure 19.</li>
+<li>Observe that this makes it difficult to observe the message type visually from log traffic, or to write a static network signature for the message type, since it varies for every machine due to the inclusion of the <span class="code">&lt;user_hash&gt;</span>.</li>
+<li>One type of message uses the value u instead of a hash for <span class="code">&lt;message_hash&gt;</span>.</li>
+</ul>
+</li>
+<li><i><span class="code">&lt;message&gt;</span></i> is the message data, which is not obscured in any way.</li>
+</ul>
+<p>The other type of ordinary message is a <span class="code">getdata</span> message. These are GET requests to URLs of the form <span class="code">hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqb<br>
+jvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xwjlxqnn<br>
+3b34w/<i>&lt;hash&gt;</i>.php? type=__ds_getdata&amp;__ds_getdata_user=<i>&lt;user_hash&gt;</i>&amp;__ds_getdata_ext=<i>&lt;message_hash&gt;</i>&amp;__ds_getdata_key=<i>&lt;key&gt;</i></span>, where:</p>
+<ul>
+<li><i><span class="code">&lt;hash&gt;</span></i> and <i><span class="code">&lt;user_hash&gt;</span></i> are calculated as described above for getdata messages.</li>
+<li><i><span class="code">&lt;message_hash&gt;</span></i> is also calculated as described above for getdata messages, but describes the type of message the malware is expecting to receive in the server’s response.</li>
+<li><i><span class="code">&lt;key&gt;</span></i> is <span class="code">MD5(&lt;user_hash&gt;)</span>.</li>
+</ul>
+<p>The server is expected to respond to a <span class="code">getdata</span> message with an appropriate response for the type of message specified by <span class="code">&lt;message_hash&gt;</span>.</p>
+<p><i>GET requests, format 2</i></p>
+<p>A few types of messages from the malware to the C2 use a different format, which we denote as “format 2.” These messages are GET requests of the form <span class="code">hxxp://domalo[.]online /ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqbjvyklunp1z56txzkhen7gj<br>
+ci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xwjlxqnn3b34w/<i>&lt;user_hash&gt;</i>.<i>&lt;mes<br>
+sage_hash&gt;</i></span>, where:</p>
+<ul>
+<li><i><span class="code">&lt;user_hash&gt;</span></i> is calculated as described above for getdata messages.</li>
+<li><i><span class="code">&lt;message_hash&gt;</span></i> is also calculated as described above for getdata messages, but describes the type of message the malware is expecting to receive in the server’s response. <span class="code">&lt;message_hash&gt;</span> may also be the string <span class="code">comm</span>.</li>
+</ul>
+<p>Table 1 shows possible <span class="code">&lt;message_types&gt;</span> that may be incorporated into <span class="code">&lt;message_hash&gt;</span> as part of format 2 messages to instruct the server which type of response is desired. In contrast to format 1 messages, format 2 messages are only used for a handful of <span class="code">&lt;message_type&gt;</span> values.</p>
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody><tr><td width="174" valign="top"><p><b>&lt;message_type&gt;</b></p>
+</td>
+<td width="449" valign="top"><p><b>Response desired</b></p>
+</td>
+</tr><tr><td width="174" valign="top"><p>s_comm</p>
+</td>
+<td width="449" valign="top"><p>The server sends a non-empty response if a screenshot request is pending</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>m_comm</p>
+</td>
+<td width="449" valign="top"><p>The server sends a non-empty response if a microphone request is pending</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>RDK</p>
+</td>
+<td width="449" valign="top"><p>The server responds directly with keystrokes to replay</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>comm</p>
+</td>
+<td width="449" valign="top"><p>The server responds directly with other types of tasking</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 1: Message types when the malware uses a special message to request tasking from the server</span></p>
+<p><i>POST requests</i></p>
+<p>When the malware needs to upload large files, it makes a POST request. These POST requests are sent to <span class="code">hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqb<br>
+jvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xwjlxqnn<br>
+3b34w/&lt;hash&gt;.php</span>, with the following parameters in the POST data:</p>
+<ul>
+<li><i>name</i> is <span class="code">&lt;user_hash&gt; + &quot;.&quot; + &lt;message_type&gt;</span>, where <span class="code">&lt;user_hash&gt;</span> is calculated as described above and <span class="code">&lt;message_type&gt;</span> is the type of data being uploaded.</li>
+<li><i>upload</i> is a file with the data being sent to the server.</li>
+</ul>
+<p>Table 2 shows possible <span class="code">&lt;message_type&gt;</span> values along with the type of file being uploaded.</p>
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody><tr><td width="312" valign="top"><p>&lt;message_type&gt;</p>
+</td>
+<td width="312" valign="top"><p>Type of File</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>jpg</p>
+</td>
+<td width="312" valign="top"><p>Screenshot</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>zipstealerlog</p>
+</td>
+<td width="312" valign="top"><p>Cookie stealer log</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>wav</p>
+</td>
+<td width="312" valign="top"><p>Microphone recording</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>file</p>
+</td>
+<td width="312" valign="top"><p>Uploaded file</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>bmp</p>
+</td>
+<td width="312" valign="top"><p>Webcam image</p>
+</td>
+</tr><tr><td width="312" valign="top"><p>RD.jpg</p>
+</td>
+<td width="312" valign="top"><p>Remote control screenshot</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 2: Message types when files are uploaded to the server</span></p>
+<p><i>Capabilities</i></p>
+<p>By analyzing the code that handles the responses to the <span class="code">comm</span> message (format 2), it was possible for us to inventory the malware’s capabilities. Table 3 shows the keywords used in responses along with the description of each capability.</p>
+<table border="0" cellspacing="0" cellpadding="0" width="630">
+<tbody><tr><td width="132" valign="top"><p><b>Keyword</b></p>
+</td>
+<td width="498" valign="top"><p><b>Description</b></p>
+</td>
+</tr><tr><td width="132" valign="top"><p>shell</p>
+</td>
+<td width="498" valign="top"><p>Execute a shell command</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>deleteall</p>
+</td>
+<td width="498" valign="top"><p>Recursively delete all files from C:, D:, F:, and G:</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>closecd</p>
+</td>
+<td width="498" valign="top"><p>Close the CD-ROM drive door</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>setwallpaper</p>
+</td>
+<td width="498" valign="top"><p>Change the background wallpaper</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>ddos</p>
+</td>
+<td width="498" valign="top"><p>Send TCP and UDP packets to a given host or IP address</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>logoff</p>
+</td>
+<td width="498" valign="top"><p>Log off the current user</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>keyboardrecorder</p>
+</td>
+<td width="498" valign="top"><p>Replay keystrokes as if the user had typed them</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_newfolder</p>
+</td>
+<td width="498" valign="top"><p>Create a new folder</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_rename</p>
+</td>
+<td width="498" valign="top"><p>Rename or move a file</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>desktopHide</p>
+</td>
+<td width="498" valign="top"><p>Hide desktop icons</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>keyloggerstart</p>
+</td>
+<td width="498" valign="top"><p>Start logging keystrokes</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>exec_cs_code</p>
+</td>
+<td width="498" valign="top"><p>Compile and execute C# code</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>msgbox</p>
+</td>
+<td width="498" valign="top"><p>Open a Windows MessageBox</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_upload</p>
+</td>
+<td width="498" valign="top"><p>Transfer a file from the C2 to the client</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>rdp</p>
+</td>
+<td width="498" valign="top"><p>Re-spawn the malware running as an administrator</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_zip</p>
+</td>
+<td width="498" valign="top"><p>Build a ZIP file from a directory tree and transfer it from the client to the C2</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>webcam</p>
+</td>
+<td width="498" valign="top"><p>Take a webcam picture</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_unzip</p>
+</td>
+<td width="498" valign="top"><p>Unzip a ZIP file to a given path on the client</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>keyloggerstop</p>
+</td>
+<td width="498" valign="top"><p>Stop logging keystrokes</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_drives</p>
+</td>
+<td width="498" valign="top"><p>Enumerate drive letters</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>cookiestealer</p>
+</td>
+<td width="498" valign="top"><p>Transfer cookies and browser/FileZilla saved credentials to the C2</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_delete</p>
+</td>
+<td width="498" valign="top"><p>Recursively delete a given directory</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>dismon</p>
+</td>
+<td width="498" valign="top"><p>Hide desktop icons and taskbar</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_uploadu</p>
+</td>
+<td width="498" valign="top"><p>Transfer a file from the C2 to the client</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>taskstart</p>
+</td>
+<td width="498" valign="top"><p>Start a process</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>cleardesktop</p>
+</td>
+<td width="498" valign="top"><p>Rotate screen</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>lcmd</p>
+</td>
+<td width="498" valign="top"><p>Run shell command and send standard output back to C2</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>taskbarShow</p>
+</td>
+<td width="498" valign="top"><p>Show taskbar</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>clipboard</p>
+</td>
+<td width="498" valign="top"><p>Set clipboard contents</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>cookiestealer_file</p>
+</td>
+<td width="498" valign="top"><p>Save cookies and credentials to a local file</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>newuserpass</p>
+</td>
+<td width="498" valign="top"><p>Create a new local user account</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>beep</p>
+</td>
+<td width="498" valign="top"><p>Beep for set frequency and duration</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>speak</p>
+</td>
+<td width="498" valign="top"><p>Use speech synthesizer to speak text</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>openchat</p>
+</td>
+<td width="498" valign="top"><p>Open chat window</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>taskbarHide</p>
+</td>
+<td width="498" valign="top"><p>Hide the taskbar</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>RDStart</p>
+</td>
+<td width="498" valign="top"><p>Start remote control over user’s desktop</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>closechat</p>
+</td>
+<td width="498" valign="top"><p>Close chat window</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>RDStop</p>
+</td>
+<td width="498" valign="top"><p>Stop remote control over user’s desktop</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_opendir</p>
+</td>
+<td width="498" valign="top"><p>List directory contents</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>uninstall</p>
+</td>
+<td width="498" valign="top"><p>Remove the malware from the client</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>taskkill</p>
+</td>
+<td width="498" valign="top"><p>Kill a process</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>forkbomb</p>
+</td>
+<td width="498" valign="top"><p>Endlessly spawn instances of cmd.exe</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>fm_get</p>
+</td>
+<td width="498" valign="top"><p>Transfer a file from the client to the C2</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>desktopShow</p>
+</td>
+<td width="498" valign="top"><p>Show desktop icons</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>Clipboardget</p>
+</td>
+<td width="498" valign="top"><p>Transfer clipboard contents to C2</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>playaudiourl</p>
+</td>
+<td width="498" valign="top"><p>Play a sound file</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>opencd</p>
+</td>
+<td width="498" valign="top"><p>Open the CD-ROM drive door</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>shutdown</p>
+</td>
+<td width="498" valign="top"><p>Shut down the machine</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>restart</p>
+</td>
+<td width="498" valign="top"><p>Restart the machine</p>
+</td>
+</tr><tr><td width="132" valign="top"><p>browseurl</p>
+</td>
+<td width="498" valign="top"><p>Open a web URL in the default browser</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 3: Capabilities of DCRat</span></p>
+<h4>Proof-of-Concept Dark Crystal RAT Server</h4>
+<p>After gathering information from Dark Crystal RAT about its capabilities and C2 message format, another way to illustrate the capabilities and test our understanding of the messages was to write a proof-of-concept server. Here is a code snippet that we wrote containing a <a adhocenable="false" href="https://www.fireeye.com/content/dam/fireeye-www/blog/pdfs/pocdcrat.pdf">barebones DCRat server written in Python</a>. Unlike a real RAT server, this one does not have a user interface to allow the attacker to pick and launch commands. Instead, it has a pre-scripted command list that it sends to the RAT.</p>
+<p>When the server starts up, it uses the Python BaseHTTPServer to begin listening for incoming web requests (lines 166-174). Incoming POST requests are assumed to hold a file that the RAT is uploading to the server; this server assumes all file uploads are screenshots and saves them to “screen.png” (lines 140-155). For GET requests, the server must distinguish between beacons, ordinary messages, and special messages (lines 123-138). For ordinary messages, <span class="code">__ds_setdata</span> messages are simply printed to standard output, while the only <span class="code">__ds_getdata</span> message type supported is <span class="code">s_comm</span> (screenshot communications), to which the server responds with the desired screenshot dimensions (lines 63-84). For messages of type comm, the server sends four types of commands in sequence: first, it hides the desktop icons; then, it causes the string “Hello this is tech support” to be spoken; next, it displays a message box asking for a password; finally, it launches the Windows Calculator (lines 86-121).</p>
+<p>Figure 16 shows the results when Dark Crystal RAT is run on a system that has been configured to redirect all traffic to domalo[.]online to the proof-of-concept server we wrote.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure17.jpg" alt=""><br>
+<span class="type-XS">Figure 16: The results when a Dark Crystal RAT instance communicates with the proof-of-concept server</span></p>
+<h4>Other Work and Reconnaissance</h4>
+<p>After reverse engineering Dark Crystal RAT, we continued reconnaissance to see what additional information we could find. One limitation to our analysis was that we did not wish to allow the sample to communicate with the real C2, so we kept it isolated from the Internet. To learn more about Dark Crystal RAT we tried two approaches: the first was to browse the Dark Crystal RAT website (files.dcrat[.]ru) using Tor, and the other was to take a look at YouTube videos of others’ experiments with the “real” Dark Crystal RAT server.</p>
+<h5>Dark Crystal RAT Website</h5>
+<p>We found that Dark Crystal RAT has a website at files.dcrat[.]ru, shown in Figure 17. Observe that there are options to download the RAT itself, as well as a few plugins; the DCLIB extension is consistent with the plugin loading code we found in the RAT.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure18.png" alt=""><br>
+<span class="type-XS">Figure 17: The website files.dcrat[.]ru allows users to download Dark Crystal RAT and some of its plugins</span></p>
+<p>Figure 18 shows some additional plugins, including plugins with the ability to resist running in a virtual machine, disable Windows Defender, and disable webcam lights on certain models. No plugins were bundled with the sample we studied.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure19.png" alt=""><br>
+<span class="type-XS">Figure 18: Additional plugins listed on the Dark Crystal RAT website</span></p>
+<p>Figure 19 lists software downloads on the RAT page. We took some time to look at these files; here are some interesting things we discovered:</p>
+<ul>
+<li>The DCRat listed on the website is actually a “builder” that packages a build of the RAT and a configuration for the attacker to deploy. This is consistent with the name DCRatBuild.exe shown back in Figure 4. In our brief testing of the builder, we found that it had a licensing check. We did not pursue bypassing it once we found public YouTube videos of the DCRat builder in operation, as we show later.</li>
+<li>The DarkCrystalServer is not self-contained, rather, it is just a PHP file that allows the user to supply a username and password, which causes it to download and install the server software. Due to the need to supply credentials and communicate back with dcrat[.]ru (Figure 20), we did not pursue further analysis of DarkCrystalServer.</li>
+</ul>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure20.png" alt=""><br>
+<span class="type-XS">Figure 19: The RAT page lists software for the RAT, the server, an API, and plugin development</span></p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure21.png" alt=""><br>
+<span class="type-XS">Figure 20: The DarkCrystalServer asks for a username and password and calls back to dcrat[.]ru to download software, so we did not pursue it further</span></p>
+<h5>YouTube Videos</h5>
+<p>As part of confirming our findings about Dark Crystal RAT capabilities that we obtained through reverse engineering, we found some YouTube demonstrations of the DCRat builder and server.</p>
+<p>The YouTube user <i>LIKAR </i>has a <a href="https://www.youtube.com/watch?v=ElqjEzv9vog">YouTube demonstration of Dark Crystal RAT</a>. The author demonstrates use of the Dark Crystal RAT software on a server with two active RAT instances. During the video, the author browses through the various screens in the software. This made it easy to envision how a cyber threat would use the RAT, and to confirm our suspicions of how it works.</p>
+<p>Figure 21 shows a capture from the video at <a href="https://youtu.be/ElqjEzv9vog?t=207">3:27</a>. Note that the Dark Crystal RAT builder software refers to the DCRatBuild package as a “server” rather than a client. Nonetheless, observe that one of the options was a type of Java, or C# (Beta). By watching this YouTube video and doing some additional background research, we discovered that Dark Crystal RAT has existed for some time in a Java version. The C# version is relatively new. This explained why we could not find much detailed prior reporting about it.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure22.png" alt=""><br>
+<span class="type-XS">Figure 21: A YouTube demonstration revealed that Dark Crystal RAT previously existed in a Java version, and the C# version we analyzed is in beta</span></p>
+<p>Figure 22 shows another capture from the video at 6:28. The functionality displayed on the screen lines up nicely with the “msgbox”, “browseurl”, “clipboard”, “speak”, “opencd”, “closecd”, and other capabilities we discovered and enumerated in Table 6.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/dcrat/Figure23.png" alt=""><br>
+<span class="type-XS">Figure 22: A YouTube demonstration confirmed many of the Dark Crystal RAT capabilities we found in reverse engineering</span></p>
+<h4>Conclusion</h4>
+<p>In this post we walked through our analysis of the sample that the threat intel team provided to us and all its components. Through our initial triage, we found that its “dfsds.exe” component is Dark Crystal RAT. We found that Dark Crystal RAT was a .NET executable, and reverse engineered it. We extracted the malware’s configuration, and through dynamic analysis discovered the syntax of its C2 communications. We implemented a small proof-of-concept server to test the correct format of commands that can be sent to the malware, and how to interpret its uploaded screenshots. Finally, we took a second look at how actual threat actors would download and use Dark Crystal RAT.</p>
+<p>To conclude, indicators of compromise for this version of Dark Crystal RAT (MD5: 047af34af65efd5c6ee38eb7ad100a01) are given in Table 4.</p>
+<h4>Indicators of Compromise</h4>
+<h5>Dark Crystal RAT (dfsds.exe)</h5>
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody><tr><td width="174" valign="top"><p><b>Handle artifacts</b></p>
+</td>
+<td width="450" valign="top"><p>&nbsp;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>Mutex name</p>
+</td>
+<td width="450" valign="top"><p>bc2dc004028c4f0303f5e49984983352</p>
+</td>
+</tr><tr><td width="174" valign="top"><p><b>Registry artifacts</b></p>
+</td>
+<td width="450" valign="top"><p>&nbsp;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>Registry value</p>
+</td>
+<td width="450" valign="top"><p>HKCU\Software\Microsoft\Windows\CurrentVersion\Run\scrss</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>Registry value</p>
+</td>
+<td width="450" valign="top"><p>HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Wininit</p>
+</td>
+</tr><tr><td width="174" valign="top"><p><b>File system artifacts</b></p>
+</td>
+<td width="450" valign="top"><p>&nbsp;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>C:\Sysdll32.lnk</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>%APPDATA%\dotNET.lnk</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>Start Menu\Programs\Startup\Sysdll32.lnk</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>Start Menu\Programs\Startup\dotNET.lnk</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>%APPDATA%\&lt;random process name&gt;.exe</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>File</p>
+</td>
+<td width="450" valign="top"><p>C:\&lt;random process name&gt;.exe</p>
+</td>
+</tr><tr><td width="174" valign="top"><p><b>Network artifacts</b></p>
+</td>
+<td width="450" valign="top"><p>&nbsp;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>HTTP request</p>
+</td>
+<td width="450" valign="top"><p>hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91due<br>
+u3qa54/46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9kl<br>
+vv3/212bad81b4208a2b412dfca05f1d9fa7.php?data=active</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>HTTP request</p>
+</td>
+<td width="450" valign="top"><p>hxxp://domalo[.]online/ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91due<br>
+u3qa54/46kqbjvyklunp1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9kl<br>
+vv3/akcii239myzon0xwjlxqnn3b34w212bad81b4208a2b412dfca05f1d9f<br>
+a7.php? type=__ds_getdata&amp;__ds_getdata_user=&lt;user_hash&gt;&amp;__ds_getdata_ex<br>
+t=&lt;message_hash&gt;&amp;__ds_getdata_key=&lt;key&gt;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>HTTP request</p>
+</td>
+<td width="450" valign="top"><p>hxxp://domalo[.]online /ksezblxlvou3kcmbq8l7hf3f4cy5xgeo4udla91dueu3qa54/46kqbjvyklunp<br>
+1z56txzkhen7gjci3cyx8ggkptx25i74mo6myqpx9klvv3/akcii239myzon0xw<br>
+jlxqnn3b34w/&lt;user_hash&gt;.&lt;message_hash&gt;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>TCP connection</p>
+</td>
+<td width="450" valign="top"><p>domalo[.]online:80</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>TCP connection</p>
+</td>
+<td width="450" valign="top"><p>ipinfo[.]ip</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>DNS lookup</p>
+</td>
+<td width="450" valign="top"><p>domalo[.]online</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>DNS lookup</p>
+</td>
+<td width="450" valign="top"><p>ipinfo[.]ip</p>
+</td>
+</tr><tr><td width="174" valign="top"><p><b>Strings</b></p>
+</td>
+<td width="450" valign="top"><p>&nbsp;</p>
+</td>
+</tr><tr><td width="174" valign="top"><p>Static string</p>
+</td>
+<td width="450" valign="top"><p>DCRatBuild</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 4: IoCs for this instance of DCRat</span></p>
+<h4>FireEye Product Support for Dark Crystal RAT</h4>
+<p>Table 5 describes how FireEye products react to the initial sample (MD5: b478d340a787b85e086cc951d0696cb1) and its Dark Crystal RAT payload, or in the case of Mandiant Security Validation, allow a stakeholder to validate their own capability to detect Dark Crystal RAT.</p>
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody><tr><td width="234" valign="top"><p><b>FireEye Product</b></p>
+</td>
+<td width="389" valign="top"><p><b>Support for Dark Crystal RAT</b></p>
+</td>
+</tr><tr><td width="234" valign="top"><p>FireEye Network Security (NX)</p>
+</td>
+<td width="389" valign="top"><p>Backdoor.Plurox detection</p>
+</td>
+</tr><tr><td width="234" valign="top"><p>FireEye Email Security (EX &amp; ETP)</p>
+</td>
+<td width="389" valign="top"><p>Backdoor.MSIL.DarkCrystal, Backdoor.Plurox, Malware.Binary.exe, Trojan.Vasal.FEC3, Win.Ransomware.Cerber-6267996-1, fe_ml_heuristic detections</p>
+</td>
+</tr><tr><td width="234" valign="top"><p>FireEye Endpoint Security (HX)</p>
+</td>
+<td width="389" valign="top"><p>Trojan.GenericKD.32546165, Backdoor.MSIL.DarkCrystal detections</p>
+</td>
+</tr><tr><td width="234" valign="top"><p>FireEye Malware Analysis (AX)</p>
+</td>
+<td width="389" valign="top"><p>Backdoor.Plurox.FEC2 detection</p>
+</td>
+</tr><tr><td width="234" valign="top"><p>FireEye Detection on Demand (DoD)</p>
+</td>
+<td width="389" valign="top"><p>Backdoor.Plurox.FEC2, FireEye.Malware detections</p>
+</td>
+</tr><tr><td width="234" valign="top"><p>Mandiant Security Validation</p>
+</td>
+<td width="389" valign="top"><p>Built-in Action coming soon</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 5: Support in FireEye products to detect Dark Crystal RAT or validate detection capability</span></p>
+</div>
+<div class="clear-all"></div></div>
+</div>
+<div class="par prevnextbutton">
+<div class="prevnext">
+<div class="button">
+<a id="leftBtnId" class="btn btn-B2282D" href="#"><span>Previous</span> <span>Post</span></a>
+</div>
+<div class="button">
+<a id="rightBtnId" class="btn btn-B2282D" href="#"><span>Next</span> <span>Post</span></a>
+</div>
+</div>
+<input type="hidden" value="/content/fireeye-www/en_US/blog/threat-research" id="categoryPathVal" name="categoryPath" />
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    $(document).ready(function(){
+
+         var prevenextHtml = $('.prevnext').html();	
+         var categoryPathVal = $("#categoryPathVal").val();
+            var blogsDetails;
+        
+            if(undefined == blogsDetails){
+                    blogsDetails = [];
+            }
+        
+        
+            if(undefined != prevenextHtml){
+                if(blogsDetails.length <= 0){
+                     $.ajax({
+                        type: "GET",
+                        url: "/bin/www-blogs/read-blogentries",
+                        dataType: "json",
+                        data: { categoryPath: categoryPathVal} ,
+                        async: false,
+                        success : function(data) {
+                            var totalFoundRes = data.blogs.length;
+                            blogsDetails = data.blogs;
+                            var currentPagePath = window.location.pathname;
+                            currentPagePath = currentPagePath.split(".")[0]
+                            console.log("currentPagePath :: "+currentPagePath);
+        
+                            for (var i = 0; i < blogsDetails.length; i++) {
+                                var currentItrPath = blogsDetails[i].path;
+        
+                                if (currentItrPath.indexOf(currentPagePath) > -1) {
+                                    console.log(blogsDetails[i-1]);
+                                    console.log(blogsDetails[i+1]);
+
+                                    if(undefined != blogsDetails[i-1] ){
+										var prevPagePath = blogsDetails[i-1].path;
+                                        $("#leftBtnId").attr("href",prevPagePath+".html");
+                                        $("#leftBtnId").show();
+                                    }else{
+										$("#leftBtnId").hide();
+                                    }
+                                    if(undefined != blogsDetails[i+1] ){
+										var nextPagePath = blogsDetails[i+1].path;  
+                                    	$("#rightBtnId").attr("href",nextPagePath+".html");
+                                        $("#rightBtnId").show();
+                                    }else{
+										$("#rightBtnId").hide();
+                                    }
+                                }
+                            }
+        
+                        },
+                        error : function(response){
+                            console.log("Error: while connecting to servlet.");
+                        }
+                    });
+                 }else{
+                     alert("Blogs from global object :: "+blogsDetails);
+                 }
+            }else{
+                alert("prevenextHtml :: "+prevenextHtml);
+            }
+    });
+</script></div>
+</div></div>
+</div>
+</div>
+<div id="sidebar" class="g-u-7-24 l_g-u-1 blog-sidebar">
+<div class="g-content">
+<div class="sidebar reuse-blog-resources">
+<div class="blog-resources">
+<div class="grid-33-left parsys"><div class="rightrail section">
+<div class="blog-right-rail">
+<div class="bottom-bar"><div class="tab">
+<span class="ficon ficon-star"></span>
+<p>Promotion</p></div><div class="tab">
+<span class="ficon ficon-checkbox-checked"></span>
+<p>Subscribe</p></div>
+<div class="tab">
+<span class="ficon ficon-share"></span>
+<p>Share</p></div>
+<div class="tab">
+<span class="ficon ficon-history2"></span>
+<p>Recent</p></div>
+<div class="tab">
+<span class="ficon ficon-feed"></span>
+<p>RSS</p></div>
+</div><div class="section cta">
+<div id="cq-image-jsp-/content/fireeye-www/site-content/en_US/blog-right-threat-research/jcr:content/grid-33-left/rightrail/image"><a href="/mandiant/advantage.html"><img src="/content/dam/fireeye-www/services/images/bnr-mandiant-advantage-v3-315x315.png" alt="bnr-mandiant-advantage-v3-315x315" title="bnr-mandiant-advantage-v3-315x315" class="cq-dd-image"></a></div></div><div class="section email">
+<script src="https://www2.fireeye.com/js/forms2/js/forms2.min.js"></script>
+<div id="mktoWrapper_3353" class="a08 bg-f2f2f2"><div class="c00 c00v0"><h3>Email Updates</h3><p>Information and insight on today's advanced threats from FireEye.</p></div><form id="mktoForm_3353"></form> <script type="text/javascript">
+		if(typeof digitalData=="undefined"){digitalData={}}
+        //alert(https://www2.fireeye.com+":"+848-DID-242)
+        //alert("false");
+		MktoForms2.loadForm("https://www2.fireeye.com", "848-DID-242", 3353,
+		function(form) {
+			
+            if(typeof fdc.blog.initCheckboxes === "function") {
+                fdc.blog.initCheckboxes(form);
+            } 
+			digitalData.form = {id: form.getId(),name: document.title,url: window.location.href};
+			//if(typeof marketoFormViewTealiumEvent !== "undefined" && typeof utag!=="undefined"){marketoFormViewTealiumEvent(form);}
+			if(typeof marketoFormViewGtmEvent !== "undefined") {
+				marketoFormViewGtmEvent(form);
+			}
+			form.onSubmit(function(values){
+                //Check if GA fields are present
+                if(($("input[name='GACLIENTID__c']").length>0)&&($("input[name='GAUSERID__c']").length>0)&&($("input[name='GATRACKID__c']").length>0)&&(typeof ga!=="undefined"))
+                {
+                      ga(function(){ 
+                          //Get tracking ID and Client ID
+                           var tracker = ga.getAll()[0];
+                           var trackingId = tracker.get('trackingId');
+                           var clientId = tracker.get('clientId');
+                           var userId = tracker.get('userId');
+                           $("input[name='GACLIENTID__c'").val(clientId);
+                           $("input[name='GATRACKID__c'").val(trackingId);
+                           $("input[name='GAUSERID__c'").val(userId);
+                       });
+                 }
+            
+        	});
+			form.onSuccess(function(values, followUpUrl) {
+				//if(typeof marketoFormSubmitTealiumEvent !== "undefined"){marketoFormSubmitTealiumEvent(values);}
+				if(typeof marketoFormSubmitGTMEvent !== "undefined") {
+					marketoFormSubmitGTMEvent(values);
+				}
+				
+				if(typeof fdc.blog.replaceFormWithThankYou === "function") {
+					var result = fdc.blog.replaceFormWithThankYou(form,values,followUpUrl);
+					if (result === false) {
+						return false;
+					}
+				} 
+				return true;
+			});
+			
+			var adrC = typeof addMissingUTMsFromCookies !== "undefined" ? addMissingUTMsFromCookies(document.URL) : document.URL;
+			form.addHiddenFields({ ADR__c: adrC,ADR_Credit__c_account: document.title,ADR_Credit__c: document.referrer });
+			if(($("input[name='GACLIENTID__c']").length==0)&&($("input[name='GAUSERID__c']").length==0)&&($("input[name='GATRACKID__c']").length==0)){
+				form.addHiddenFields({ GACLIENTID__c:"",GAUSERID__c:"",GATRACKID__c:""});				
+			}
+			
+		});
+	</script>
+</div></div>
+<div class="section share">
+<h6><small>Share</small></h6>
+
+<div class="addthis_inline_share_toolbox_7uq8"></div>
+</div>
+<div class="section recent">
+<h6>Recent Posts</h6>
+
+<div class="c05 c05v0"><ul>
+<li class="c05_item"><p class="c05_date">04 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/detection-response-to-exploitation-of-microsoft-exchange-zero-day-vulnerabilities.html" title="Detection and Response to Exploitation of Microsoft Exchange Zero-Day Vulnerabilities">Detection and Response to Exploitation of Microsoft Exchange Zero-Day Vulnerabilities</a></li>
+
+<li class="c05_item"><p class="c05_date">04 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/sunshuttle-second-stage-backdoor-targeting-us-based-entity.html" title="New SUNSHUTTLE Second-Stage Backdoor Uncovered Targeting U.S.-Based Entity; Possible Connection to UNC2452">New SUNSHUTTLE Second-Stage Backdoor Uncovered Targeting U.S.-Based
+Entity; Possible Connection to UNC2452</a></li>
+
+<li class="c05_item"><p class="c05_date">03 Mar 2021</p><a class="c05_link" href="/blog/threat-research/2021/03/fuzzing-image-parsing-in-windows-uninitialized-memory.html" title="Fuzzing Image Parsing in Windows, Part Two: Uninitialized Memory">Fuzzing Image Parsing in Windows, Part Two: Uninitialized Memory</a></li>
+</ul></div>
+</div>
+<a href="/content/fireeye-www/en_US/blog/threat-research/_jcr_content.feed" target="_blank">
+<div class="section rss">
+<h6><small>RSS Feed: </small><small>Stay Connected</small></h6>
+<span class="ficon ficon-feed"></span>
+</div>
+</a>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<div class="footer_f635 footer">
+
+<footer id="g03-footer" class="l_footer g03 g03v0 g03v2 g03-5col">
+<div class="main-footer-wrapper">
+
+<div class="g03_list g03_list_1">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Company</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company.html" class="Footer">Why FireEye?</a></li>
+<li class="g03_item"><a href="/customers.html" class="Footer">Customer Stories</a></li>
+<li class="g03_item"><a href="/company/jobs.html" class="Footer">Careers</a></li>
+<li class="g03_item"><a href="/company/compliance-certification.html" class="Footer">Certifications and Compliance</a></li>
+<li class="g03_item"><a href="http://investors.fireeye.com/" target="_blank" class="Footer">Investor Relations</a></li>
+<li class="g03_item"><a href="/company/supplier.html" class="Footer">Supplier Documents</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_2">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>News and Events</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company/newsroom.html" class="Footer">Newsroom</a></li>
+<li class="g03_item"><a href="/company/press-releases.html" class="Footer">Press Releases</a></li>
+<li class="g03_item"><a href="/company/webinars.html" class="Footer">Webinars</a></li>
+<li class="g03_item"><a href="/company/events.html" class="Footer">Events</a></li>
+<li class="g03_item"><a href="/company/awards.html" class="Footer">Awards and Honors</a></li>
+<li class="g03_item"><a href="/company/contact-us/manage-your-communication-preference.html" class="Footer">Email Preferences</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_3">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Technical Support</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company/incident-response.html" class="Footer">Incident?</a></li>
+<li class="g03_item"><a href="/company/security.html" class="Footer">Report Security Issue</a></li>
+<li class="g03_item"><a href="/support/contacts.html" class="Footer">Contact Support</a></li>
+<li class="g03_item"><a href="https://csportal.fireeye.com/secur/login_portal.jsp?orgId=00D3000000063LS&portalId=06030000000pSNE" target="_blank" class="Footer">Customer Portal</a></li>
+<li class="g03_item"><a href="https://community.fireeye.com/s/support-community" target="_blank" class="Footer">Communities</a></li>
+<li class="g03_item"><a href="https://docs.fireeye.com" target="_blank" class="Footer">Documentation Portal</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_4">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>FireEye Blogs</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/blog/threat-research.html" class="Footer">Threat Research</a></li>
+<li class="g03_item"><a href="/blog/products-and-services.html" class="Footer">FireEye Stories</a></li>
+<li class="g03_item"><a href="/blog/executive-perspective.html" class="Footer">Industry Perspectives</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Threat Map</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/cyber-map/threat-map.html" class="Footer">View the Latest Threats</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_5">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Contact Us</strong><br>
+<div class="footer-list section">
+<ul class="g03_block">
+<li class="g03_item"><a href="tel:+1 877-347-3393" class="contactlinks">+1 877-347-3393</a><br>&nbsp;</li>
+</ul>
+</div></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Stay Connected</strong></p></div>
+<div class="followus-footer section"><h4 class="g03_title" id="g03-followus-title"> </h4><ul class="g03_block g03-s" id="g03-followus-list"><li class="g03_item g03_item-s">
+<a href="https://www.linkedin.com/company/fireeye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-li ficon-linkedin"></span>
+<span class="g03-s_label">LinkedIn</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://twitter.com/fireeye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-tw ficon-twitter2"></span>
+<span class="g03-s_label">Twitter</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.facebook.com/FireEye" target="_blank">
+<span class="g03-s-i ficon g03-s-i-fb ficon-facebook2"></span>
+<span class="g03-s_label">Facebook</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.youtube.com/user/FireEyeInc" target="_blank">
+<span class="g03-s-i ficon g03-s-i-yt ficon-youtube2"></span>
+<span class="g03-s_label">YouTube</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://itunes.apple.com/us/podcast/eye-on-security/id1073779629?mt=2" target="_blank">
+<span class="g03-s-i ficon g03-s-i-pc ficon-podcast"></span>
+<span class="g03-s_label">Podcast</span>
+</a>
+</li></ul>
+</div>
+<div class="htmlpassthru section">
+<div class="country-notification">
+<div id="c08_modal-lang" class="c08_modal lang">
+<div class="c08 c08v1">
+<div class="c08_header">
+<a href="#dismiss-lightbox" class="ficon ficon-close c08_dismiss" data-behavior="dismiss-c08"></a>
+</div>
+<div class="c08_content">
+<div class="c08_body">
+<div class="col FR">
+<p class="type-ML">Cette page est également disponible en français.</p>
+<div class="button section"><a class="btn" href="/index.html">Version française</a></div>
+</div>
+<div class="col DE">
+<p class="type-ML">Diese Seite ist auch auf Deutsch verfügbar</p>
+<div class="button section"><a class="btn" href="/index.html">Zur deutschen Seite wechseln</a></div>
+</div>
+<div class="col JP">
+<p class="type-ML">日本語ページを</p>
+<div class="button section"><a class="btn" href="/index.html">見る</a></div>
+</div>
+<div class="col KR">
+<p class="type-ML">해당 페이지는 한글 버전으로 보실 수 있습니다</p>
+<div class="button section"><a class="btn" href="/index.html">바로 가기</a></div>
+</div>
+<hr>
+<div class="col">
+<p><a class="dismiss" href="#dismiss-lightbox" data-behavior="dismiss-c08">Continue viewing this page in English</a></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<style>
+.c08_modal.lang {
+    background: rgba(255,255,255,0.8);
+}
+.c08_modal.lang .c08_header {
+    background: transparent;
+    border-left: none;
+}
+.c08_modal.lang .c08 {
+    top: 20%;
+    width: 600px;
+    border-radius: 12px;
+    box-shadow: rgba(0, 0, 0, 0.37) 0 0 15px;
+    border: 1px solid #b4b5b8;
+    background-image: url("/content/dam/fireeye-www/fw/images/bg-language-select.jpg");
+    background-position: right bottom;
+    margin: 0 auto;
+    position: relative;
+    max-width: 90%;
+}
+.c08_modal.lang .c08_dismiss {
+    color: #222;
+}
+.c08_modal.lang .c08_body {
+    padding: 12px 50px 60px;
+}
+.c08_modal.lang .col {
+    display: none;
+}
+.c08_modal.lang .col:last-child {
+    display: block;
+}
+.c08_modal.lang .btn {
+    margin-bottom: 0;
+}
+.c08_modal.lang hr {
+    margin: 30px 80px;
+}
+.c08_modal.lang hr:before {
+    border-bottom: none;
+}
+</style>
+</div></div>
+</div>
+</div></div>
+<div class="legal-footer-wrapper">
+<div class="legal-footer">
+<div class="g03_copyright">
+<p class="g03_copyright_p">
+Copyright&nbsp;&copy;&nbsp;2021&nbsp;FireEye, Inc.&nbsp;All rights reserved.&nbsp;<span class="g03-legal"><a href="/company/privacy.html">Privacy &amp; Cookies Policy</a> | <a href="/company/privacy-shield-commitment.html">Privacy Shield</a> | <a href="/company/legal.html">Legal Documentation</a></span>
+</p>
+</div><div class="g03_languages">
+<a class="g01_options-option" href="#footer-worldwide">
+<span>Site Language</span>
+<span>English<span class="ficon ficon-globe"></span></span>
+</a>
+<div class="option-menu" id="footer-worldwide">
+<p><strong>My preferred language:</strong></p>
+<ul class="g01_options_list"><li><a href="https://www.fireeye.com/blog/threat-research/2020/05/analyzing-dark-crystal-rat-backdoor.html" target="_blank">English (English)</a></li>
+<li><a href="https://www.fireeye.fr" target="_blank">French (Français)</a></li>
+<li><a href="https://www.fireeye.de" target="_blank">German (Deutsch)</a></li>
+<li><a href="https://www.fireeye.jp" target="_blank">Japanese (日本語)</a></li>
+<li><a href="https://www.fireeye.kr" target="_blank">Korean (한국어)</a></li>
+<li><a href="/products/international-literature.html">More languages</a></li>
+</ul>
+</div>
+</div> </div>
+</div>
+</footer>
+</div>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_fw.min.js"></script>
+
+
+<div class="htmlpassthru_c66c htmlpassthru">
+</div>
+
+<script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=fewebadmin"></script>
+</body>
+</html>

@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google-site-verification" content="RHQeasQqjasbRt5asY6atZYbs5tr10gFBevDt2HRhW0" />
+<link rel="pingback" href="https://nakedsecurity.sophos.com/xmlrpc.php">
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-5VK6LTK');</script>
+<!-- End Google Tag Manager -->
+
+<meta name="description" content="Paul Ducklin digs into one of the cryptographic flaws recently found in Cryptocat, a secure messaging application. Don&#039;t worry if you aren&#039;t a statistician or a computer scientist...Duck doesn&#039;t get very mathematical, and has produced some very groovy images!" />
+<meta name="keywords" content="cryptography, chi-squared, cryptocat, entropy, prng, randomness" />
+<title>Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG &#8211; Naked Security</title>
+<meta name='robots' content='max-image-preview:large' />
+<!-- Jetpack Site Verification Tags -->
+<meta name="google-site-verification" content="I9dHFo-YhnK2MfAHn-20V4GnWrOttVUYyISGamyU41M" />
+<meta name="msvalidate.01" content="7D8D1FA2892142B1543D2CBCD07FB88F" />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel='dns-prefetch' href='//v0.wordpress.com' />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Feed" href="https://nakedsecurity.sophos.com/feed/" />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Comments Feed" href="https://nakedsecurity.sophos.com/comments/feed/" />
+<link rel="alternate" type="application/rss+xml" title="Naked Security &raquo; Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG Comments Feed" href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/feed/" />
+<link rel='stylesheet' id='all-css-0' href='https://nakedsecurity.sophos.com/_static/??-eJyVz00OwiAQhuELCSM1mLgwnoXCRFD+wgxpevvS2J0bXU7yPsk3sFQRso3dIYElAheIYY7FvkUMczNtBeI1okwhyxGcYAhbMmNmYI9pOCrVF8q4kJjOSh/gn1hEw0j8q9mHGifZNzQsfB9xkybVL5+6qLE/QyZ4IVczvrrJjz/unTzSXV2VvkxKa70BdwtjDg==' type='text/css' media='all' />
+<style id='wp-block-library-inline-css'>
+.has-text-align-justify{text-align:justify;}
+</style>
+<script type='text/javascript' src='https://nakedsecurity.sophos.com/_static/??-eJzTLy/QzcxLzilNSS3WzwKiwtLUokoopZebmaeXVayjj0+Rbm5melFiSSpUsX2uraGZoamxkaGpqWkWAK9EIho='></script>
+<link rel="https://api.w.org/" href="https://nakedsecurity.sophos.com/wp-json/" /><link rel="alternate" type="application/json" href="https://nakedsecurity.sophos.com/wp-json/wp/v2/posts/230032" /><link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://nakedsecurity.sophos.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://nakedsecurity.sophos.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.7" />
+<link rel="canonical" href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/" />
+<link rel='shortlink' href='https://nakedsecurity.sophos.com/?p=230032' />
+<link rel="alternate" type="application/json+oembed" href="https://nakedsecurity.sophos.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2013%2F07%2F09%2Fanatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://nakedsecurity.sophos.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2013%2F07%2F09%2Fanatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng%2F&#038;format=xml" />
+<style type='text/css'>img#wpstats{display:none}</style><link rel="amphtml" href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/amp/">
+<!-- Jetpack Open Graph Tags -->
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG" />
+<meta property="og:url" content="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/" />
+<meta property="og:description" content="Paul Ducklin digs into one of the cryptographic flaws recently found in Cryptocat, a secure messaging application. Don&#8217;t worry if you aren&#8217;t a statistician or a computer scientist&amp;#8230…" />
+<meta property="article:published_time" content="2013-07-09T00:10:55+00:00" />
+<meta property="article:modified_time" content="2020-03-16T15:16:41+00:00" />
+<meta property="og:site_name" content="Naked Security" />
+<meta property="og:image" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?w=250" />
+<meta property="og:image:secure_url" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?w=250" />
+<meta property="og:image:width" content="250" />
+<meta property="og:image:height" content="250" />
+<meta property="og:locale" content="en_US" />
+<meta name="twitter:site" content="@NakedSecurity" />
+<meta name="twitter:text:title" content="Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG" />
+<meta name="twitter:image" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?w=144" />
+<meta name="twitter:card" content="summary" />
+<meta property="fb:admins" content="28552295016" />
+
+<!-- End Jetpack Open Graph Tags -->
+<link rel="icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=32" sizes="32x32" />
+<link rel="icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=192" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=180" />
+<meta name="msapplication-TileImage" content="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/03/cropped-sophos.png?w=270" />
+</head>
+<body class="post-template-default single single-post postid-230032 single-format-standard" >
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5VK6LTK"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div style="display: none">
+<svg>
+	<symbol id="sophos" viewBox="0 0 132 24">
+		<path d="m111.82 22.176h11.64c3.267 0 4.65-0.2 5.74-0.896 1.715-1.063 2.804-3.26 2.804-5.62 0-1.928-0.658-3.89-1.647-4.888-1.288-1.33-3.035-1.828-6.271-1.828h-3.527c-1.586 0-2.754-0.067-3.412-0.365-0.794-0.367-1.256-1.165-1.256-2.161 0-1.165 0.56-2.03 1.486-2.264 0.692-0.163 1.498-0.163 3.574-0.198h10.419v-3.956h-11.473c-2.574 0-3.727 0.099-4.718 0.466-2.279 0.796-3.828 3.257-3.828 6.083 0 1.93 0.76 3.727 2.079 4.89 1.155 0.996 2.872 1.462 5.51 1.462h4.697c1.057 0 1.915 0.132 2.376 0.398 0.893 0.433 1.418 1.328 1.418 2.36 0 0.864-0.395 1.597-1.087 2.027-0.561 0.369-1.517 0.534-3.268 0.534h-11.256zm-111.35 0h11.64c3.267 0 4.652-0.2 5.741-0.896 1.714-1.063 2.803-3.26 2.803-5.62 0-1.928-0.66-3.89-1.65-4.888-1.285-1.33-3.034-1.828-6.27-1.828h-3.527c-1.584 0-2.751-0.067-3.41-0.365-0.792-0.367-1.253-1.165-1.253-2.161 0-1.165 0.56-2.03 1.484-2.264 0.693-0.163 1.496-0.163 3.574-0.198h10.42v-3.956h-11.477c-2.573 0-3.727 0.099-4.715 0.466-2.278 0.796-3.83 3.257-3.83 6.083 0 1.93 0.762 3.727 2.08 4.89 1.155 0.996 2.871 1.462 5.51 1.462h4.696c1.057 0 1.913 0.132 2.377 0.398 0.888 0.433 1.416 1.328 1.416 2.36 0 0.864-0.394 1.597-1.089 2.027-0.558 0.369-1.517 0.534-3.264 0.534h-11.256v3.956zm94.05-16.18c-0.68 1.076-1.003 2.803-1.003 5.122 0 5.088 1.747 7.405 5.63 7.405 3.822 0 5.568-2.317 5.568-7.34 0-5.092-1.715-7.373-5.568-7.373-2.102 0-3.754 0.784-4.627 2.186zm13.174-2.511c1.329 1.761 2.072 4.63 2.072 7.992 0 3.816-1.197 6.948-3.334 8.677-1.619 1.304-4.078 2.022-6.995 2.022-4.142 0-7.41-1.372-9.092-3.817-1.263-1.793-1.88-4.176-1.88-7.08 0-4.172 1.133-7.339 3.27-9.035 1.682-1.37 4.339-2.122 7.383-2.122 3.85 0 6.925 1.209 8.576 3.363zm-22.018-3.068h-4.596v8.908h-8.319v-8.908h-4.597v21.759h4.597v-8.97h8.318v8.97h4.596v-21.759zm-28.61 10.277c1.23 0 1.941-0.163 2.427-0.62 0.581-0.49 0.938-1.533 0.938-2.74 0-1.436-0.58-2.478-1.584-2.838-0.356-0.13-0.94-0.197-1.684-0.197h-6.344v6.395zm-6.247 11.481h-4.598v-21.758h10.78c3.786 0 5.114 0.39 6.538 1.991 1.264 1.37 1.942 3.163 1.942 5.088 0 2.284-0.904 4.404-2.394 5.676-1.262 1.077-2.43 1.402-4.888 1.402h-7.38zm-22.589-16.179c-0.682 1.076-1.004 2.803-1.004 5.122 0 5.088 1.748 7.405 5.634 7.405 3.818 0 5.568-2.317 5.568-7.34 0-5.092-1.716-7.373-5.568-7.373-2.106 0-3.757 0.784-4.63 2.186zm13.174-2.511c1.328 1.761 2.073 4.63 2.073 7.992 0 3.816-1.2 6.948-3.335 8.677-1.618 1.304-4.079 2.022-6.993 2.022-4.144 0-7.413-1.372-9.096-3.817-1.264-1.793-1.878-4.176-1.878-7.08 0-4.172 1.133-7.339 3.272-9.035 1.681-1.37 4.337-2.122 7.38-2.122 3.851 0 6.93 1.209 8.578 3.363z"></path>
+	</symbol>
+	<symbol id="twitter" viewBox="0 0 24 24">
+ 		<path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"></path>
+ 	</symbol>
+	<symbol id="facebook" viewBox="0 0 24 24">
+ 		<path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"></path>
+ 	</symbol>
+	<symbol id="instagram" viewBox="0 0 24 24">
+		<path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"></path>
+	</symbol>
+	<symbol id="linkedin" viewBox="0 0 24 24">
+		<path d="M4.98 3.5c0 1.381-1.11 2.5-2.48 2.5s-2.48-1.119-2.48-2.5c0-1.38 1.11-2.5 2.48-2.5s2.48 1.12 2.48 2.5zm.02 4.5h-5v16h5v-16zm7.982 0h-4.968v16h4.969v-8.399c0-4.67 6.029-5.052 6.029 0v8.399h4.988v-10.131c0-7.88-8.922-7.593-11.018-3.714v-2.155z"></path>
+	</symbol>
+	<symbol id="rss" viewBox="0 0 24 24">
+		<path d="M6.503 20.752c0 1.794-1.456 3.248-3.251 3.248-1.796 0-3.252-1.454-3.252-3.248 0-1.794 1.456-3.248 3.252-3.248 1.795.001 3.251 1.454 3.251 3.248zm-6.503-12.572v4.811c6.05.062 10.96 4.966 11.022 11.009h4.817c-.062-8.71-7.118-15.758-15.839-15.82zm0-3.368c10.58.046 19.152 8.594 19.183 19.188h4.817c-.03-13.231-10.755-23.954-24-24v4.812z"></path>
+	</symbol>
+	<symbol id="reddit" viewBox="0 0 24 24">
+		<path d="M24 11.779c0-1.459-1.192-2.645-2.657-2.645-.715 0-1.363.286-1.84.746-1.81-1.191-4.259-1.949-6.971-2.046l1.483-4.669 4.016.941-.006.058c0 1.193.975 2.163 2.174 2.163 1.198 0 2.172-.97 2.172-2.163s-.975-2.164-2.172-2.164c-.92 0-1.704.574-2.021 1.379l-4.329-1.015c-.189-.046-.381.063-.44.249l-1.654 5.207c-2.838.034-5.409.798-7.3 2.025-.474-.438-1.103-.712-1.799-.712-1.465 0-2.656 1.187-2.656 2.646 0 .97.533 1.811 1.317 2.271-.052.282-.086.567-.086.857 0 3.911 4.808 7.093 10.719 7.093s10.72-3.182 10.72-7.093c0-.274-.029-.544-.075-.81.832-.447 1.405-1.312 1.405-2.318zm-17.224 1.816c0-.868.71-1.575 1.582-1.575.872 0 1.581.707 1.581 1.575s-.709 1.574-1.581 1.574-1.582-.706-1.582-1.574zm9.061 4.669c-.797.793-2.048 1.179-3.824 1.179l-.013-.003-.013.003c-1.777 0-3.028-.386-3.824-1.179-.145-.144-.145-.379 0-.523.145-.145.381-.145.526 0 .65.647 1.729.961 3.298.961l.013.003.013-.003c1.569 0 2.648-.315 3.298-.962.145-.145.381-.144.526 0 .145.145.145.379 0 .524zm-.189-3.095c-.872 0-1.581-.706-1.581-1.574 0-.868.709-1.575 1.581-1.575s1.581.707 1.581 1.575-.709 1.574-1.581 1.574z"></path>
+	</symbol>
+</svg>
+</div>
+<div id="page" class="hfeed site">
+	<a class="skip-link screen-reader-text" href="#content">Skip to content</a>
+
+	
+	<header id="masthead" class="site-header variation variation-3" role="banner">
+		<div class="header-container">
+			<div class="site-branding">
+				<div class="site-title">
+					<a title="Naked Security" href="https://nakedsecurity.sophos.com/" rel="home"><img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/naked-security-logo-white@2x.png"></a>
+					by
+					<a title="sophos.com" href="https://www.sophos.com"><svg viewBox="0 0 132 24" class="icon sophos"><use xlink:href="#sophos"></use></svg></a>
+				</div>
+			</div><!-- .site-branding -->
+			<nav id="site-navigation" class="main-navigation" role="navigation">
+				<div class="container">
+					<ul id="menu-variation-two" class="exit-links menu"><li id="menu-item-436509" class="products menu-item menu-item-type-custom menu-item-object-custom menu-item-436509"><a href="#">Products</a></li>
+<li id="menu-item-436515" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-436515"><a href="https://www.sophos.com/en-us/products/free-tools.aspx">Free Tools</a></li>
+<li id="menu-item-436531" class="search-toggle menu-item menu-item-type-custom menu-item-object-custom menu-item-436531"><a href="#">Search</a></li>
+<li id="menu-item-436532" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-436532"><a href="https://home.sophos.com/en-us.aspx">Free Sophos Home</a></li>
+</ul>				</div>
+			</nav><!-- #site-navigation -->
+			<div class="site-search-block">
+	<form target="_top" role="search" class="search-form" method="get" action="https://nakedsecurity.sophos.com/">
+        <fieldset>
+            <div class="field">
+				<input type="search" value="" name="s" class="search-field" placeholder="Search naked security...">
+            </div>
+            <div class="submit">
+				<button type="submit" class="search-submit button">Go</button>
+            </div>
+        </fieldset>
+    </form>
+</div>
+		</div><!-- .container -->
+	</header>
+
+	<div class="responsive-flyout-panel small-12 column active" style="opacity: 1; display: none;">
+		<div class="modal-filler"></div>
+	    <div class="productNavBox">
+	        <div class="productNavContainer">
+	            <div class="row prodRow">
+	                <div class="prodListBox column large-9">
+	                    <div class="row margin-0 highlightProduct">
+	                        <div class="column medium-6">
+	                            <a href="https://www.sophos.com/products/next-gen-firewall.aspx"><img src="https://www.sophos.com/medialibrary/2F4785DE8C3F43ECBD699A18F332FEEB.ashx">
+	                                <div class="menu-section-header">
+										<div class="menu-section-title">XG Firewall</div>
+	                                	<div class="menu-section-subtitle">Next-Gen Firewall</div>
+									</div>
+	                            </a>
+	                        </div>
+	                        <div class="column medium-6">
+	                            <a href="https://www.sophos.com/products/intercept-x.aspx"><img src="https://www.sophos.com/medialibrary/27111765D65A45D49A232925D2CE428B.ashx">
+	                                <div class="menu-section-header">
+										<div class="menu-section-title">Intercept X</div>
+	                                	<div class="menu-section-subtitle">Next-Gen Endpoint</div>
+									</div>
+	                            </a>
+	                        </div>
+	                    </div>
+	                    <div class="productList">
+	                        <ul>
+								<li>
+									<a href="https://www.sophos.com/en-us/products/cloud-optix.aspx"><img src="https://www.sophos.com/medialibrary/SophosNext/Images/Products/Icons/sophos-cloud-optix-icon.svg">Sophos Cloud Optix</a>
+								</li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/sophos-central.aspx"><img src="https://www.sophos.com/medialibrary/08EA66123F1B4DDE8FE5C9B578A7FAA7.ashx">Sophos Central</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/mobile-control.aspx"><img src="https://www.sophos.com/medialibrary/678FE994855047739F50D6C411184FA6.ashx">Sophos Mobile</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/server-security.aspx"><img src="https://www.sophos.com/medialibrary/01B80E7D7CD54EF8AC2E51C9C6EC0236.ashx">Intercept X for Server</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/secure-wifi.aspx"><img src="https://www.sophos.com/medialibrary/BEBD9C41BB4E480498514B29B92A145A.ashx">Secure Wi-Fi</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/phish-threat.aspx"><img src="https://www.sophos.com/medialibrary/DC9D1A7BA3964B0C9DAF1F1E68806B5A.ashx">Phish Threat</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/safeguard-encryption.aspx"><img src="https://www.sophos.com/medialibrary/8F51F06B62814B108D3B2763FF018E37.ashx">SafeGuard Encryption</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/sophos-email.aspx"><img src="https://www.sophos.com/medialibrary/597ADA0AF01A4A12B2B27239D0F9992C.ashx">Secure Email</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/unified-threat-management.aspx"><img src="https://www.sophos.com/medialibrary/8CB72BF5E1AD41F7894CE5E42101B0F3.ashx">SG UTM</a>
+	                            </li>
+	                            <li>
+	                                <a href="https://www.sophos.com/products/secure-web-gateway.aspx"><img src="https://www.sophos.com/medialibrary/C586E372694547A1B207A61D87246BA7.ashx">Secure Web Gateway</a>
+	                            </li>
+	                        </ul>
+	                    </div>
+	                </div>
+	                <div class="homeUserBox column large-3">
+						<img src="https://www.sophos.com/medialibrary/3376DF5742A64AEE93FDB9DCA7291239.ashx">
+						<div class="menu-section-title">For Home Users</div>
+	                    <p>Sophos Home protects every Mac and PC in your home </p><a href="https://home.sophos.com/" target="_blank" class="greenSmallMenuBtn">Learn More</a>
+					</div>
+	            </div>
+	            <div class="row blueRow">
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/free-tools.aspx"><img width="19" src="https://www.sophos.com/medialibrary/A1FF440D2BB84511B8C94D771D44E207.ashx">Free Security Tools</a>
+	                </div>
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/free-trials.aspx"><img width="20" src="https://www.sophos.com/medialibrary/FCD3410ED2C347808D9DB8AC12C62DBD.ashx">Free Trials</a>
+	                </div>
+	                <div class="column large-3 medium-6">
+	                    <a href="https://www.sophos.com/products/demos.aspx"><img width="18" src="https://www.sophos.com/medialibrary/50985180E5F54C94917A2A6508E24287.ashx">Product Demos</a>
+	                </div>
+	                <!-- <div class="column large-3 medium-6">
+	                    <a href="javascript:fairfax.openLiveChatFromFlyoutLink();" class="flyout-live-chat-link"><img width="20" src="https://www.sophos.com/medialibrary/E24C5050837145F6A5C592E299BA2A0D.ashx">Live Sales Chat</a>
+	                </div> -->
+	            </div>
+	        </div>
+	    </div>
+	</div>
+	<script>
+
+	jQuery(document).ready( function () {
+		var productButton   = jQuery('nav .menu-item.products');
+		var modalBackground = jQuery('.modal-filler');
+		var flyoutMenu		= jQuery('.responsive-flyout-panel');
+		var Sophos			= Sophos || {};
+
+		Sophos.MenuTest = {};
+
+		Sophos.MenuTest.open = function () {
+				productButton.addClass('open');
+				flyoutMenu.show();
+				modalBackground.show();
+		};
+
+		Sophos.MenuTest.close = function () {
+			productButton.removeClass('open');
+			flyoutMenu.hide();
+			modalBackground.hide();
+		};
+
+		Sophos.MenuTest.toggle = function () {
+			if ( productButton.hasClass('open') ) {
+				Sophos.MenuTest.close();
+			} else {
+				Sophos.MenuTest.open();
+			}
+		};
+
+		productButton.click( Sophos.MenuTest.toggle );
+		modalBackground.click( Sophos.MenuTest.close );
+	});
+
+	</script>
+
+	
+	<section class="about-panel">
+	<div class="container">
+	<div class="panel-content ">
+
+		<div class="description"><span>Have you listened to our podcast? <a href="/podcast/">Listen now</a></span></div>
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	<div id="content" class="site-content">
+		<div class="content-container">
+
+</div> <!-- .container -->
+</div> <!-- #content -->
+
+
+	<section class="content-panel">
+	<div class="container">
+	<div class="panel-content framed-content-area">
+
+		<main id="main" class="site-main" role="main">
+
+	
+		
+<article id="post-230032" class="post-230032 post type-post status-publish format-standard has-post-thumbnail hentry category-cryptography category-featured tag-chi-squared tag-cryptocat tag-entropy tag-prng tag-randomness">
+
+	<header class="entry-header">
+		<h1 class="entry-title">Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG</h1>		<div class="entry-meta">
+			<div>
+				
+	<span class="entry-published">
+		<time class="entry-date published" datetime="2013-07-09T01:10:55+01:00">09 Jul 2013</time>
+	</span>
+
+					<a href="#comments" class="comment-box">
+					<span class="count">23</span>
+				</a>
+					
+	<span class="entry-categories">
+	<a href="https://nakedsecurity.sophos.com/category/cryptography/">Cryptography</a>	</span>
+
+			</div>
+	</header> <!-- .entry-header -->
+
+    <div id="newsletter-signup" class="container top"></div>
+
+			<div class="entry-featured-image">
+			<img width="250" height="250" src="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?w=250&amp;h=250&amp;crop=1" class="attachment-hero-thumbnail size-hero-thumbnail wp-post-image" alt="" loading="lazy" srcset="https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png 250w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=150,150 150w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=225,225 225w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=70,70 70w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=32,32 32w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=50,50 50w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=64,64 64w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=96,96 96w, https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2013/07/colourmap-2501.png?resize=128,128 128w" sizes="(max-width: 250px) 100vw, 250px" />					</div> <!-- .entry-featured-image -->
+		
+		<nav class="navigation post-navigation" role="navigation">
+		<h2 class="screen-reader-text">Post navigation</h2>
+
+		<div class="nav-links">
+			<div class="nav-previous"><a href="https://nakedsecurity.sophos.com/2013/07/08/who-is-sophoslabs-joanne-garvey-threat-researcher/" rel="prev"><span class="nav-label">Previous</span><span class="nav-seperator">:</span><span class="nav-title"> Who is SophosLabs: Joanne Garvey, Threat Researcher</span></a></div><div class="nav-next"><a href="https://nakedsecurity.sophos.com/2013/07/09/some-us-states-strengthen-data-breach-notification-laws-others-ignore-them/" rel="next"><span class="nav-label">Next</span><span class="nav-seperator">:</span><span class="nav-title"> Some US states strengthen data breach notification laws, others ignore them</span></a></div>		</div>
+		<!-- .nav-links -->
+	</nav><!-- .navigation -->
+	
+	<div class="entry-content">
+		<div class="entry-prefix">
+			<div class="entry-author">
+				
+	
+					<span class="by">by</span>
+			<a href="https://nakedsecurity.sophos.com/author/paul-ducklin/" title="Posts by Paul Ducklin" class="author url fn" rel="author">Paul Ducklin</a>		
+	
+				</div>
+			<div class="entry-sharing">
+				
+	<ul class="block social share">
+		<li class="facebook"><a href="https://www.facebook.com/share.php?u=https%3A%2F%2Fnakedsecurity.sophos.com%2F2013%2F07%2F09%2Fanatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng%2F&title=Anatomy+of+a+pseudorandom+number+generator+%E2%80%93+visualising+Cryptocat%E2%80%99s+buggy+PRNG" data-title="Anatomy of a pseudorandom number generator – visualising Cryptocat’s buggy PRNG" title="Share on Facebook"><svg style="height: 20px;" viewBox="0 0 100 100" class="icon facebook"><use xlink:href="#facebook"></use></svg></a></li>
+		<li class="twitter"><a href="https://twitter.com/intent/tweet?text=Anatomy+of+a+pseudorandom+number+generator+%E2%80%93+visualising+Cryptocat%E2%80%99s+buggy+PRNG+https%3A%2F%2Fnakedsecurity.sophos.com%2F%3Fp%3D230032" data-title="Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG" title="Share on Twitter"><svg style="height: 20px;" viewBox="0 0 100 100" class="icon twitter"><use xlink:href="#twitter"></use></svg></a></li>
+		<li class="linkedin"><a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2013%2F07%2F09%2Fanatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng%2F&title=Anatomy+of+a+pseudorandom+number+generator+%E2%80%93+visualising+Cryptocat%E2%80%99s+buggy+PRNG" data-title="Anatomy of a pseudorandom number generator – visualising Cryptocat’s buggy PRNG" title="Share on LinkedIn"><svg style="height: 20px;"  viewBox="0 0 100 100" class="icon linkedin"><use xlink:href="#linkedin"></use></svg></a></li>
+		<li class="reddit"><a href="https://reddit.com/submit/?url=https%3A%2F%2Fnakedsecurity.sophos.com%2F2013%2F07%2F09%2Fanatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng%2F&title=Anatomy+of+a+pseudorandom+number+generator+%E2%80%93+visualising+Cryptocat%E2%80%99s+buggy+PRNG" title="Share on Reddit"><svg style="height: 20px;"  viewBox="0 0 100 100" class="icon reddit"><use xlink:href="#reddit"></use></svg></a></li>
+
+			</ul>
+
+				</div>
+		</div>
+		<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/cryptocat-170.jpg" align="right" hspace="10" width="170" height="220"></img>We recently <a href="http://nakedsecurity.sophos.com/2013/07/06/cryptocat-encrypted-group-chats-may-have-been-crackable-for-7-months/">wrote about</a> a security advisory <a href="https://blog.crypto.cat/2013/07/new-critical-vulnerability-in-cryptocat-details/" rel="nofollow">from Cryptocat</a>, an open-source web-based secure messaging project.</p>
+<p>Cryptocat&#8217;s hacktivist credibility was cemented in 2012 when its Canadian developer, Nadim Kobeissi, was <a href="http://nakedsecurity.sophos.com/2012/06/08/interest-in-cryptocat-spikes-following-developers-interrogation-at-us-border/" rel="nofollow">stopped at the US border</a> and interviewed about his Cryptocat-related programming activities.</p>
+<p>The software enjoyed a surge in popularity as a result, which made last week&#8217;s Fourth-of-July <a href="https://blog.crypto.cat/2013/07/new-critical-vulnerability-in-cryptocat-details/" rel="nofollow">vulnerability announcement</a> all the more worrying.</p>
+<p>It turned out that the Cryptocat code had for some time contained a number of <a href="http://tobtu.com/decryptocat.php" rel="nofollow">cryptographic flaws</a> that made it measurably less secure than its users might reasonably have assumed.</p>
+<p>One of these flaws was found in the heart of Cryptocat&#8217;s PRNG (pseudo-random number generator).</p>
+<h4>PRNGs are a key component of cryptographic software</h4>
+<p>For the same reason that you don&#8217;t use the same password on more than one website, so that one cracked password doesn&#8217;t open up your whole online life, Cryptocat generates new keys every time you chat to someone.</p>
+<p>So, to generate a steady supply of unpredictable, unguessable, one-use encryption keys, Cryptocat needs a steady supply of high-quality random numbers.</p>
+<p>With this in mind, I thought it might be interesting, and educational, to drill into one of Cryptocat&#8217;s now-patched PRNG bugs.</p>
+<h4>Cryptocat random numbers, old-style</h4>
+<p>Cryptocat is written in JavaScript, which represents numbers internally as 8-byte IEEE-754 <a href="http://en.wikipedia.org/wiki/IEEE_floating_point" rel="nofollow">floating point numbers</a>.</p>
+<p>Usefully, 8-byte floats allow you to represent integers up to and beyond 32 bits, though annoyingly this numeric range doesn&#8217;t extend all the way to 64 bit integers.</p>
+<p>For technical reasons, IEEE-754 numbers run out of integer precision at 2<sup>53</sup>, which corresponds to nearly, but not quite, 16 decimal digits of precision. </p>
+<p>Since Cryptocat&#8217;s core PRNG function, <tt>Cryptocat.random()</tt>, returns a JavaScript number, the coders made sure they extracted all possible variability every time it was called.</p>
+<p>They constructed a text string representing a random 16-digit (53 bit) decimal number somewhere from 0 to 0.999999999999999 inclusive. In pseudocode:</p>
+<pre>
+// Start building a number (0&lt;=N&lt;1) as a text string
+
+numstr = &#039;0.&#039;
+
+// tack on 16 random ASCII digits
+
+for i = 1 to 16 do
+   numstr = numstr + randomASCIIdigit()
+end
+
+// Convert the string to an 8-byte float
+
+return stringtonumber(numstr)
+</pre>
+<p>Curiously, the coders generated each random ASCII digit by extracting a random byte from a stream cipher of excellent repute known as <a href="http://en.wikipedia.org/wiki/Salsa20">Salsa20</a>, and converting that byte into one of the characters from &#8216;0&#8217; to &#8216;9&#8217;.</p>
+<p>But a byte (8 bits) can take on 256 (2<sup>8</sup>) different values, and 256 isn&#8217;t a multiple of 10.</p>
+<p>Since they couldn&#8217;t divide 256 bytes into 10 equally-sized groups of values, the coders resorted to a trick:</p>
+<pre>
+repeat
+   byte250 = randomSalsaByte()
+until byte250 &lt;= 250
+
+randomdigit = remainder(byte250,10)
+</pre>
+<p>The idea is simple: 250 is evenly divisible by 10, so it&#8217;s easy to map the numbers from 1..250 onto the digits 0..9.</p>
+<p>And 250 is very close to 256, so by simply throwing away random bytes from 251..255, the problem of indivisibility by 10 is sidestepped.</p>
+<h4>The problem</h4>
+<p>The code above is certainly an inelegant solution, since it is, in theory, at least, a potentially infinite loop. </p>
+<p style='background-color:#e8e8e8;font-size:80%;padding:.71em;padding-left:2em;text-indent:-1.29em;'>&rarr; If the <tt>randomSalsaByte()</tt> function is truly random, there is no mathematical <em>guarantee</em> that it won&#8217;t continue to return values above 250 for seconds, or minutes, or months.</p>
+<p>It is also flat-out wrong.</p>
+<p>The less-than-or-equal-to sign should be a less-than sign.</p>
+<p>There are 251 different integers such that 0 &le; X &le; 250. </p>
+<p>The programmer meant to specify that 0 &le; X &lt; 250 or, equivalently, that 0 &le; X &le; 249. </p>
+<p>This is known as a fencepost error, by analogy with the fact that it takes seven fenceposts one metre apart to create a fence six metres long.</p>
+<p>That&#8217;s because you need an extra fencepost at the far end of the sixth section:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/fenceposts-480.png" width="480" height="159"></img></p>
+<h4>Quantifying the error</h4>
+<p>When you divide numbers from 0..249 by 10 and take the remainder, the values 0 to 9 come out on average 25 times each, or 10% of the time, for a uniform distribution of digits.</p>
+<p>But when you do the same with numbers from 0..250, there are 25 ways to come up with each of the digits 1..9, and 26 ways to come up with 0.</p>
+<p>Instead of coming up on average 10% of the time (25/250, or 0.1), 0 will come up approximately 10.36% of the time (26/251, or 0.1036), and 1..9 will come up 9.96% each (25/251, or 0.0996).</p>
+<p>The difference is easily visualised.</p>
+<p>Here is a graph showing three tests, each generating 1,000,000 random digits using a good PRNG (the file <tt>/dev/urandom</tt> on OS X). </p>
+<p>You&#8217;d expect each digit to come up about 100,000 times, and that&#8217;s what happened:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/distro-urandom-498.png" width="498" height="114"></img></p>
+<p>But the Cryptocat generator, with its one-part-in-251 inaccuracy, gives a graph that on casual inspection doesn&#8217;t look right. </p>
+<p>Each time, the count for 0 is somewhere around 103,500 &#8211; approximately 10.36% of the 1,000,000 digits in each sample:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/distro-faux-498.png" width="497" height="113"></img></p>
+<p>Of course, the visible differences between the red graphs and the blue graphs might not be statistically significant, since they could have arisen by chance. </p>
+<p>There is, after all, no law that prevents unusual looking results, just as there is nothing that stops a casino&#8217;s roulette wheel from landing on red 20 times in a row.</p>
+<p>But there are statistical tools we can use to measure the likelihood that a set of non-random-looking results really did happen by chance, not due to some flaw in the PRNG.</p>
+<h4>Chi-squared</h4>
+<p>One common method is known as the Chi-squared test.</p>
+<p>You compute the difference between each reading and the average value you expected.</p>
+<p>Then you square the differences, divide each one by the expected value, and add those scaled-squares-of-differences together.</p>
+<p>Because you square the differences, readings that are unusually far from what you expected have a much larger effect on the Chi-squared value than readings that were close to correct.</p>
+<p>You then do some fancy mathematical calculations (or look up the result in a pre-computed table) to convert the Chi-squared value into a probability figure; the lower the probability, the worse your PRNG looks.</p>
+<p>Loosely speaking, the Chi-squared probability tells you the chance that the variation in results that you observed really did happen by accident.</p>
+<p>So, the lower the figure, the less likely that the inaccuracies you observed can be explained away as natural and reasonable.</p>
+<p style='background-color:#e8e8e8;font-size:80%;padding:.71em;padding-left:2em;text-indent:-1.29em;'>&rarr; Lower than 0.1% is considered very suspicious, since it suggests that your observed result should only happen &#8220;against the odds&#8221; once in every 1000 tries. So there&#8217;s a 99.9% chance that your weird results are down to a flaw in your assumptions. In this case our assumption is that the numbers come from a reliable PRNG; if we <em>reject</em> that hypothesis, we effectively <em>accept</em> that the PRNG is faulty.</p>
+<p>Generating 30 sets of 100,000 samples using the <tt>/dev/urandom</tt> generator produced a wide range of probability figures, none particularly alarming:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/chi2-100k-urandom-4992.png" width="499" height="275"></img></p>
+<p>But similar results for 30 sets of Cryptocat PRNG digits have a much shabbier look:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/chi2-100k-mod251-499.png" width="499" height="275"></img></p>
+<p>Stepping up the number of samples in each test &#8211; simply put, giving more time for genuinely random variations to even themselves out &#8211; polarises the results even further.</p>
+<p>With 30 sets of 1,000,000 samples, <tt>/dev/urandom</tt> seems to satisfy our assumption, namely that it is a decent PRNG:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/chi2-1mil-urandom-499.png" width="499" height="275"></img></p>
+<p>Cryptocat&#8217;s fencepost error, however, has really put a spanner in the works:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/chi2-1mil-mod251-499.png" width="499" height="275"></img></p>
+<h4>The error propagated</h4>
+<p>Clearly, the PRNG&#8217;s bias towards 0 is consistent and quantifiable: it&#8217;s off-kilter by 1/251, as we showed above.</p>
+<p>Does that sort of bias still cause a problem when we combine sixteen digits into a floating point string and convert it back to a 53-bit number?</p>
+<p>What if we generate 53 bits of floating point precision, and then do this:</p>
+<pre>
+number = rounddown(Cryptocat.random()*100) + 1
+</pre>
+<p>Since the <tt>random()</tt> function produces a number from 0 to 0.9999999999999999, multiplying by 100 and rounding down limits us to numbers from 0..99, and adding 1 produces an integer from 1..100.</p>
+<p>We&#8217;ve converted 16 flawed digits into 53 bits of IEEE-754 floating point fraction, then converted that again to fewer than seven bits&#8217; worth of positive integer.</p>
+<p>Perhaps that is enough to hide the bias we saw above?</p>
+<p>It isn&#8217;t.</p>
+<h4>Visualising the flaw</h4>
+<p>Below, I created a 100&#215;100 grid and then generated 10,000,000 pairs of Cryptocat-style floats.</p>
+<p>I mapped each pair of 53-bit numbers to a pair of integers from 1..100, as explained above, and used that pair as an (X,Y) co-ordinate in my 100&#215;100 grid, keeping tally of how many times each point in the grid got a &#8220;hit&#8221;.</p>
+<p>I then used those counts to choose a colour for each point in the grid; more &#8220;hits&#8221; meant a brighter colour.</p>
+<p>Using <tt>/dev/urandom</tt> to produce my digits from 0..9 in my PRNG, I ended up with what looks like (and, indeed, is) just so much random noise:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/colourmap-urandom-4801.png" width="480" height="342"></img></p>
+<p>But using the flawed Cryptocat PRNG produced a ghostly grid of colours that clearly reveals the systematic prejudices in the PRNG:</p>
+<p><img loading="lazy" src="http://news-sophos.go-vip.net/wp-content/uploads/sites/2/2013/07/colourmap-mod251-4801.png" width="480" height="342"></img></p>
+<p>And that, my friends, is why PRNGs are important, and why they should be tested thoroughly every time you build and ship the latest version of your software.</p>
+<p>A PRNG which passes the Chi-squared test may very well still be deeply flawed, but one that fails, and which produces such clear visual regularities, is definitely unfit for purpose.</p>
+<p>Random number generators, as the joke goes, are far too important to be left to chance.</p>
+<p style='padding-bottom:.8em;padding-top:.8em;'></p>
+			</div> <!-- .entry-content -->
+	<ul class="block social follow">
+		<li>
+			<svg style="height: 24px" viewBox="0 0 24 24" class="icon twitter"><use xlink:href="#twitter"></use></svg>
+			<p>Follow <strong><a href="https://twitter.com/nakedsecurity">@NakedSecurity on Twitter</a></strong> for the latest computer security news.</p>
+		</li>
+		<li>
+			<svg style="height: 24px" viewBox="0 0 24 24" class="icon instagram"><use xlink:href="#instagram"></use></svg>
+			<p>Follow <strong><a href="https://www.instagram.com/nakedsecurity/">@NakedSecurity on Instagram</a></strong> for exclusive pics, gifs, vids and LOLs!</p>
+		</li>
+	</ul>
+</article><!-- #post-## -->
+
+		<div class="free-tools-block">
+			<h2 class="block-title">Free tools</h2>
+
+<div class="ns-free-tools">
+	<div class="ns-free-tools__item ns-free-tools__item--sophos-home">
+		<a class="ns-free-tools__link" href="https://home.sophos.com/en-us.aspx?cmp=701j0000001eLpnAAE">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/sophos-home@2x.png" alt="Sophos Home" class="ns-free-tools__image" width="166" height="100">
+			<h4 class="ns-free-tools__title">
+				Sophos Home			</h4>
+			<div class="ns-free-tools__sub-title">
+				Protect personal PCs and Macs			</div>
+		</a>
+	</div>
+	<div class="ns-free-tools__item ns-free-tools__item--hitman-pro">
+		<a class="ns-free-tools__link" href="https://www.hitmanpro.com/en-us/hmp.aspx">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/hitman-pro@2x.png" alt="Hitman Pro" class="ns-free-tools__image" width="154" height="100">
+			<h4 class="ns-free-tools__title">
+				Hitman Pro			</h4>
+			<div class="ns-free-tools__sub-title">
+				Find and remove malware			</div>
+		</a>
+	</div>
+	<div class="ns-free-tools__item ns-free-tools__item--intercept-x">
+		<a class="ns-free-tools__link" href="https://www.sophos.com/en-us/products/free-tools/sophos-mobile-security-free-edition.aspx">
+			<img src="https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/img/free-tools/mobile-security-android@2x.png" alt="Sophos Intercept X for Mobile" class="ns-free-tools__image" width="96" height="110">
+			<h4 class="ns-free-tools__title">
+				Intercept X for Mobile			</h4>
+			<div class="ns-free-tools__sub-title">
+				Protect Android devices			</div>
+		</a>
+	</div>
+</div>
+		</div>
+
+			<nav class="navigation post-navigation" role="navigation">
+		<h2 class="screen-reader-text">Post navigation</h2>
+
+		<div class="nav-links">
+			<div class="nav-previous"><a href="https://nakedsecurity.sophos.com/2013/07/08/who-is-sophoslabs-joanne-garvey-threat-researcher/" rel="prev"><span class="nav-label">Previous</span><span class="nav-seperator">:</span><span class="nav-title"> Who is SophosLabs: Joanne Garvey, Threat Researcher</span></a></div><div class="nav-next"><a href="https://nakedsecurity.sophos.com/2013/07/09/some-us-states-strengthen-data-breach-notification-laws-others-ignore-them/" rel="next"><span class="nav-label">Next</span><span class="nav-seperator">:</span><span class="nav-title"> Some US states strengthen data breach notification laws, others ignore them</span></a></div>		</div>
+		<!-- .nav-links -->
+	</nav><!-- .navigation -->
+	
+	
+	</main><!-- #main -->
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	
+	<section class="comments-panel">
+	<div class="container">
+	<div class="panel-content framed-content-area">
+
+			
+<div id="comments" class="comments-area">
+
+			<h2 class="comments-title">
+			23 comments on &ldquo;<span>Anatomy of a pseudorandom number generator &#8211; visualising Cryptocat&#8217;s buggy PRNG</span>&rdquo;		</h2>
+
+		<ol class="comment-list">
+					<li id="comment-218868" class="comment even thread-even depth-1 parent">
+			<article id="div-comment-218868" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/e2a071f187a256689088ff8e53435991?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Chester Wisniewski</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-218868"><time datetime="2013-07-09T02:53:49+01:00">July 9, 2013 at 2:53 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>It isn&#039;t often I am enlightened and entertained and even less often that I get to the end of a 1400+ word blog post and feel happier for it. It&#039;s clear that it wasn&#039;t by chance and should be even more apparent by my public commentary. I don&#039;t hand out public praise, even for friends, very often. Thanks for the excellent article Duck. </p>
+<p>Chester </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_218868"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_218868={"id":7238218,"unique_id":"wp-comment-218868","title":"It%20isn%26%23039%3Bt%20often%20I%20am%20enlightened%20and%20entertained%20and%20even%20less%20often%20that%20I%20get%20to%20the%20end%20of%20a%201400%2B%20word%20blog%20post%20and%20feel%20happier%20for%20it.%20It%26%23039%3Bs%20clear%20that%20it%20wasn%26%23039%3Bt%20by%20chance%20and%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-218868","item_id":"_comm_218868"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=218868#respond' data-commentid="218868" data-postid="230032" data-belowelement="div-comment-218868" data-respondelement="respond" data-replyto="Reply to Chester Wisniewski" aria-label='Reply to Chester Wisniewski'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219059" class="comment odd alt depth-2">
+			<article id="div-comment-219059" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219059"><time datetime="2013-07-09T17:44:33+01:00">July 9, 2013 at 5:44 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Aw, thanks, Chester 🙂 </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219059"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219059={"id":7238218,"unique_id":"wp-comment-219059","title":"Aw%2C%20thanks%2C%20Chester%20%3A-%29%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219059","item_id":"_comm_219059"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219059#respond' data-commentid="219059" data-postid="230032" data-belowelement="div-comment-219059" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-218917" class="comment even thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-218917" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/0e7b6173470ead2fe170d55b317a9b1d?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/0e7b6173470ead2fe170d55b317a9b1d?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Jack O&#039;Connor</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-218917"><time datetime="2013-07-09T06:35:15+01:00">July 9, 2013 at 6:35 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Apart from the colorful plot, I&#039;m curious what the impact of this bug really was. If it only reduced the randomness in their passwords by a fraction of a percent, is it really practically less secure? </p>
+<p>I&#039;m also curious what the author&#039;s preferred method would be for reducing the range of random integers. I&#039;d always been taught that this was a good method. If you wanted to be really deterministic, I guess you could collect the remainder bits until they add up to a multiple of 10, to guarantee that you can terminate at that point. But the odds of holding up that loop for even a tenth of a second are so vanishingly small that I wonder if it&#039;s really worth the added complexity.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_218917"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_218917={"id":7238218,"unique_id":"wp-comment-218917","title":"Apart%20from%20the%20colorful%20plot%2C%20I%26%23039%3Bm%20curious%20what%20the%20impact%20of%20this%20bug%20really%20was.%20If%20it%20only%20reduced%20the%20randomness%20in%20their%20passwords%20by%20a%20fraction%20of%20a%20percent%2C%20is%20it%20really%20practically%20le%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-218917","item_id":"_comm_218917"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=218917#respond' data-commentid="218917" data-postid="230032" data-belowelement="div-comment-218917" data-respondelement="respond" data-replyto="Reply to Jack O&#039;Connor" aria-label='Reply to Jack O&#039;Connor'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-218990" class="comment odd alt depth-2">
+			<article id="div-comment-218990" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo avatar-default' height='50' width='50' loading='lazy'/>						<b class="fn">@jmgosney</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-218990"><time datetime="2013-07-09T12:21:31+01:00">July 9, 2013 at 12:21 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Hey Jack, please refer to this blog post by sc00bz (Steve Thomas) to read about the real impact of this bug: <a href="http://tobtu.com/decryptocat.php" rel="nofollow">http://tobtu.com/decryptocat.php</a> </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_218990"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_218990={"id":7238218,"unique_id":"wp-comment-218990","title":"Hey%20Jack%2C%20please%20refer%20to%20this%20blog%20post%20by%20sc00bz%20%28Steve%20Thomas%29%20to%20read%20about%20the%20real%20impact%20of%20this%20bug%3A%20%26lt%3Ba%20href%3D%26quot%3Bhttp%3A%2F%2Ftobtu.com%2Fdecryptocat.php%26quot%3B%20rel%3D%26quot%3Bnofollow%26quot%3B%26gt%3Bhttp%3A%2F%2Ftobtu.com%2Fdecryptocat%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-218990","item_id":"_comm_218990"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=218990#respond' data-commentid="218990" data-postid="230032" data-belowelement="div-comment-218990" data-respondelement="respond" data-replyto="Reply to @jmgosney" aria-label='Reply to @jmgosney'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219065" class="comment even depth-2 parent">
+			<article id="div-comment-219065" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219065"><time datetime="2013-07-09T18:11:49+01:00">July 9, 2013 at 6:11 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The potential severity of this bug paled into insignificance compared to another bug in Cryptocat &#8211; the code acquired 32 bytes of random data (used by the crypto key pair generator for each message) but inadvertently requested hex digits (4 bits per byte) instead of full bytes, thus effectively using 16 bytes where the crypto algorithm specified 32.      </p>
+<p>As for the whole multiple-of-10 thing, you can avoid it altogether. The only reason for having it is to generate ten decimal  digits to convert into 53 bits of floating point number.      </p>
+<p>But base 2 and base 10 never play nicely together. Mixing them, as here, is unnecessary.       </p>
+<p>You can just generate two 32-bit integers from Salsa and use multiplication and addition to combine them into exactly 53 bits of float. </p>
+<p>To convert from 53 bits of float in the range 0 to 0.9999999999999999 into an integer in the range 1..N, just multiply by N, do math.floor(), i.e. round down, and add 1. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219065"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219065={"id":7238218,"unique_id":"wp-comment-219065","title":"The%20potential%20severity%20of%20this%20bug%20paled%20into%20insignificance%20compared%20to%20another%20bug%20in%20Cryptocat%20-%20the%20code%20acquired%2032%20bytes%20of%20random%20data%20%28used%20by%20the%20crypto%20key%20pair%20generator%20for%20each%20messa%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219065","item_id":"_comm_219065"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219065#respond' data-commentid="219065" data-postid="230032" data-belowelement="div-comment-219065" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219149" class="comment odd alt depth-3 parent">
+			<article id="div-comment-219149" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/0e7b6173470ead2fe170d55b317a9b1d?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/0e7b6173470ead2fe170d55b317a9b1d?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Jack O&#039;Connor</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219149"><time datetime="2013-07-10T04:15:10+01:00">July 10, 2013 at 4:15 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Cool. I don&#039;t know if this applies here, but another friend pointed me to this article  <a href="http://(http://rdist.root.org/2009/05/17/the-debian-pgp-disaster-that-almost-was/)" rel="nofollow">(http://rdist.root.org/2009/05/17/the-debian-pgp-disaster-that-almost-was/)</a> about how a biased PRNG can actually leak your (even properly generated) private key through signatures alone. Holy cow. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219149"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219149={"id":7238218,"unique_id":"wp-comment-219149","title":"Cool.%20I%20don%26%23039%3Bt%20know%20if%20this%20applies%20here%2C%20but%20another%20friend%20pointed%20me%20to%20this%20article%20%20%26lt%3Ba%20href%3D%26quot%3Bhttp%3A%2F%2F%28http%3A%2F%2Frdist.root.org%2F2009%2F05%2F17%2Fthe-debian-pgp-disaster-that-almost-was%2F%29%26quot%3B%20rel%3D%26quot%3Bnofo%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219149","item_id":"_comm_219149"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219149#respond' data-commentid="219149" data-postid="230032" data-belowelement="div-comment-219149" data-respondelement="respond" data-replyto="Reply to Jack O&#039;Connor" aria-label='Reply to Jack O&#039;Connor'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219159" class="comment even depth-4">
+			<article id="div-comment-219159" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219159"><time datetime="2013-07-10T06:50:22+01:00">July 10, 2013 at 6:50 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Debian cut the entropy of its crypto keys to 15 bits, I think. </p>
+<p>The Debian story is a really intriguing one &#8211; IIRC, developers ran an automated code analysis tool that said, &quot;Here&#039;s a bunch of code that seems to produce unpredictable results and might therefore be wrong,&quot; which usually it would be. </p>
+<p>So they removed it &quot;for safety,&quot; except that it was the code to put randomness into the PRNG, and it was supposed to produce unpredictable results! </p>
+<p>In the end, the only data used to seed the PRNG was the process ID (an integer from 0..32767). Oops! </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219159"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219159={"id":7238218,"unique_id":"wp-comment-219159","title":"Debian%20cut%20the%20entropy%20of%20its%20crypto%20keys%20to%2015%20bits%2C%20I%20think.%20%20The%20Debian%20story%20is%20a%20really%20intriguing%20one%20-%20IIRC%2C%20developers%20ran%20an%20automated%20code%20analysis%20tool%20that%20said%2C%20%26quot%3BHere%26%23039%3Bs%20a%20b%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219159","item_id":"_comm_219159"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219159#respond' data-commentid="219159" data-postid="230032" data-belowelement="div-comment-219159" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-235506" class="comment odd alt depth-3">
+			<article id="div-comment-235506" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/f83f83bd21a24d8214e2158953277f36?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/f83f83bd21a24d8214e2158953277f36?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Douglas Bagnall</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-235506"><time datetime="2013-08-15T13:01:00+01:00">August 15, 2013 at 1:01 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<blockquote><p>To convert from 53 bits of float in the range 0 to 0.9999999999999999 into an integer in the range 1..N, just multiply by N, do math.floor(), i.e. round down, and add 1. </p></blockquote>
+<p>Actually, no.  This will divide the float values into N buckets of unequal size, unless N is a power of 2 less than 2 **53.  To see this, imagine for a moment the float has a 7 bit mantissa, and N is 100. There are 128 possible float values and 100 integers, which is resolved by giving 28 regularly spaced integers an extra ticket in the lottery.  With 53 bits, the effect is smaller because the buckets are much bigger (around 2** 46 rather than 1 or 2), but it is still there. </p>
+<p>The correct thing to do is what e.g. GSL does: <i>don&#8217;t</i> convert to floating point at all. Pick the power of two just bigger than N, and poll those many bits at a time until you get a number in your range. Along these lines: </p>
+<pre> 
+  
+x = 100 
+  
+while x &gt;= 100: 
+  
+  x = get_salsa_bits(7) 
+  
+ 
+x += 1 
+  
+</pre>
+<p>And don&#8217;t worry about the indeterminacy of the loop, for goodness sake! You&#8217;re no more likely to wait a hundred cycles than you are win a lottery or guess an RSA key. Amortise.  </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_235506"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_235506={"id":7238218,"unique_id":"wp-comment-235506","title":"%26lt%3Bblockquote%26gt%3BTo%20convert%20from%2053%20bits%20of%20float%20in%20the%20range%200%20to%200.9999999999999999%20into%20an%20integer%20in%20the%20range%201..N%2C%20just%20multiply%20by%20N%2C%20do%20math.floor%28%29%2C%20i.e.%20round%20down%2C%20and%20add%201.%20%26lt%3B%2Fblockquote%26gt%3B%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-235506","item_id":"_comm_235506"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=235506#respond' data-commentid="235506" data-postid="230032" data-belowelement="div-comment-235506" data-respondelement="respond" data-replyto="Reply to Douglas Bagnall" aria-label='Reply to Douglas Bagnall'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-218949" class="comment even thread-even depth-1">
+			<article id="div-comment-218949" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/4a0601578362df1ea06314fd6dd6fcfc?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/4a0601578362df1ea06314fd6dd6fcfc?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">appIncredible</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-218949"><time datetime="2013-07-09T09:47:01+01:00">July 9, 2013 at 9:47 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Wow I agree&#8230;. very interesting and entertaining article regarding the use of random numbers in security software. I am interested in cryptography software and so this was informative as well.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_218949"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_218949={"id":7238218,"unique_id":"wp-comment-218949","title":"Wow%20I%20agree....%20very%20interesting%20and%20entertaining%20article%20regarding%20the%20use%20of%20random%20numbers%20in%20security%20software.%20I%20am%20interested%20in%20cryptography%20software%20and%20so%20this%20was%20informative%20as%20well.%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-218949","item_id":"_comm_218949"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=218949#respond' data-commentid="218949" data-postid="230032" data-belowelement="div-comment-218949" data-respondelement="respond" data-replyto="Reply to appIncredible" aria-label='Reply to appIncredible'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-218972" class="comment odd alt thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-218972" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/c87e9f77fa22550a20ec0d9adc88cc84?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/c87e9f77fa22550a20ec0d9adc88cc84?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Pekka Pietik&auml;inen</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-218972"><time datetime="2013-07-09T11:19:12+01:00">July 9, 2013 at 11:19 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Excellent post!  I would like to point out the dieharder test suite  <a href="http://(http://www.phy.duke.edu/~rgb/General/dieharder.php" rel="nofollow">(http://www.phy.duke.edu/~rgb/General/dieharder.php</a> ) , which is a great way to test whether a RNG is producing random numbers or not. </p>
+<p>The while(randomnumber &gt; 250) generatenewnumber() also serves as an example of why getting cryptography right is difficult.  If the attacker can accurately measure the time it takes to run that function (but not get the result), and it takes longer than one iteration, that&#039;s a tiny fraction of a bit of information that could be useful in a brute force attack. Probably totally academic in this scenario, but sometimes it&#039;s really not 🙂 </p>
+<p>For each bit of information the attacker knows, the amount of brute force required goes down 50%, so even a small failure in randomness can ruin your day.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_218972"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_218972={"id":7238218,"unique_id":"wp-comment-218972","title":"Excellent%20post%21%20%20I%20would%20like%20to%20point%20out%20the%20dieharder%20test%20suite%20%20%26lt%3Ba%20href%3D%26quot%3Bhttp%3A%2F%2F%28http%3A%2F%2Fwww.phy.duke.edu%2F~rgb%2FGeneral%2Fdieharder.php%26quot%3B%20rel%3D%26quot%3Bnofollow%26quot%3B%26gt%3B%28http%3A%2F%2Fwww.phy.duke.edu%2F~rgb%2FGeneral%2Fdieh%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-218972","item_id":"_comm_218972"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=218972#respond' data-commentid="218972" data-postid="230032" data-belowelement="div-comment-218972" data-respondelement="respond" data-replyto="Reply to Pekka Pietik&auml;inen" aria-label='Reply to Pekka Pietik&auml;inen'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219070" class="comment even depth-2">
+			<article id="div-comment-219070" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219070"><time datetime="2013-07-09T18:21:09+01:00">July 9, 2013 at 6:21 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Dieharder and dieharder2 are great. Even if you don&#039;t use them (dieharder2 won&#039;t compile on OS X, for example, because the code is, ahhhhhh, a bit of a mess), the docs are well worth reading for how to go well beyond the basics of just doing a Chi-squared test.  </p>
+<p>Agree about the timing problems of the not-provably-terminating loop.  </p>
+<p>As I explained somewhere above, you don&#039;t need decimal digits for the purpose they&#039;re put to here (constructing a float) &#8211; you can do the same thing with powers of two instead, with no loops needed at all. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219070"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219070={"id":7238218,"unique_id":"wp-comment-219070","title":"Dieharder%20and%20dieharder2%20are%20great.%20Even%20if%20you%20don%26%23039%3Bt%20use%20them%20%28dieharder2%20won%26%23039%3Bt%20compile%20on%20OS%20X%2C%20for%20example%2C%20because%20the%20code%20is%2C%20ahhhhhh%2C%20a%20bit%20of%20a%20mess%29%2C%20the%20docs%20are%20well%20worth%20re%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219070","item_id":"_comm_219070"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219070#respond' data-commentid="219070" data-postid="230032" data-belowelement="div-comment-219070" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219098" class="comment odd alt depth-2">
+			<article id="div-comment-219098" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/715582ddcd4dd0ab1e3f0706e189b5a8?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/715582ddcd4dd0ab1e3f0706e189b5a8?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">William Urton</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219098"><time datetime="2013-07-09T21:15:00+01:00">July 9, 2013 at 9:15 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The National Institute for Standards and Technology (NIST) also has random number validation software:<br />
+  <a href="http://csrc.nist.gov/groups/ST/toolkit/rng/index.html" rel="nofollow">http://csrc.nist.gov/groups/ST/toolkit/rng/index&#8230;.</a>  </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219098"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219098={"id":7238218,"unique_id":"wp-comment-219098","title":"The%20National%20Institute%20for%20Standards%20and%20Technology%20%28NIST%29%20also%20has%20random%20number%20validation%20software%3A%20%20%20%20%26lt%3Ba%20href%3D%26quot%3Bhttp%3A%2F%2Fcsrc.nist.gov%2Fgroups%2FST%2Ftoolkit%2Frng%2Findex.html%26quot%3B%20rel%3D%26quot%3Bnofollow%26quot%3B%26gt%3Bhttp%3A%2F%2Fcsr%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219098","item_id":"_comm_219098"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219098#respond' data-commentid="219098" data-postid="230032" data-belowelement="div-comment-219098" data-respondelement="respond" data-replyto="Reply to William Urton" aria-label='Reply to William Urton'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-219011" class="comment even thread-even depth-1 parent">
+			<article id="div-comment-219011" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/d7e11b9c00db2ab86feb683c9915eea3?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/d7e11b9c00db2ab86feb683c9915eea3?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Steve</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219011"><time datetime="2013-07-09T14:01:33+01:00">July 9, 2013 at 2:01 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>This was an awesome article. Please do more of this!</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219011"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219011={"id":7238218,"unique_id":"wp-comment-219011","title":"This%20was%20an%20awesome%20article.%20Please%20do%20more%20of%20this%21%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219011","item_id":"_comm_219011"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219011#respond' data-commentid="219011" data-postid="230032" data-belowelement="div-comment-219011" data-respondelement="respond" data-replyto="Reply to Steve" aria-label='Reply to Steve'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219071" class="comment odd alt depth-2">
+			<article id="div-comment-219071" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219071"><time datetime="2013-07-09T18:22:20+01:00">July 9, 2013 at 6:22 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Thanks.  </p>
+<p>This is part of what I call an &quot;occasional series,&quot; of which you can find other examples by putting &quot;Anatomy&quot; in the [search articles] box at the top right of the page&#8230; </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219071"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219071={"id":7238218,"unique_id":"wp-comment-219071","title":"Thanks.%20%20%20This%20is%20part%20of%20what%20I%20call%20an%20%26quot%3Boccasional%20series%2C%26quot%3B%20of%20which%20you%20can%20find%20other%20examples%20by%20putting%20%26quot%3BAnatomy%26quot%3B%20in%20the%20%26%23091%3Bsearch%20articles%26%23093%3B%20box%20at%20the%20top%20right%20of%20the%20pa%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219071","item_id":"_comm_219071"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219071#respond' data-commentid="219071" data-postid="230032" data-belowelement="div-comment-219071" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-219018" class="comment even thread-odd thread-alt depth-1">
+			<article id="div-comment-219018" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo avatar-default' height='50' width='50' loading='lazy'/>						<b class="fn">Rob Redpath</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219018"><time datetime="2013-07-09T14:23:38+01:00">July 9, 2013 at 2:23 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Very interesting! Thanks for this; it&#039;s a useful lesson for all of us who write software that&#039;s used in a secure environment. Interesting, though, that no-one thought to test this during development &#8211; frustrating through traditional software development paradigms are (and by no means error-proof), I do suspect that someone would have stuck &#039;test algorithm statistically&#039; on to the testing team&#039;s work list somewhere along the line.  </p>
+<p>Like Jack, though, I&#039;d be interested in the real-world impact of the bug. Any crypting is effective protection against typical chat being intercepted &#8211; if you&#039;re going to hunt for Facebook passwords or credit card details, there&#039;s easier places to get them than crypted chat traffic. If I was Edward Snowden, however, I&#039;d be scared if I&#039;d used Cryptocat before the bug was fixed.  </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219018"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219018={"id":7238218,"unique_id":"wp-comment-219018","title":"Very%20interesting%21%20Thanks%20for%20this%3B%20it%26%23039%3Bs%20a%20useful%20lesson%20for%20all%20of%20us%20who%20write%20software%20that%26%23039%3Bs%20used%20in%20a%20secure%20environment.%20Interesting%2C%20though%2C%20that%20no-one%20thought%20to%20test%20this%20durin%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219018","item_id":"_comm_219018"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219018#respond' data-commentid="219018" data-postid="230032" data-belowelement="div-comment-219018" data-respondelement="respond" data-replyto="Reply to Rob Redpath" aria-label='Reply to Rob Redpath'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219265" class="comment odd alt thread-even depth-1">
+			<article id="div-comment-219265" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/a06fd67e3539f86ee94fb629eb1cea56?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/a06fd67e3539f86ee94fb629eb1cea56?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">hhjh</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219265"><time datetime="2013-07-10T17:23:58+01:00">July 10, 2013 at 5:23 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Nice article. Good to see a visualization of chi squared! </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219265"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219265={"id":7238218,"unique_id":"wp-comment-219265","title":"Nice%20article.%20Good%20to%20see%20a%20visualization%20of%20chi%20squared%21%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219265","item_id":"_comm_219265"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219265#respond' data-commentid="219265" data-postid="230032" data-belowelement="div-comment-219265" data-respondelement="respond" data-replyto="Reply to hhjh" aria-label='Reply to hhjh'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219358" class="comment even thread-odd thread-alt depth-1">
+			<article id="div-comment-219358" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/2cbcbae6d59783ea7ea21f0770dd5f74?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/2cbcbae6d59783ea7ea21f0770dd5f74?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Mansour</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219358"><time datetime="2013-07-11T02:42:20+01:00">July 11, 2013 at 2:42 am</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Javascript stores all numbers as double-precision floating-point digits (&quot;binary64&quot; in IEEE754), aka &#039;double&#039; in C. The &#039;double&#039; type can actually only store the equivalent of 15 decimal (base 10) digits &#8212; the constant DBL_DIG in the system header float.h &#8212; not 16. (The 16th digit is either truncated or rounded away.) </p>
+<p>So there is only 120 bits of entropy there, even with the fence-post bug fixed. </p>
+<p>Most programmers can rely on IEEE754 arithmetic most of the time, but people who have not studied numerical analysis should not touch floating-point for serious work. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219358"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219358={"id":7238218,"unique_id":"wp-comment-219358","title":"Javascript%20stores%20all%20numbers%20as%20double-precision%20floating-point%20digits%20%28%26quot%3Bbinary64%26quot%3B%20in%20IEEE754%29%2C%20aka%20%26%23039%3Bdouble%26%23039%3B%20in%20C.%20The%20%26%23039%3Bdouble%26%23039%3B%20type%20can%20actually%20only%20store%20the%20equ%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219358","item_id":"_comm_219358"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219358#respond' data-commentid="219358" data-postid="230032" data-belowelement="div-comment-219358" data-respondelement="respond" data-replyto="Reply to Mansour" aria-label='Reply to Mansour'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219536" class="comment odd alt thread-even depth-1 parent">
+			<article id="div-comment-219536" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">MauricioC</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219536"><time datetime="2013-07-11T17:22:33+01:00">July 11, 2013 at 5:22 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>&quot;The code above is certainly an inelegant solution, since it is, in theory, at least, a potentially infinite loop.&quot; </p>
+<p>I don&#039;t see how this indicates a lack of elegance. The algorithm they used (without the off-by-one error, of course) has a crystal-clear implementation and, assuming it is backed by a good PRNG, won&#039;t be slow with extremely high probability. To be more explicit: Suppose I have a fixed favorite atom. Now choose one atom uniformly at random out of all atoms in the universe. The probability that you chose my favorite atom is *larger* than the probability of the mentioned loop running for 50 iterations with an uniform RNG! </p>
+<p>The very successful field of Randomized Algorithms should convince you that such tricks often make algorithms *more* elegant, not less so.</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219536"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219536={"id":7238218,"unique_id":"wp-comment-219536","title":"%26quot%3BThe%20code%20above%20is%20certainly%20an%20inelegant%20solution%2C%20since%20it%20is%2C%20in%20theory%2C%20at%20least%2C%20a%20potentially%20infinite%20loop.%26quot%3B%20%20I%20don%26%23039%3Bt%20see%20how%20this%20indicates%20a%20lack%20of%20elegance.%20The%20algorith%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219536","item_id":"_comm_219536"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219536#respond' data-commentid="219536" data-postid="230032" data-belowelement="div-comment-219536" data-respondelement="respond" data-replyto="Reply to MauricioC" aria-label='Reply to MauricioC'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219569" class="comment even depth-2 parent">
+			<article id="div-comment-219569" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/025c4bb891cbc5a1bb24a4854f823e48?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Paul Ducklin</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219569"><time datetime="2013-07-11T19:56:33+01:00">July 11, 2013 at 7:56 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>The thing is, they&#039;ve created a bad PRNG out of a good one, and needlessly included a loop of unpredictably variable length. </p>
+<p>(Many cryptographers spend ages trying to remove timing variations from their code to prevent timing attacks, where you learn more than is necessary about internal state by measuring how long things take.) </p>
+<p>I&#039;m not sure how generating a 53-bit string by numeric conversion of 16 base-10 digits generated non-primitive-recursively from a full byte *that already came out of a PRNG* is making anything more elegant. </p>
+<p>Especially when those 53-bit random numbers are being generated, for the most part, as a source from which to generate random strings of exactly N bytes (i.e. multiples of 8 bits) in length. </p>
+<p>If what you want is a 32-byte random string, e.g. as a nonce to generate a keypair, why not just call the randomSalsaByte() function precisely 32 times? *That* would be elegance in my book. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219569"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219569={"id":7238218,"unique_id":"wp-comment-219569","title":"The%20thing%20is%2C%20they%26%23039%3Bve%20created%20a%20bad%20PRNG%20out%20of%20a%20good%20one%2C%20and%20needlessly%20included%20a%20loop%20of%20unpredictably%20variable%20length.%20%20%28Many%20cryptographers%20spend%20ages%20trying%20to%20remove%20timing%20variatio%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219569","item_id":"_comm_219569"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219569#respond' data-commentid="219569" data-postid="230032" data-belowelement="div-comment-219569" data-respondelement="respond" data-replyto="Reply to Paul Ducklin" aria-label='Reply to Paul Ducklin'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-219593" class="comment odd alt depth-3">
+			<article id="div-comment-219593" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">MauricioC</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219593"><time datetime="2013-07-11T21:39:25+01:00">July 11, 2013 at 9:39 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>I agree, the general idea of the algorithm is not elegant at all: The fact that base-10 is even used is a big hint that things weren&#039;t well thought out at all. No argument from me there. Feel free to disregard the rest of the post if you feel anything smaller than this is just nitpicking (it very much is); I&#039;m only commenting on the line I quoted in my previous post and on the one I&#039;m about to quote now.  </p>
+<p>Here&#039;s the thing, though: The specific two-line algorithm to get an uniform number from {1, &#8230;, n} from a uniform {1, &#8230;, m} RNG you criticized in the post is fine, and &quot;potentially infinite-running loop&quot; is a red herring in my opinion. The article states: </p>
+<p>&quot;If the randomSalsaByte() function is truly random, there is no mathematical guarantee that it won&#039;t continue to return values above 250 for seconds, or minutes, or months.&quot; </p>
+<p>That&#039;s technically true, but very misleading: Under those conditions, there is a mathematical guarantee that, with probability higher than 99.99999999999999999999999999% (&lt; 10^-28 probability of failure), the loop will run in less than 30 iterations for all of the next 10^30 runs (which is more than 1000 runs every second since the Big Bang). I would guess that lightning striking someone a billion times this year is much much more likely, but I haven&#039;t actually done this particular calculation. </p>
+<p>Besides, the distribution of the times when you get more than 10 cycles out of the loop is a) Uniformly random b) Very very very very sparse. I would be very surprised to see timing attacks coming out of it. But I&#039;m writing this post mainly because I want to be surprised, so I&#039;d definitely like to hear any timing attack ideas. </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219593"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219593={"id":7238218,"unique_id":"wp-comment-219593","title":"I%20agree%2C%20the%20general%20idea%20of%20the%20algorithm%20is%20not%20elegant%20at%20all%3A%20The%20fact%20that%20base-10%20is%20even%20used%20is%20a%20big%20hint%20that%20things%20weren%26%23039%3Bt%20well%20thought%20out%20at%20all.%20No%20argument%20from%20me%20there.%20Fee%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219593","item_id":"_comm_219593"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219593#respond' data-commentid="219593" data-postid="230032" data-belowelement="div-comment-219593" data-respondelement="respond" data-replyto="Reply to MauricioC" aria-label='Reply to MauricioC'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+		<li id="comment-219594" class="comment even depth-3">
+			<article id="div-comment-219594" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/875a1502a0bb09bd43193317384f91a5?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">MauricioC</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-219594"><time datetime="2013-07-11T21:44:23+01:00">July 11, 2013 at 9:44 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Oh, and by the way: I really enjoyed the article! Thanks for the entertaining and informative read (and sorry for not saying thanks earlier :)). </p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_219594"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_219594={"id":7238218,"unique_id":"wp-comment-219594","title":"Oh%2C%20and%20by%20the%20way%3A%20I%20really%20enjoyed%20the%20article%21%20Thanks%20for%20the%20entertaining%20and%20informative%20read%20%28and%20sorry%20for%20not%20saying%20thanks%20earlier%20%3A%29%29.%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-219594","item_id":"_comm_219594"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=219594#respond' data-commentid="219594" data-postid="230032" data-belowelement="div-comment-219594" data-respondelement="respond" data-replyto="Reply to MauricioC" aria-label='Reply to MauricioC'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		<li id="comment-4603256" class="comment odd alt thread-odd thread-alt depth-1 parent">
+			<article id="div-comment-4603256" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/28de78f1ca8ef3d86ffc761678771c59?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/28de78f1ca8ef3d86ffc761678771c59?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Alexander</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-4603256"><time datetime="2016-09-07T15:25:56+01:00">September 7, 2016 at 3:25 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Hello,</p>
+<p>I came across this blog post whilst doing research for my thesis project. I found the cryptocat colormap images very pedagogical for a point I am making on the importance of good PRNG&#8217;s. I was wondering if I would be allowed to use these images (of-course provided I cite you properly and include a link to sophos.)</p>
+<p>Thank you in advance!<br />
+///Alexander</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_4603256"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_4603256={"id":7238218,"unique_id":"wp-comment-4603256","title":"Hello%2CI%20came%20across%20this%20blog%20post%20whilst%20doing%20research%20for%20my%20thesis%20project.%20I%20found%20the%20cryptocat%20colormap%20images%20very%20pedagogical%20for%20a%20point%20I%20am%20making%20on%20the%20importance%20of%20good%20PRNG%26%23039%3Bs.%20I%20%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-4603256","item_id":"_comm_4603256"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=4603256#respond' data-commentid="4603256" data-postid="230032" data-belowelement="div-comment-4603256" data-respondelement="respond" data-replyto="Reply to Alexander" aria-label='Reply to Alexander'>Reply</a></div>			</article><!-- .comment-body -->
+		<ul class="children">
+		<li id="comment-4603297" class="comment byuser comment-author-annabrading even depth-2">
+			<article id="div-comment-4603297" class="comment-body">
+				<footer class="comment-meta">
+					<div class="comment-author vcard">
+						<img alt='' src='https://secure.gravatar.com/avatar/e168447da9241a39ea46936822d3d755?s=50&#038;d=mm&#038;r=g' srcset='https://secure.gravatar.com/avatar/e168447da9241a39ea46936822d3d755?s=100&#038;d=mm&#038;r=g 2x' class='avatar avatar-50 photo' height='50' width='50' loading='lazy'/>						<b class="fn">Anna Brading</b> <span class="says">says:</span>					</div><!-- .comment-author -->
+
+					<div class="comment-metadata">
+						<a href="https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#comment-4603297"><time datetime="2016-09-07T17:27:00+01:00">September 7, 2016 at 5:27 pm</time></a>					</div><!-- .comment-metadata -->
+
+									</footer><!-- .comment-meta -->
+
+				<div class="comment-content">
+					<p>Hi Alexander, Thanks for getting in touch. Would you mind sending an email to socialmedia@sophos.com and let us know which images you require? Thanks!</p>
+<div class="cs-rating pd-rating" id="pd_rating_holder_7238218_comm_4603297"></div>
+<script type="text/javascript" charset="UTF-8"><!--//--><![CDATA[//><!--
+PDRTJS_settings_7238218_comm_4603297={"id":7238218,"unique_id":"wp-comment-4603297","title":"Hi%20Alexander%2C%20Thanks%20for%20getting%20in%20touch.%20Would%20you%20mind%20sending%20an%20email%20to%20socialmedia%40sophos.com%20and%20let%20us%20know%20which%20images%20you%20require%3F%20Thanks%21%E2%80%A6","permalink":"https:\/\/nakedsecurity.sophos.com\/2013\/07\/09\/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng\/#comment-4603297","item_id":"_comm_4603297"};
+//--><!]]></script>
+<script type="text/javascript" charset="UTF-8" src="https://polldaddy.com/js/rating/rating.js"></script>				</div><!-- .comment-content -->
+
+				<div class="reply"><a rel='nofollow' class='comment-reply-link' href='https://nakedsecurity.sophos.com/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/?replytocom=4603297#respond' data-commentid="4603297" data-postid="230032" data-belowelement="div-comment-4603297" data-respondelement="respond" data-replyto="Reply to Anna Brading" aria-label='Reply to Anna Brading'>Reply</a></div>			</article><!-- .comment-body -->
+		</li><!-- #comment-## -->
+</ul><!-- .children -->
+</li><!-- #comment-## -->
+		</ol><!-- .comment-list -->
+
+		
+	
+	
+		<div id="respond" class="comment-respond">
+		<h3 id="reply-title" class="comment-reply-title">What do you think? <small><a rel="nofollow" id="cancel-comment-reply-link" href="/2013/07/09/anatomy-of-a-pseudorandom-number-generator-visualising-cryptocats-buggy-prng/#respond" style="display:none;">Cancel reply</a></small></h3><form action="https://nakedsecurity.sophos.com/wp-comments-post.php" method="post" id="commentform" class="comment-form" novalidate><p class="comment-form-comment"><label for="comment">Comment</label> <textarea id="comment" name="comment" cols="45" rows="8" maxlength="65525" required="required"></textarea></p><p class="comment-form-author"><label for="author">Name</label> <input id="author" name="author" type="text" value="" size="30" maxlength="245" /></p>
+<p class="comment-form-email"><label for="email">Email</label> <input id="email" name="email" type="email" value="" size="30" maxlength="100" /></p>
+<p class="comment-form-url"><label for="url">Website</label> <input id="url" name="url" type="url" value="" size="30" maxlength="200" /></p>
+<p class="form-submit"><input name="submit" type="submit" id="submit" class="submit" value="Post Comment" /> <input type='hidden' name='comment_post_ID' value='230032' id='comment_post_ID' />
+<input type='hidden' name='comment_parent' id='comment_parent' value='0' />
+</p><p style="display: none;"><input type="hidden" id="akismet_comment_nonce" name="akismet_comment_nonce" value="b22ac73057" /></p><input type="hidden" id="ak_js" name="ak_js" value="223"/><textarea name="ak_hp_textarea" cols="45" rows="8" maxlength="100" style="display: none !important;"></textarea></form>	</div><!-- #respond -->
+	
+</div><!-- #comments -->
+		<div class="comments-widget-area">
+					</div>
+	
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+
+	<section class="recommended-panel">
+	<div class="container">
+	<div class="panel-content ">
+
+		<h3 class="block-title">Recommended reads</h3>
+	<div class="blocks">
+		<article id="post-542584" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2020/12/24/s3-ep12-a-chat-with-social-engineering-hacker-rachel-tobac-podcast/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2020/10/nean-with-mic-wt-purply-1200.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Dec</span><span class="day">24</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Paul Ducklin	
+	</div>
+			<div class="comment-box">
+				<span class="count">3</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2020/12/24/s3-ep12-a-chat-with-social-engineering-hacker-rachel-tobac-podcast/" rel="bookmark">S3 Ep12: A chat with social engineering hacker Rachel Tobac [Podcast]</a></h3>	</div>
+</article> <!-- .card-article -->
+<article id="post-545071" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2021/02/12/fallen-victim-to-online-fraud-heres-what-to-do/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2021/02/lv-1200.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Feb</span><span class="day">12</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Lisa Ventura	
+	</div>
+			<div class="comment-box">
+				<span class="count">7</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2021/02/12/fallen-victim-to-online-fraud-heres-what-to-do/" rel="bookmark">Fallen victim to online fraud? Here&#8217;s what to do&#8230;</a></h3>	</div>
+</article> <!-- .card-article -->
+<article id="post-563309" class="card-slide">
+	<div class="card-image">
+		<div class="image-pointer"></div>
+		<a href="https://nakedsecurity.sophos.com/2021/03/18/s3-ep24-how-not-to-get-snooped-scammed-or-hoaxed-podcast/"><div class="dynamic-image-frame">
+		<div class="dynamic-image" style="background-image: url(https://nakedsecurity.sophos.com/wp-content/uploads/sites/2/2021/03/nean-with-mic-wt-paleish-green-1200.png?w=412&#038;h=200&#038;crop=1);"></div>
+	</div></a>
+	</div>
+	<div class="card-content">
+		<div class="meta-box">
+			<div class="date-box">
+				<span class="month">Mar</span><span class="day">18</span>
+			</div>
+ 			<div class="author-box">
+			<span class="by">by</span>
+		Paul Ducklin	
+	</div>
+			<div class="comment-box">
+				<span class="count">3</span>
+			</div>
+		</div>
+		<h3 class="card-title"><a href="https://nakedsecurity.sophos.com/2021/03/18/s3-ep24-how-not-to-get-snooped-scammed-or-hoaxed-podcast/" rel="bookmark">S3 Ep24: How not to get snooped, scammed or hoaxed [Podcast]</a></h3>	</div>
+</article> <!-- .card-article -->
+	</div>
+
+	</div> <!-- .panel-container -->
+	</div> <!-- .container -->
+	</section> <!-- .panel -->
+
+	
+	
+	<footer id="colophon" class="site-footer" role="contentinfo">
+		<div class="footer-container">
+			<a href="#" class="js-collapse-footer"><svg style="height: 20px" viewBox="0 0 132 24" class="block icon sophos"><use xlink:href="#sophos"></use></svg></a>
+			<div id="collapseFooter" class="blocks">
+				<div class="sophos block">
+					<ul id="menu-footer-primary" class="primary menu"><li id="menu-item-306737" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-306737"><a href="https://nakedsecurity.sophos.com/about/">About Naked Security</a></li>
+<li id="menu-item-306754" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-306754"><a href="https://www.sophos.com/en-us/company.aspx">About Sophos</a></li>
+<li id="menu-item-306747" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-306747"><a href="https://nakedsecurity.sophos.com/send-us-a-tip/">Send us a tip</a></li>
+<li id="menu-item-323171" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323171"><a href="/cookies-and-scripts/">Cookies</a></li>
+<li id="menu-item-323170" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323170"><a href="https://www.sophos.com/en-us/legal/sophos-group-privacy-policy.aspx">Privacy</a></li>
+<li id="menu-item-323169" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-323169"><a href="https://www.sophos.com/en-us/legal.aspx">Legal</a></li>
+</ul>				</div>
+										<div class="news block">
+							<ul id="menu-products-column-one" class="small menu"><li id="menu-item-306998" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-306998"><a href="https://www.sophos.com/en-us/products/intercept-x.aspx">Intercept X</a></li>
+<li id="menu-item-440801" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440801"><a href="https://www.sophos.com/en-us/products/server-security.aspx">Intercept X for Server</a></li>
+<li id="menu-item-440802" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440802"><a href="https://www.sophos.com/en-us/products/mobile-control.aspx">Intercept X for Mobile</a></li>
+</ul>						</div>
+											<div class="products block">
+							<ul id="menu-products-column-two" class="small menu"><li id="menu-item-440803" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440803"><a href="https://www.sophos.com/en-us/products/next-gen-firewall.aspx">XG Firewall</a></li>
+<li id="menu-item-440805" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440805"><a href="https://www.sophos.com/en-us/products/sophos-email.aspx">Sophos Email</a></li>
+<li id="menu-item-440804" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440804"><a href="https://www.sophos.com/en-us/products/secure-wifi.aspx">Sophos Wireless</a></li>
+</ul>						</div>
+											<div class="threats block">
+							<ul id="menu-server-protection" class="small menu"><li id="menu-item-440806" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440806"><a href="https://www.sophos.com/en-us/products/managed-threat-response.aspx">Managed Threat Response</a></li>
+<li id="menu-item-448404" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-448404"><a href="https://www.sophos.com/en-us/products/cloud-optix.aspx">Cloud Optix</a></li>
+<li id="menu-item-440807" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-440807"><a href="https://www.sophos.com/en-us/products/phish-threat.aspx">Phish Threat</a></li>
+</ul>						</div>
+								</div>
+			<ul class="block social footer">
+				<li class="twitter"><a rel="nofollow" href="https://twitter.com/NakedSecurity" title="Follow our team of security experts on Twitter"><svg style="height: 14px" viewBox="0 0 100 100" class="icon twitter"><use xlink:href="#twitter"></use></svg></a></li>
+				<li class="facebook"><a rel="nofollow" href="https://www.facebook.com/SophosSecurity" title="Join over 250,000 people in our Facebook community"><svg style="height: 14px" viewBox="0 0 100 100" class="icon facebook"><use xlink:href="#facebook"></use></svg></a></li>
+				<li class="instagram"><a rel="nofollow" href="https://www.instagram.com/nakedsecurity/" title="Follow Naked Security on Instagram"><svg style="height: 14px" viewBox="0 0 100 100" class="icon instagram"><use xlink:href="#instagram"></use></svg></a></li>
+				<li class="linkedin"><a rel="nofollow" href="https://www.linkedin.com/company/5053/" title="Join the naked security discussion group on LinkedIn"><svg style="height: 14px" viewBox="0 0 100 100" class="icon linkedin"><use xlink:href="#linkedin"></use></svg></a></li>
+				<li class="rss"><a rel="nofollow" href="/feed" title="Subscribe to our RSS feed"><svg style="height: 14px" viewBox="0 0 100 100" class="icon rss"><use xlink:href="#rss"></use></svg></a></li>
+			</ul>
+
+							<div class="vip-powered-wpcom">
+					<span class="copyright">© 1997 - 2021 Sophos Ltd.</span>
+					All rights reserved.
+					Powered by <a href="https://wpvip.com/?utm_source=vip_powered_wpcom&#038;utm_medium=web&#038;utm_campaign=VIP%20Footer%20Credit&#038;utm_term=nakedsecurity.sophos.com" rel="generator nofollow" class="powered-by-wpcom">WordPress VIP</a>				</div>
+					</div>
+		<script type="text/javascript">
+			window.cookieconsent_options = {
+				"message":"This site uses cookies. By continuing to browse the site you are agreeing to our use of cookies.",
+				"dismiss":"Got it!",
+				"learnMore":"Learn More",
+				"link":"/cookies-and-scripts",
+				"theme":"https://nakedsecurity.sophos.com/wp-content/themes/sophosnews-2015/css/sophos.css"};
+		</script>
+	</footer><!-- #colophon -->
+</div><!-- #page -->
+<div id="survey-wrapper" class="mfp-hide"><div class="pd-embed" id="pd_1499706777" data-settings=""></div></div>
+<script id='child-js-plugins-js-extra'>
+var PG8Data = {"startPage":"1","maxPages":"0","nextLink":""};
+</script>
+<script id='child-js-core-js-extra'>
+var Sophos = {"ajaxurl":"https:\/\/nakedsecurity.sophos.com\/wp-admin\/admin-ajax.php","nonce":"64f6810f0c"};
+</script>
+<script type='text/javascript' src='https://nakedsecurity.sophos.com/_static/??-eJyNjkEOwjAMBD9EalKU3hBPQZAamhDbUZyo4vdEiEocOHD07ozWsGbjhStyhbogoYJKXkQZVzXj3jqICjm1e2Adou7gL8FLwY0O7FObO/fOibppCub0HCjwL6ifSFecv/ttkpr5PAOXR1DCCufuwk0KdfZERztZdxitc1N8ARFpT3A='></script>
+<script src='https://stats.wp.com/e-202112.js' defer></script>
+<script>
+	_stq = window._stq || [];
+	_stq.push([ 'view', {v:'ext',j:'1:9.5.2',blog:'166161173',post:'230032',tz:'0',srv:'nakedsecurity.sophos.com'} ]);
+	_stq.push([ 'clickTrackerInit', '166161173', '230032' ]);
+</script>
+</body>
+</html>

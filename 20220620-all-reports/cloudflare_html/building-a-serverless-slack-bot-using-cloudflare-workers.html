@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Building a serverless Slack bot using Cloudflare Workers</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/building-a-serverless-slack-bot-using-cloudflare-workers/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Building a serverless Slack bot using Cloudflare Workers" />
+    <meta property="og:description" content="Our Workers platform can be used for a ton of useful purposes: for A/B testing, storage bucket authentication, coalescing responses from multiple APIs, and more. But Workers can also be put to use beyond &quot;HTTP middleware&quot;: a Worker can effectively be a web application in its own right." />
+    <meta property="og:url" content="https://blog.cloudflare.com/building-a-serverless-slack-bot-using-cloudflare-workers/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/06/workers_slack_bot2.jpg" />
+    <meta property="article:published_time" content="2018-06-22T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-10-12T23:06:12.000Z" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="JavaScript" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Building a serverless Slack bot using Cloudflare Workers" />
+    <meta name="twitter:description" content="Our Workers platform can be used for a ton of useful purposes: for A/B testing, storage bucket authentication, coalescing responses from multiple APIs, and more. But Workers can also be put to use beyond &quot;HTTP middleware&quot;: a Worker can effectively be a web application in its own right." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/building-a-serverless-slack-bot-using-cloudflare-workers/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/06/workers_slack_bot2.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Rita Kozlov" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Cloudflare Workers, Serverless, JavaScript" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Rita Kozlov",
+        "image": "https://blog.cloudflare.com/content/images/2018/03/pVwrM31KSu1BnYw0gH16_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg",
+        "url": "https://blog.cloudflare.com/author/rita/",
+        "sameAs": []
+    },
+    "headline": "Building a serverless Slack bot using Cloudflare Workers",
+    "url": "https://blog.cloudflare.com/building-a-serverless-slack-bot-using-cloudflare-workers/",
+    "datePublished": "2018-06-22T13:00:00.000Z",
+    "dateModified": "2020-10-12T23:06:12.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/06/workers_slack_bot2.jpg",
+    "keywords": "Cloudflare Workers, Serverless, JavaScript",
+    "description": "Our Workers platform can be used for a ton of useful purposes: for A/B testing, storage bucket authentication, coalescing responses from multiple APIs, and more. But Workers can also be put to use beyond &quot;HTTP middleware&quot;: a Worker can effectively be a web application in its own right.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-workers tag-serverless tag-javascript sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-workers tag-serverless tag-javascript ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Building a serverless Slack bot using Cloudflare Workers</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-06-22T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 22, 2018 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/rita/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/03/pVwrM31KSu1BnYw0gH16_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg" alt="Rita Kozlov" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/rita" class="fw5 f3 no-underline black mr3">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Our <a href="https://www.cloudflare.com/products/cloudflare-workers/">Workers platform</a> can be used for a ton of useful purposes: for A/B (multivariate) testing, storage bucket authentication, coalescing responses from multiple APIs, and more. But Workers can also be put to use beyond &quot;HTTP middleware&quot;: a Worker can effectively be a web application in its own right. Given the rise of 'chatbots', we can also build a <a href="https://api.slack.com/slack-apps">Slack app</a> using Cloudflare Workers, with no servers required (well, at least not yours!).</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/workers_slack_bot2-1.jpg" alt="workers_slack_bot2-1"></p>
+<h3 id="whatarewebuilding">What are we Building?</h3>
+<p>We're going to build a <a href="https://api.slack.com/slash-commands">Slack bot</a> (as an external webhook) for fetching the latest stock prices.</p>
+<p>This Worker could also be adapted to fetch <a href="https://developer.github.com/v3/issues/">open issues</a> from GitHub's API; to <a href="https://www.themoviedb.org/documentation/api/discover">discover what movie to watch</a> after work; anything with a REST API you can make query against.</p>
+<p>Nevertheless, our &quot;stock prices bot&quot;:</p>
+<ul>
+<li>Uses the <a href="https://www.alphavantage.co/">Alpha Vantage Open Stock API</a> to fetch stock prices. Alpha Vantage is a finance API that provides free cloud-based access to the global financial market.</li>
+<li>Caches a map of the top equities to their public identifiers, so you can request <code>/stocks MSFT</code> as a shorthand.</li>
+<li>Leverages Cloudflare's cache to minimize the need to hit the API on every invocation, whilst still serving recent price data.</li>
+</ul>
+<p>Using the cache allows you to improve your bot's response times across all invocations of your Worker. It's also polite to reduce redundant calls to an API (less you get rate limited!) where possible, so it's win-win.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<p>In order to get started, you'll need:</p>
+<ul>
+<li>A Cloudflare account, with Workers enabled (see note)</li>
+<li>Some basic programming experience.</li>
+<li>An existing Slack workspace. If you don't have one set up, follow Slack's <a href="https://get.slack.help/hc/en-us/articles/206845317-Create-a-Slack-workspace">helpful guide</a> to get one started.</li>
+</ul>
+<blockquote>
+<p><em>Note: You can enable Workers via the &quot;Workers&quot; app in the Cloudflare dashboard.</em></p>
+</blockquote>
+<h3 id="creatingourworker">Creating our Worker</h3>
+<p>We'll get our Worker up and running first, and test it outside of Slack before wiring it up. Our Worker needs to:</p>
+<ol>
+<li>Handle the incoming webhook (a HTTP POST request) from Slack, including authenticating it is actually from Slack.</li>
+<li>Parsing the requested symbol from the user's message (the webhook body).</li>
+<li>Making a request to the Alpha vantage API, as well as handling any errors that arise (invalid symbol, API unreachable, etc).</li>
+<li>Building our response, and sending that back to Slack within 3s (the timeout).</li>
+</ol>
+<p>We'll step through each requirement and its associated code, deploy the Worker to a route, and then connect it to Slack.</p>
+<h3 id="handlingthewebhook">Handling the Webhook</h3>
+<p>Like all Cloudflare Workers, we need to add a hook for the <code>fetch</code> event and attach the entry point to our Worker. Our <code>slackWebhookHandler</code> function will then be responsible for triggering the rest of our logic and returning a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Response"><code>Response</code></a> to Slack's request.</p>
+<pre><code class="language-js">// SLACK_TOKEN is used to authenticate requests are from Slack.
+// Keep this value secret.
+const SLACK_TOKEN = &quot;SLACKTOKENGOESHERE&quot;
+const BOT_NAME = &quot;Stock-bot 🤖&quot;
+const ALPHA_VANTAGE_KEY = &quot;&quot;
+
+
+let jsonHeaders = new Headers([[&quot;Content-Type&quot;, &quot;application/json&quot;]])
+
+addEventListener(&quot;fetch&quot;, event =&gt; {
+  event.respondWith(slackWebhookHandler(event.request))
+})
+
+/**
+ * simpleResponse generates a simple JSON response
+ * with the given status code and message.
+ *
+ * @param {Number} statusCode
+ * @param {String} message
+ */
+function simpleResponse(statusCode, message) {
+  let resp = {
+    message: message,
+    status: statusCode
+  }
+
+  return new Response(JSON.stringify(resp), {
+    headers: jsonHeaders,
+    status: statusCode
+  })
+}
+
+/**
+ * slackWebhookHandler handles an incoming Slack
+ * webhook and generates a response.
+ * @param {Request} request
+ */
+async function slackWebhookHandler(request) {
+  // As per: https://api.slack.com/slash-commands
+  // - Slash commands are outgoing webhooks (POST requests)
+  // - Slack authenticates via a verification token.
+  // - The webhook payload is provided as POST form data
+  
+  if (request.method !== &quot;POST&quot;) {
+    return simpleResponse(
+      200,
+      `Hi, I'm ${BOT_NAME}, a Slack bot for fetching the latest stock prices`
+    )
+  }
+
+  try {
+    let formData = await request.formData()
+    if (formData.get(&quot;token&quot;) !== SLACK_TOKEN) {
+      return simpleResponse(403, &quot;invalid Slack verification token&quot;)
+    }
+    
+    let parsed = parseMessage(formData)
+
+  
+    let reply = await stockRequest(parsed.stock)
+    let line = `Current price (*${parsed.stock}*): 💵 USD $${reply.USD} (Last updated on ${reply.updated}).`
+
+    return slackResponse(line)
+  } catch (e) {
+    return simpleResponse(
+      200,
+      `Sorry, I had an issue retrieving anything for that stock: ${e}`
+    )
+  }
+}
+
+
+</code></pre>
+<p>Our handler is fairly straightforward:</p>
+<ol>
+<li>If the incoming request was not a POST request (i.e. what the Slack webhook is), we return some useful information.</li>
+<li>For POST requests, we check that the token provided in the POST form data matches ours: this is how we validate the webhook is coming from Slack itself.</li>
+<li>We then parse the user message, make a request to fetch the latest price, and construct our response.</li>
+<li>If anything fails along the way, we return an error back to the user.</li>
+</ol>
+<p>While we were at it, we also built a couple of useful helper functions: <code>simpleResponse</code>, which is used for generating errors back to the client, and <code>slackResponse</code> (which we'll look at later) for generating responses in Slack's expected format.</p>
+<p>The constants <code>SLACK_TOKEN</code>, <code>BOT_NAME</code>, and <code>ALPHA_VANTAGE_KEY</code>don't need to be calculated on every request, and so we've made them global, outside our request handling logic.</p>
+<blockquote>
+<p>Note: Caching (often called &quot;memoizing&quot;) static data outside of our request handler in a Worker allows it to be re-used across requests, should the Worker instance itself be re-used. Although the performance gain in this case is negligible, it's good practice, and doesn't hinder our Workers' readability.</p>
+</blockquote>
+<h3 id="parsingtheusermessage">Parsing the User Message</h3>
+<p>Our next step is to parse the message sent in the POST request from Slack. This is where we capture the requested equity, ready to be passed to the Alpha Vantage API.</p>
+<p>To receive the correct stock information from the API, we will parse the input we received from Slack, so that we can pass it to the API to collect information about the stock we are looking for.</p>
+<pre><code class="language-js">/**
+ * parseMessage parses the selected stock from the Slack message.
+ *
+ * @param {FormData} message - the message text
+ * @return {Object} - an object containing the stock name.
+ */
+function parseMessage(message) {
+  // 1. Parse the message (trim whitespace, uppercase)
+  // 2. Return stock that we are looking for
+  return {
+    stock: message.get(&quot;text&quot;).trim().toUpperCase()
+  }
+}
+</code></pre>
+<p>Let's step through what we're doing:</p>
+<ol>
+<li>We pass in our <a href="https://developer.mozilla.org/en-US/docs/Web/API/FormData"><code>FormData</code></a> containing the user's message</li>
+<li>We clean it up (i.e. trim surrounding whitespace, convert to uppercase)</li>
+</ol>
+<p>In the future, if we want to parse more values from the bot (maybe get the currency the user is interested in, or the date), we easily can add additional values to the object.</p>
+<p>Now that we have the stock we are looking for, we can move on to making the API request!</p>
+<h3 id="makingtheapirequest">Making the API Request</h3>
+<p>We want to make sure our bot doesn't have to make a request to the Alpha Vantage API unnecessarily: if we had thousands of users every minute, there's no need to fetch the (same) price every time. We can fetch it once (per Cloudflare PoP), store in the Cloudflare cache for a short period of time (say 1 minute), and serve users that cached copy. This is win-win: our bot responds more quickly and we're kinder to the API we're consuming).</p>
+<p>For customers on the Enterprise plan, you may also use the <code>cacheTtlByStatus</code> functionality, which allows you to set different TTLs based on the response status. This way, if you get an error code, you may only cache it for 1 second, or not cache at all, so that subsequent requests (once the API has been updated) will not fail as well.</p>
+<p>Given the requested stock, we'll make a HTTP request to the API, confirm we got an acceptable response (HTTP 200), and then return an object with the fields we need:</p>
+<pre><code class="language-js">
+    let resp = await fetch(
+      endpoint,
+      { cf: { cacheTtl: 60} } // Cache our responses for 60s.
+    )
+
+</code></pre>
+<p>The API output provides us with two things: the metadata and a line per time interval. For the purposes of our bot, we are going to keep the latest interval provided by the API and discard the rest. On future iterations, we may also call the monthly endpoint, and provide information on monthly highs and lows for comparison, but we will keep it simple for now.</p>
+<p>We are going to be using the intradaily intervals API endpoint provided by Alpha Vantage. This will allow us to cache the response for each individual stock lookup, such that the next person to make a call to our bot may receive a cached version faster (and help us avoid getting rate limited by the API). Here, we will be choosing to optimize for having the latest data, rather than caching for longer periods of time.</p>
+<p>You can see that we will be asking the API for a 1min interval.</p>
+<pre><code>curl -s &quot;https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&amp;symbol=MSFT&amp;interval=1min&amp;apikey=KEY&quot; | jq
+</code></pre>
+<p>A single output block looks like this:</p>
+<pre><code>{
+      &quot;1. open&quot;: &quot;99.8950&quot;,
+      &quot;2. high&quot;: &quot;99.8950&quot;,
+      &quot;3. low&quot;: &quot;99.8300&quot;,
+      &quot;4. close&quot;: &quot;99.8750&quot;,
+      &quot;5. volume&quot;: &quot;34542&quot;
+    },
+</code></pre>
+<p>To only get the last 1 minute interval, we will grab the last value that is provided to us by the API, and get the currently open price for it.</p>
+<pre><code>/**
+ * stockRequest makes a request to the Alpha Vantage API for the
+ * given stock request.
+ * Endpoint:  https://www.alphavantage.co/documentation/*
+ * @param {string} stock - the stock to fetch the price for
+ * @returns {Object} - an Object containing the stock, price in USD.
+ */
+async function stockRequest(stock) {
+  let endpoint = new URL(&quot;https://www.alphavantage.co/query&quot;)
+
+  endpoint.search = new URLSearchParams({&quot;function&quot; : &quot;TIME_SERIES_INTRADAY&quot; ,
+    &quot;interval&quot; : &quot;1min&quot;,
+    &quot;apikey&quot;: ALPHA_VANTAGE_KEY,
+    &quot;symbol&quot;: stock
+  })
+
+
+  try {
+    let resp = await fetch(
+      endpoint,
+      { cf: { cacheTtl: 60} } // Cache our responses for 60s.
+    )
+
+    if (resp.status !== 200) {
+      throw new Error(`bad status code from Alpha Vantage: HTTP ${resp.status}`)
+    }
+    
+    let data = await resp.json()
+    let timeSeries = data[&quot;Time Series (1min)&quot;]
+
+    // We want to use the last value (1 minute interval) that is provided by the API
+    let timestamp = Object.keys(timeSeries)[1]
+    let usd = timeSeries[timestamp][&quot;1. open&quot;]
+    
+    let reply = {
+      stock: stock,
+      USD: usd,
+      updated: timestamp
+    }
+    
+    return reply
+  } catch (e) {
+    throw new Error(`could not fetch the selected symbol: ${e}`)
+  }
+}
+
+</code></pre>
+<p>We build an object representing our reply. We're also careful to handle any errors should we get a bad response back from the API: be it a non-HTTP 200 response, or a non-JSON response body. When relying on a third-party service/API, any assumptions you make about the format or correctness of a response that could cause an exception to be thrown if broken—such as calling <code>resp.json()</code> on HTML body—must be accounted for.</p>
+<p>Additionally, note that subrequests will respect the SSL Mode you have for your entire zone. Thus, if the SSL mode is set to flexible, Cloudflare will try to connect to the API over port 80 and over HTTP, and the request will fail (you will see a 525 error).</p>
+<h3 id="respondingtoslack">Responding to Slack</h3>
+<p>Slack expects responses in <a href="https://api.slack.com/slash-commands#responding_to_a_command">two possible formats</a>: a plain text string, or a simple JSON structure. Thus, we need to take our reply and build a response for Slack.</p>
+<pre><code class="language-js">/**
+ * slackResponse builds a message for Slack with the given text
+ * and optional attachment text
+ *
+ * @param {string} text - the message text to return
+ */
+function slackResponse(text) {
+  let content = {
+    response_type: &quot;in_channel&quot;,
+    text: text,
+    attachments: []
+  }
+
+  return new Response(JSON.stringify(content), {
+    headers: jsonHeaders,
+    status: 200
+  })
+}
+
+</code></pre>
+<p>The corresponding part of our <code>slackWebhookHandler</code> deals with taking our reply object and passing it to <code>slackResponse</code> -</p>
+<pre><code class="language-js">    let reply = await stockRequest(parsed.stock)
+    let line = `Current price (*${parsed.stock}*): 💵 USD $${reply.USD} (Last updated on ${reply.updated}).`
+
+    return slackResponse(line)
+</code></pre>
+<p>This returns a response to Slack that looks like this:</p>
+<pre><code class="language-json">{
+  &quot;response_type&quot;: &quot;in_channel&quot;,
+  &quot;text&quot;: &quot;Current price (*MSFT*): 💵 USD $101.8300 (Last updated on 2018-06-20 11:52:00).&quot;,
+  &quot;attachments&quot;: []
+}
+</code></pre>
+<h3 id="configuringslacktestingourbot">Configuring Slack &amp; Testing Our Bot</h3>
+<p>With our bot ready, let's configure Slack to talk to it for our chosen slash-command. First, log into Slack and head to the <a href="https://api.slack.com/apps">app management</a> dashboard.</p>
+<p>You'll then want to click &quot;Create an App&quot; and fill in the fields, including nominating which  workspace to attach it to:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/slack-create-app.png" alt="Slack: Create App modal"></p>
+<p>We'll then want to set it up as a Slash Command:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/slack-select-slash-command.png" alt="Slack: Select Slash Command"></p>
+<p>Fill in the details: the request URL is the most important, and will reflect the route you've attached your Worker to. In our case, that's <code>https://bots.example.com/stockbot/stocks</code></p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/create-new-command.png" alt="Slack: Create New Command"></p>
+<p>Fetch your App Credentials from the <em>Basic Information</em> tab: specifically, the <em>Verification Token</em>.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/app_credentials.png" alt="Slack: Fetch App Credentials"></p>
+<p>Paste that value into our Worker bot as the value of our <code>SLACK_TOKEN</code> variable:</p>
+<pre><code class="language-js">// SLACK_TOKEN is used to authenticate requests are from Slack.
+// Keep this value secret.
+let SLACK_TOKEN = &quot;PUTYOURTOKENHERE&quot;
+</code></pre>
+<p>Before hooking our bot up to Slack, we can test to make sure it responds correctly. We can emulate a request from Slack by making a POST request with token and message text via <code>curl</code> -</p>
+<pre><code class="language-sh"># Replace with the hostname/route your Worker is running on
+➜  ~  curl -X POST -F &quot;token=SLACKTOKENGOESHERE&quot; -F &quot;text=MSFT&quot; &quot;https://bots.example.com/stockbot/stock&quot;
+{&quot;response_type&quot;:&quot;in_channel&quot;,&quot;text&quot;:&quot;Current price (MSFT): 💵 USD $101.7300&quot;,&quot;attachments&quot;:[]}
+</code></pre>
+<p>A correct response should net us the expected reply. If we intentionally send an invalid token instead, our bot should reply accordingly:</p>
+<pre><code class="language-sh">➜  ~  curl -X POST https://bots.example.com/stockbot/stock
+ -F &quot;token=OBVIOUSLYINCORRECTTOKEN&quot; -F &quot;text=MSFT&quot;
+{&quot;message&quot;:&quot;invalid Slack verification token&quot;,&quot;status&quot;:403}%
+</code></pre>
+<p>... or an invalid symbol:</p>
+<pre><code class="language-sh">➜  ~  curl -X POST https://bots.example.com/stockbot/stock -F &quot;token=SLACKTOKENGOESHERE&quot; -F &quot;text=BADSYMBOL&quot;
+{&quot;message&quot;:&quot;Sorry, I had an issue retrieving anything for that symbol: Error: could not fetch the selected symbol: Error: bad status code from Alpha Vantage: HTTP 404&quot;,&quot;status&quot;:200}%
+</code></pre>
+<p>If you're running into issues, make sure your token is correct (case-sensitive), and that the stock you're after exists on Alpha Vantage. Beyond that however, we can now install the app to our Workspace (Slack will ask you to authorize the bot):</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/workspace.png" alt="Slack: Add to Workspace"></p>
+<p>We can now call our bot via the slash command we assigned to it!</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/06/stockbot.gif" alt="stockbot"></p>
+<h4 id="wrap">Wrap</h4>
+<p>With our Cloudflare Worker, we were able to put together a useful chat bot that responds quickly (within the 3 seconds Slack allows) thanks to Cloudflare's cache. We're also kind on the Alpha Vantage API, since we don't have to reach back out to it for a given symbol if we just fetched it recently.</p>
+<p>We look forward to hearing what others have built using Workers!</p>
+<h4 id="thankyou">Thank you</h4>
+<p>Thank you to <a href="https://github.com/elithrar">Matt Silverlock</a> for his contribution to this post, and Cloudflare.</p>
+<hr>
+<p><em><small>If you have a worker you'd like to share, or want to check out workers from other Cloudflare users, visit the <a href="https://community.cloudflare.com/tags/recipe-exchange">“Recipe Exchange”</a> in the Workers section of the <a href="https://community.cloudflare.com/c/developers/workers">Cloudflare Community Forum</a>. </small></em></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+        <a href="/tag/javascript/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">JavaScript</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-20T12:00:00Z">March 20, 2021 12:00PM</p>
+        <a href="/random-employee-chats-cloudflare/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Random Employee Chats at Cloudflare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We developed the Random Employee Chats application internally, with the goal of recreating the pre-pandemic informal interactions. Here's how we moved from a shared spreadsheet to Cloudflare Workers to automate the entire process....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sven/" class="fw5 f2 black no-underline">Sven Sauleau</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/david-wragg/" class="fw5 f2 black no-underline">David Wragg</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-kv/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers KV</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cron/" class="no-underline f1 fw2 blue3 underline-hover">Cron</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wrangler/" class="no-underline f1 fw2 blue3 underline-hover">Wrangler</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-25T14:00:00Z">December 25, 2020 2:00PM</p>
+        <a href="/using-one-cron-parser-everywhere-with-rust-and-saffron/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Using One Cron Parser Everywhere With Rust and Saffron</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cron parsers are everywhere, each supporting their own extensions on the cron string format, which made consistency between parts of Cron Triggers difficult to achieve. Today we’re showing how we easily solved this problem with Rust without needing to write the same code twice....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/aaron-loyd/" class="fw5 f2 black no-underline">Aaron Loyd</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-09T12:00:00+01:00">October 09, 2020 12:00PM</p>
+        <a href="/exploring-webassembly-ai-services-on-cloudflare-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Exploring WebAssembly AI Services on Cloudflare Workers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Edge networks present a significant opportunity for Artificial Intelligence (AI) performance and applicability. AI technologies already make it possible to run compelling applications like object and voice recognition, navigation, and recommendations....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/guest-author/" class="fw5 f2 black no-underline">Guest Author</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-06T12:00:00+01:00">October 06, 2020 12:00PM</p>
+        <a href="/cloudflare-worker-with-webassembly-and-haskell/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Let&#x27;s build a Cloudflare Worker with WebAssembly and Haskell</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Let's combine the power of Haskell and WebAssembly in a Cloudflare Worker!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/cristhian-motoche/" class="fw5 f2 black no-underline">Cristhian Motoche</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/webassembly/" class="no-underline f1 fw2 blue3 underline-hover">WebAssembly</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wasm/" class="no-underline f1 fw2 blue3 underline-hover">WASM</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"rayId":"633cc7df8887cf5c","si":10,"version":"2021.2.0"}'></script>
+</body>
+
+</html>

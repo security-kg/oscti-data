@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>A Tale of Two (APT) Transports</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Securing access to your APT repositories is critical." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/apt-transports/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="A Tale of Two (APT) Transports" />
+    <meta property="og:description" content="Securing access to your APT repositories is critical. At Cloudflare, like in most organizations, we used a legacy VPN to lock down who could reach our internal software repositories. However, a network perimeter model lacks a number of features that we consider critical to a team’s security." />
+    <meta property="og:url" content="https://blog.cloudflare.com/apt-transports/" />
+    <meta property="og:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/07/apt-transport-internals-2-2.png" />
+    <meta property="article:published_time" content="2019-07-18T14:12:38.000Z" />
+    <meta property="article:modified_time" content="2020-08-14T15:59:18.000Z" />
+    <meta property="article:tag" content="Cloudflare Access" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="HTTPS" />
+    <meta property="article:tag" content="Security" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="A Tale of Two (APT) Transports" />
+    <meta name="twitter:description" content="Securing access to your APT repositories is critical. At Cloudflare, like in most organizations, we used a legacy VPN to lock down who could reach our internal software repositories. However, a network perimeter model lacks a number of features that we consider critical to a team’s security." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/apt-transports/" />
+    <meta name="twitter:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/07/apt-transport-internals-2-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ryan Djurovich" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Cloudflare Access, Linux, HTTPS, Security" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@ryan0x44" />
+    <meta property="og:image:width" content="2005" />
+    <meta property="og:image:height" content="1047" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ryan Djurovich",
+        "image": "https://blog.cloudflare.com/content/images/2017/09/AAEAAQAAAAAAAA16AAAAJDlkMzM2ZDc4LWNkYjgtNDJhOS1hM2VkLTU1ZjA1OGNlYWFkOA.jpg",
+        "url": "https://blog.cloudflare.com/author/ryan-djurovich/",
+        "sameAs": [
+            "https://www.ryan0x44.com",
+            "https://twitter.com/ryan0x44"
+        ]
+    },
+    "headline": "A Tale of Two (APT) Transports",
+    "url": "https://blog.cloudflare.com/apt-transports/",
+    "datePublished": "2019-07-18T14:12:38.000Z",
+    "dateModified": "2020-08-14T15:59:18.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/07/apt-transport-internals-2.png",
+    "keywords": "Cloudflare Access, Linux, HTTPS, Security",
+    "description": "Securing access to your APT repositories is critical. At Cloudflare, like in most organizations, we used a legacy VPN to lock down who could reach our internal software repositories. However, a network perimeter model lacks a number of features that we consider critical to a team’s security.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-access tag-linux tag-https tag-security sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-access tag-linux tag-https tag-security ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">A Tale of Two (APT) Transports</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-07-18T15:12:38+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 18, 2019 3:12PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ryan-djurovich/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/09/AAEAAQAAAAAAAA16AAAAJDlkMzM2ZDc4LWNkYjgtNDJhOS1hM2VkLTU1ZjA1OGNlYWFkOA.jpg" alt="Ryan Djurovich" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ryan-djurovich" class="fw5 f3 no-underline black mr3">Ryan Djurovich</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>Securing access to your APT repositories is critical. At Cloudflare, like in most organizations, we used a legacy VPN to lock down who could reach our internal software repositories. However, a network perimeter model lacks a number of features that we consider critical to a team’s security.</p><p>As a company, we’ve been moving our internal infrastructure to our own zero-trust platform, Cloudflare Access. Access added SaaS-like convenience to the on-premise tools we managed. We started with web applications and then moved resources we need to reach over SSH behind the Access gateway, for example Git or user-SSH access. However, we still needed to handle how services communicate with our internal APT repository.</p><p>We recently <a href="https://github.com/cloudflare/apt-transport-cloudflared">open sourced a new APT transport</a> which allows customers to protect their private APT repositories using <a href="https://www.cloudflare.com/products/cloudflare-access/">Cloudflare Access</a>. In this post, we’ll outline the history of APT tooling, APT transports and introduce our new APT transport for Cloudflare Access. </p><h2 id="a-brief-history-of-apt">A brief history of APT</h2><p><a href="https://en.wikipedia.org/wiki/APT_(Package_Manager)">Advanced Package Tool</a>, or APT, simplifies the installation and removal of software on Debian and related Linux distributions. Originally released in 1998, APT was to Debian what the App Store was to modern smartphones - a decade ahead of its time!</p><p>APT sits atop the lower-level <a href="https://en.wikipedia.org/wiki/Dpkg">dpkg</a> tool, which is used to install, query, and remove <a href="https://en.wikipedia.org/wiki/Deb_(file_format)">.deb packages</a> - the primary software packaging format in <a href="https://www.debian.org/doc/debian-policy/ch-binary.html">Debian</a> and related Linux distributions such as Ubuntu. With dpkg, packaging and managing software installed on your system became easier - but it didn’t solve for problems around distribution of packages, such as via the Internet or local media; at the time of inception, it was commonplace to install packages from a <a href="https://en.wikipedia.org/wiki/CD-ROM">CD-ROM</a>.</p><p>APT introduced the concept of repositories - a mechanism for storing and indexing a collection of .deb packages. APT supports connecting to multiple repositories for finding packages and automatically resolving package dependencies. The way APT connects to said repositories is via a “transport” - a mechanism for communicating between the APT client and its repository source (more on this later).</p><h2 id="apt-over-the-internet">APT over the Internet</h2><p>Prior to version 1.5, APT did not include support for HTTPS - if you wanted to install a package over the Internet, your connection was not encrypted. This reduces privacy - an attacker snooping traffic could determine specific package version your system is installing. It also exposes you to on-path attacker attacks where an attacker could, for example, exploit a remote code execution vulnerability. Just 6 months ago, we saw an example of the latter with <a href="https://nvd.nist.gov/vuln/detail/CVE-2019-3462">CVE-2019-3462</a>.</p><p>Enter the APT HTTPS transport - an optional transport you can install to add support for connecting to repositories over HTTPS. Once installed, users need to configure their APT <a href="https://manpages.debian.org/stretch/apt/sources.list.5.en.html">sources.list</a> with repositories using HTTPS.</p><p>The challenge here, of course, is that the most common way to install this transport is via APT and HTTP - a classic bootstrapping problem! An alternative here is to download the .deb package via curl and install it via dpkg. You’ll find the links to apt-transport-https binaries for Stretch <a href="https://packages.debian.org/stretch/apt-transport-https#pdownload">here</a> - once you have the URL path for your system architecture, you can download it from the <a href="https://deb.debian.org/">deb.debian.org</a> mirror-redirector over HTTPS, e.g. for amd64 (a.k.a. x86_64):</p><!--kg-card-begin: markdown--><pre><code>curl -o apt-transport-https.deb -L https://deb.debian.org/debian/pool/main/a/apt/apt-transport-https_1.4.9_amd64.deb 
+HASH=c8c4366d1912ff8223615891397a78b44f313b0a2f15a970a82abe48460490cb &amp;&amp; echo &quot;$HASH  apt-transport-https.deb&quot; | sha256sum -c
+sudo dpkg -i apt-transport-https.deb
+</code></pre>
+<!--kg-card-end: markdown--><p>To confirm which APT transports are installed on your system, you can list each “method binary” that is installed:</p><!--kg-card-begin: markdown--><pre><code>ls /usr/lib/apt/methods
+</code></pre>
+<!--kg-card-end: markdown--><p>With apt-transport-https installed you should now see ‘https’ in that list.</p><h4 id="the-state-of-apt-https-on-debian">The state of APT &amp; HTTPS on Debian</h4><p>You may be wondering how relevant this APT HTTPS transport is today. Given the prevalence of HTTPS on the web today, I was surprised when I found out exactly how relevant it is.</p><p>Up until a couple of weeks ago, Debian <a href="https://www.debian.org/releases/stretch/">Stretch</a> (9.x) was the current stable release; 9.0 was first released in June 2017 - and the latest version (9.9) includes <a href="https://packages.debian.org/stretch/apt">apt 1.4.9</a> by default - meaning that <strong>securing your APT communication for Debian Stretch requires installing the optional <a href="https://packages.debian.org/stretch/apt-transport-https">apt-transport-https</a> package</strong>.</p><p>Thankfully, on July 6 of this year, Debian released the latest version - <a href="https://www.debian.org/releases/buster/">Buster</a> - which currently includes <a href="https://packages.debian.org/buster/apt">apt 1.8.2</a> with HTTPS support built-in by default, negating the need for installing the <a href="https://packages.debian.org/buster/apt-transport-https">apt-transport-https</a> package - and removing the bootstrapping challenge of installing HTTPS support via HTTPS!</p><h3 id="byo-https-apt-repository">BYO HTTPS APT Repository</h3><p>A powerful feature of APT is the ability to run your own repository. You can mirror a public repository to improve performance or protect against an outage. And if you’re producing your own software packages, you can run your own repository to simplify distribution and installation of your software for your users.</p><p>If you have your own APT repository and you’re looking to secure it with HTTPS we’ve offered free <a href="https://blog.cloudflare.com/introducing-universal-ssl/">Universal SSL since 2014</a> and last year introduced a way to <a href="https://blog.cloudflare.com/how-to-make-your-site-https-only/">require it site-wide automatically</a> with one click. You’ll get the benefits of <a href="https://www.cloudflare.com/ddos/">DDoS attack protection</a>, a <a href="https://www.cloudflare.com/cdn/">Global CDN with Caching</a>, and <a href="https://www.cloudflare.com/analytics/">Analytics</a>.</p><p>But what if you’re looking for more than just HTTPS for your APT repository? For companies operating private APT repositories, authentication of your APT repository may be a challenge. This is where our new, custom APT transport comes in.</p><h3 id="building-custom-transports">Building custom transports</h3><p>The system design of APT is powerful in that it supports extensibility via Transport executables, but how does this mechanism work?</p><p>When APT attempts to connect to a repository, it finds the executable which matches the “scheme” from the repository URL (e.g. “https://” prefix on a repository results in the “https” executable being called). </p><p>APT then uses the common Linux standard streams: stdin, stdout, and stderr. It communicates via stdin/stdout using a set of plain-text Messages, which follow <a href="https://tools.ietf.org/html/rfc822">IETF RFC #822</a> (the same format that .deb “Package” files use).</p><p>Examples of input message include “600 URI Acquire”, and examples of output messages include “200 URI Start” and “201 URI Done”:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/07/apt-transport-internals-1.png" class="kg-image"></figure><p>If you’re interested in building your own transport, check out the <a href="http://www.fifi.org/doc/libapt-pkg-doc/method.html/ch2.html">APT method interface spec</a> for more implementation details. </p><h3 id="apt-meets-access">APT meets Access</h3><p>Cloudflare prioritizes dogfooding our own products early and often. The Access product has given our internal DevTools team a chance to work closely with the product team as we build features that help solve use cases across our organization. We’ve deployed new features internally, gathered feedback, improved them, and then released them to our customers. For example, we’ve been able to iterate on tools for Access like the <a href="https://github.com/cloudflare/cloudflare-access-for-atlassian">Atlassian SSO</a> plugin and the <a href="https://developers.cloudflare.com/access/ssh/">SSH feature</a>, as collaborative efforts between DevTools and the Access team.</p><p>Our DevTools team wanted to take the same dogfooding approach to protect our internal APT repository with Access. We knew this would require a custom APT transport to support generating the required tokens and passing the correct headers in HTTPS requests to our internal APT repository server. We decided to build and test our own transport that both generated the necessary tokens and passed the correct headers to allow us to place our repository behind Access.</p><p>After months of internal use, we’re excited to announce that we have recently open-sourced our custom APT transport, so our customers can also secure their APT repositories by enabling authentication via Cloudflare Access. </p><p>By protecting your APT repository with <a href="https://www.cloudflare.com/products/cloudflare-access/">Cloudflare Access</a>, you can support authenticating users via Single-Sign On (SSO) providers, defining comprehensive access-control policies, and monitoring access and change logs.</p><p>Our APT transport leverages another Open Source tool we provide, <a href="https://github.com/cloudflare/cloudflared">cloudflared</a>, which enables users to connect to your Cloudflare-protected domain securely.</p><h3 id="securing-your-apt-repository">Securing your APT Repository</h3><p>To use our APT transport, you’ll need an APT repository that’s protected by Cloudflare Access. Our instructions (below) for using our transport will use apt.example.com as a hostname.</p><p>To use our APT transport with your own web-based APT repository, refer to our <a href="https://developers.cloudflare.com/access/setting-up-access/">Setting Up Access</a> guide.</p><h3 id="apt-transport-installation">APT Transport Installation</h3><p>To install from source, both tools require Go - once you <a href="https://golang.org/dl/">install Go</a>, you can install `cloudflared` and our APT transport with four commands:</p><!--kg-card-begin: markdown--><pre><code>go get github.com/cloudflare/cloudflared/cmd/cloudflared
+sudo cp ${GOPATH:-~/go}/bin/cloudflared /usr/local/bin/cloudflared
+go get github.com/cloudflare/apt-transport-cloudflared/cmd/cfd
+sudo cp ${GOPATH:-~/go}/bin/cfd /usr/lib/apt/methods/cfd
+</code></pre>
+<!--kg-card-end: markdown--><p>The above commands should place the cloudflared executable in <em>/usr/local/bin</em> (which should be on your PATH), and the APT transport binary in the required <em>/usr/lib/apt/methods</em> directory.</p><p>To confirm cloudflared is on your path, run:</p><!--kg-card-begin: markdown--><pre><code>which cloudflared
+</code></pre>
+<!--kg-card-end: markdown--><p>The above command should return <em>/usr/local/bin/cloudflared</em></p><p>Now that the custom transport is installed, to start using it simply configure an APT source with the cfd:// rather than https:// e.g:</p><!--kg-card-begin: markdown--><pre><code>$ cat /etc/apt/sources.list.d/example.list 
+deb [arch=amd64] cfd://apt.example.com/v2/stretch stable common
+</code></pre>
+<!--kg-card-end: markdown--><p>Next time you do `apt-get update` and `apt-get install`, a browser window will open asking you to log-in over Cloudflare Access, and your package will be retrieved using the token returned by `cloudflared`.</p><h4 id="fetching-a-gpg-key-over-access">Fetching a GPG Key over Access</h4><p>Usually, private APT repositories will use <a href="https://wiki.debian.org/SecureApt">SecureApt</a> and have their own GPG public key that users must install to verify the integrity of data retrieved from that repository.</p><p>Users can also leverage cloudflared for securely downloading and installing those keys, e.g:</p><!--kg-card-begin: markdown--><pre><code>cloudflared access login https://apt.example.com
+cloudflared access curl https://apt.example.com/public.gpg | sudo apt-key add -
+</code></pre>
+<!--kg-card-end: markdown--><p>The first command will open your web browser allowing you to authenticate for your domain. The second command wraps curl to download the GPG key, and hands it off to `apt-key add`.</p><h4 id="cloudflare-access-on-headless-servers">Cloudflare Access on "headless" servers</h4><p>If you’re looking to deploy APT repositories protected by Cloudflare Access to non-user-facing machines (a.k.a. “headless” servers), opening a browser does not work. The good news is since February, <a href="https://blog.cloudflare.com/give-your-automated-services-credentials-with-access-service-tokens/">Cloudflare Access supports service tokens</a> - and we’ve built support for them into our APT transport from day one.</p><p>If you’d like to use service tokens with our APT transport, it’s as simple as placing the token in a file in the correct path; because the machine already has a token, there is also no dependency on `cloudflared` for authentication. You can find details on how to set-up a service token in the APT transport <a href="https://github.com/cloudflare/apt-transport-cloudflared/blob/master/README.md">README</a>.</p><h2 id="what-s-next">What’s next?</h2><p>As demonstrated, you can get started using our APT transport today - we’d love to hear your feedback on this! </p><p>This work came out of an internal dogfooding effort, and we’re currently experimenting with additional packaging formats and tooling. If you’re interested in seeing support for another format or tool, please reach out.</p>
+            </div>
+        </section>
+
+        <a href="/tag/access/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Access</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/https/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTPS</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-23T12:00:00Z">December 23, 2020 12:00PM</p>
+        <a href="/integrating-cloudflare-gateway-and-access/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Integrating Cloudflare Gateway and Access</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We’re excited to announce that you can now set up your Access policies to require that all user traffic to your application is filtered by Cloudflare Gateway. This ensures that all of the traffic to your self-hosted and SaaS applications is secured and centrally logged....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/kenny/" class="fw5 f2 black no-underline">Kenny Johnson</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/access/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Access</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/gateway/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Gateway</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/zero-trust/" class="no-underline f1 fw2 blue3 underline-hover">Zero Trust</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-13T14:00:00+01:00">October 13, 2020 2:00PM</p>
+        <a href="/cloudflare-access-for-saas/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare Access: now for SaaS apps, too</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Teams can now secure SaaS applications with Zero Trust rules using Cloudflare Access....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sam/" class="fw5 f2 black no-underline">Sam Rhea</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/access/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Access</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/zero-trust-week/" class="no-underline f1 fw2 blue3 underline-hover">Zero Trust Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/zero-trust/" class="no-underline f1 fw2 blue3 underline-hover">Zero Trust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/identity/" class="no-underline f1 fw2 blue3 underline-hover">Identity</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-01T15:51:38+01:00">September 01, 2020 3:51PM</p>
+        <a href="/two-clicks-to-enable-regional-zero-trust-compliance/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Two clicks to add region-based Zero Trust compliance</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Starting today, you can make geography-based compliance easy again in Cloudflare Access with just two clicks. You can now build rules that require employees to connect from certain countries. You can also add rules that block team members from connecting from other countries....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sam/" class="fw5 f2 black no-underline">Sam Rhea</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/access/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Access</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-for-teams/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare for Teams</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-08-27T12:00:00+01:00">August 27, 2020 12:00PM</p>
+        <a href="/how-argo-tunnel-engineering-uses-argo-tunnel/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How Argo Tunnel engineering uses Argo Tunnel</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Argo Tunnel provides remote access to development environments by creating secure outbound-only connections to Cloudflare’s edge network from a resource exposing it to the Internet. That model helps protect servers and resources from being vulnerable to attack by an exposed IP address....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/chung-ting/" class="fw5 f2 black no-underline">Chung-Ting Huang</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/access/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Access</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/argo-tunnel/" class="no-underline f1 fw2 blue3 underline-hover">Argo Tunnel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/remote-work/" class="no-underline f1 fw2 blue3 underline-hover">Remote Work</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-for-teams/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare for Teams</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

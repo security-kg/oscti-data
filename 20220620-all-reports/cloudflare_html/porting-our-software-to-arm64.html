@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Porting Our Software to ARM64</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/porting-our-software-to-arm64/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Porting Our Software to ARM64" />
+    <meta property="og:description" content="As we enable more ARM64[1] machines in our network, I want to give some technical insight into the process we went through to reach software parity in our multi-architecture environment." />
+    <meta property="og:url" content="https://blog.cloudflare.com/porting-our-software-to-arm64/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/09/photo-1509815963-90cab26a868f.jpg" />
+    <meta property="article:published_time" content="2018-09-02T07:35:00.000Z" />
+    <meta property="article:modified_time" content="2018-09-02T07:35:33.000Z" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Rust" />
+    <meta property="article:tag" content="Go" />
+    <meta property="article:tag" content="Developers" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Porting Our Software to ARM64" />
+    <meta name="twitter:description" content="As we enable more ARM64[1] machines in our network, I want to give some technical insight into the process we went through to reach software parity in our multi-architecture environment." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/porting-our-software-to-arm64/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/09/photo-1509815963-90cab26a868f.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Alexander Huynh" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Programming, Rust, Go, Developers, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@divbyzer0" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Alexander Huynh",
+        "image": "https://blog.cloudflare.com/content/images/2018/08/0-2.jpg",
+        "url": "https://blog.cloudflare.com/author/alexander/",
+        "sameAs": [
+            "https://twitter.com/divbyzer0"
+        ]
+    },
+    "headline": "Porting Our Software to ARM64",
+    "url": "https://blog.cloudflare.com/porting-our-software-to-arm64/",
+    "datePublished": "2018-09-02T07:35:00.000Z",
+    "dateModified": "2018-09-02T07:35:33.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/09/photo-1509815963-90cab26a868f.jpg",
+    "keywords": "Programming, Rust, Go, Developers, Speed & Reliability",
+    "description": "As we enable more ARM64[1] machines in our network, I want to give some technical insight into the process we went through to reach software parity in our multi-architecture environment.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-programming tag-rust tag-go tag-developers tag-speed-and-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-programming tag-rust tag-go tag-developers tag-speed-and-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Porting Our Software to ARM64</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-09-02T08:35:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">September 02, 2018 8:35AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/alexander/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/08/0-2.jpg" alt="Alexander Huynh" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/alexander" class="fw5 f3 no-underline black mr3">Alexander Huynh</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>As we enable more ARM64<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup> machines in our network, I want to give some technical insight into the process we went through to reach software parity in our multi-architecture environment.</p>
+<p>To give some idea of the scale of this task, it’s necessary to describe the software stack we run on our servers. The foundation is the Linux kernel. Then, we use the Debian distribution as our base operating system. Finally, we install hundreds of packages that we build ourselves. Some packages are based on open-source software, often tailored to better meet our needs. Other packages were written from scratch within Cloudflare.</p>
+<p>Industry support for ARM64 is very active, so a lot of open-source software has already been ported. This includes the Linux kernel. Additionally, Debian made ARM64 a <a href="https://wiki.debian.org/Arm64Port#Status">first-class release architecture starting with Stretch</a> in 2017. This meant that upon obtaining our ARM64 hardware, a few engineers were able to bring Debian up quickly and smoothly. Our attention then turned to getting all our in-house packages to build and run for ARM64.</p>
+<p>Our stack uses a diverse range of programming languages, including C, C++, Go, Lua, Python, and Rust. Different languages have different porting requirements, with some being easier than others.</p>
+<h3 id="portinggocode">Porting Go Code</h3>
+<p>Cross-compiling Go code is relatively simple, since <a href="https://github.com/golang/go/wiki/GoArm">ARM64 is a first-class citizen</a>. Go compiles and links static binaries using the system’s crossbuild toolchain, meaning the only additional Debian package we had to install on top of <code>build-essential</code> is <code>crossbuild-essential-arm64</code>.</p>
+<p><img src="https://images.unsplash.com/photo-1509815963-90cab26a868f?ixlib=rb-0.3.5&amp;q=80&amp;fm=jpg&amp;crop=entropy&amp;cs=tinysrgb&amp;w=1080&amp;fit=max&amp;ixid=eyJhcHBfaWQiOjExNzczfQ&amp;s=00b57e7c25010b46a5c9257f57af7bb8" alt="traffic light on green light"><br>
+<small>Photo by <a href="https://unsplash.com/@tomcoe?utm_source=ghost&utm_medium=referral&utm_campaign=api-credit">tom coe</a> / <a href="https://unsplash.com/?utm_source=ghost&utm_medium=referral&utm_campaign=api-credit">Unsplash</a></small></p>
+<p>After installing the crossbuild toolchain, we then replaced every <code>go build</code> invocation with a loop of <code>GOARCH=&lt;arch&gt; CGO_ENABLED=1 go build</code>, where <code>&lt;arch&gt;</code> iterates through <code>amd64</code> and <code>arm64</code>. Forcing <code>CGO_ENABLED=1</code> is required, as <code>cgo</code> is <a href="https://github.com/golang/go/blob/8fbbf63cc61ffbb953a6d44649b644e4211c5d83/src/cmd/cgo/doc.go#L115-L124">disabled by default for cross-compilation</a>. The generated binaries are then run through our testing framework.</p>
+<h3 id="portingrustcode">Porting Rust Code</h3>
+<p>Rust also has mature support for ARM64. The steps for porting start at installing <code>crossbuild-essential-arm64</code>, and defining the <code>--target</code> triple in either <code>rustc</code> or <code>cargo</code>. Different targets are bucketed into <a href="https://forge.rust-lang.org/platform-support.html">different tiers of completeness</a>. Full instructions are well-documented at <a href="https://github.com/japaric/rust-cross">rust-cross</a>.</p>
+<p>One thing to note, however, is that any crates pulled in by a package must also be cross-compiled. The more crates used, the higher of a chance of running into one that does not cross-compile well.</p>
+<h3 id="testingplusportingothercode">Testing, Plus Porting Other Code</h3>
+<p>Other languages are less cooperative when it comes to cross-compilation. Fiddling with <code>CC</code> and <code>LD</code> values didn’t seem to be best use of engineering resources. What we really wanted was an emulation layer. An emulation layer would leverage all of our <code>x86_64</code> machines, from our distributed compute behemoths to developers’ laptops, for the purposes of both building and testing code.</p>
+<p>Enter QEMU.</p>
+<p>QEMU is an emulator with multiple modes, including both full system emulation and user-space emulation. Our compute nodes are beefy enough to handle system-level emulation, but for developers’ laptops, user-space emulation provides most of the benefits, with less overhead.</p>
+<p>For user-space emulation, our porting team did not want to intrude too much into our developers’ normal workflow. Our internal build system already uses Docker as a backend, so it would be ideal to be able to <code>docker run</code> into an ARM environment, like so:</p>
+<pre><code>host$ uname -m
+x86_64
+host$ docker run --rm -it stretch-arm64/master:latest
+guest# uname -m
+aarch64
+</code></pre>
+<p>Fortunately, we were not the first ones to come up with this idea: folks over at resin.io have <a href="https://resin.io/blog/building-arm-containers-on-any-x86-machine-even-dockerhub/">solved this problem already</a>! They’ve also submitted a <a href="https://patchwork.ozlabs.org/patch/582756/">patch to <code>qemu-user</code></a> that prepends the emulator into every <code>execve</code> call, similar to how <a href="https://www.kernel.org/doc/html/v4.14/admin-guide/binfmt-misc.html"><code>binfmt_misc</code> is implemented</a><sup class="footnote-ref"><a href="#fn2" id="fnref2">[2]</a></sup>. By prepending the emulator, you’re essentially forcing every new process to also be emulated, resulting in a nice self-contained environment.</p>
+<p>With the <code>execve</code> patch in built into <code>qemu-user</code>, all we had to do was copy the emulator into an ARM64 container, and set the appropriate entrypoint:</p>
+<pre><code># internal build of qemu with patch
+FROM qemu-aarch64/master:latest as qemu
+
+# arm64v8/debian:stretch-slim at 2018-02-12T13:02:00Z
+FROM arm64v8/<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0d69686f646c634d7e656c3f383b">[email&#160;protected]</a>:841bbe6f4132526be95c91bec6757831c76e603309a47992e6444de6a0b6521a
+
+COPY --from=qemu /qemu-aarch64 /qemu-aarch64
+SHELL [&quot;/qemu-aarch64&quot;, &quot;/bin/sh&quot;, &quot;-c&quot;]
+
+# setcap is required for `sudo` to work, but breaks environment variable passing
+# run `setcap -r /qemu-aarch64` to break sudo, but allow environment variable passing
+# maybe one day we’ll have our cake and eat it too
+RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends libcap2-bin &amp;&amp; \
+    setcap cap_setuid,cap_setgid+ep /qemu-aarch64 &amp;&amp; \
+    apt-get remove --purge -y libcap2-bin &amp;&amp; apt-get autoremove -y &amp;&amp; \
+    rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT [&quot;/qemu-aarch64&quot;, &quot;--execve&quot;, &quot;/qemu-aarch64&quot;]
+CMD [&quot;/bin/bash&quot;]
+</code></pre>
+<p>This Dockerfile resulted in the cross-architecture output we were looking for earlier.</p>
+<p>Now that we had a self-contained ARM64 environment, we could build and test most of our code relatively smoothly.</p>
+<h3 id="technicalgotchas">Technical Gotchas</h3>
+<p>Of course, there are always a few blockers on the road to perfection. Upon releasing this modified Debian image to our developers, they returned with a few interesting problems:</p>
+<ul>
+<li>tests were failing due to <code>LD_LIBRARY_PATH</code> not working</li>
+<li>Go programs segfaulting at indeterminate intervals</li>
+<li>system-installed libraries were taking precedence over user-installed libraries</li>
+<li>slow builds and sporadic test case failures, speeding up our plan for native builds and CI</li>
+</ul>
+<h4 id="ld_library_pathandfriends">LD_LIBRARY_PATH and Friends</h4>
+<p>It turns out that <code>LD_LIBRARY_PATH</code> was not the only environment variable that failed to work correctly. <em>All</em> environment variables, either set on the command line or via other means (e.g. <code>export</code>), would fail to propagate into the <code>qemu-user</code> process.</p>
+<p>Through bisection of known good code, we found that it was the <code>setcap</code> in our Dockerfile which prevented the environment variable passthrough. Unfortunately, this <code>setcap</code> is the same one that allows us to call <code>sudo</code>, so we have a caveat for our developers that they can either run <code>sudo</code> inside their containers, or have environment variable passing, but not both.</p>
+<h4 id="intermittentgofailures">Intermittent Go Failures</h4>
+<p>With a decent amount of Go code running through our CI system, it was easy to spot a trend of intermittent segfaults.</p>
+<p>Going on a hunch, we confirmed a hypothesis that non-deterministic failures are generally due to threading issues. Unfortunately, opinion on <a href="https://github.com/golang/go/issues/20763">the issue tracker</a> showed that Go / QEMU incompatibilities aren’t a priority, so we were left without an upstream fix.</p>
+<p>The workaround we came up with is simple: if the problem is threading-related, limit where the threads can run! When we package our internal <code>go</code> binaries, we add a <a href="https://gist.github.com/ahrex/9a84f32a33aadc197a688d2158d7e2ea"><code>.deb</code> post-install script</a> to detect if we’re running under ARM64 emulation, and if so, reduce the number of CPUs the <code>go</code> binary can run under to one. We lose performance by pinning to one CPU, but this slowdown is negligible when we’re already running under emulation, and slow code is better than non-working code.</p>
+<p>With the workaround in place, reports of intermittent crashes dropped to zero. Onto the next problem!</p>
+<h4 id="sharedlibrarymixups">Shared Library Mixups</h4>
+<p>We like to be at the forefront of technology. From suggesting improvements to what would become TLS 1.3, to partnering with Mozilla to <a href="https://blog.nightly.mozilla.org/2018/08/28/firefox-nightly-secure-dns-experimental-results/">make DNS queries more secure</a>, and everything in between. To be able to support these new technologies, our software has to be at the cutting edge.</p>
+<p>On the other hand, we also need a reliable platform to build on. One of the reasons we chose Debian is due to its long-term support lifecycle, versus other rolling release operating systems.</p>
+<p>With these two ideas counterposed, we opted not to overwrite system libraries in <code>/usr/lib</code> with our cutting edge version, but instead supplement the defaults by installing into <code>/usr/local/lib</code>.</p>
+<p>The same development team that reported the <code>LD_LIBRARY_PATH</code> issue also came to us saying the ARM64 version of their software would fail to load shared object symbols. A debugging session was launched and we eventually isolated it to the <a href="https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=685706">ordering of <code>/etc/ld.so.conf.d/</code> in Debian</a>.</p>
+<p>Compare an <code>x86_64</code> machine:</p>
+<pre><code>$ uname -m
+x86_64
+$ ls /etc/ld.so.conf.d/
+libc.conf  x86_64-linux-gnu.conf
+$ cat /etc/ld.so.conf.d/libc.conf
+# libc default configuration
+/usr/local/lib
+$ cat /etc/ld.so.conf.d/x86_64-linux-gnu.conf
+# Multiarch support
+/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu
+</code></pre>
+<p>With an <code>arm64</code> machine:</p>
+<pre><code>$ uname -m
+aarch64
+$ ls /etc/ld.so.conf.d/
+aarch64-linux-gnu.conf  libc.conf
+$ cat /etc/ld.so.conf.d/aarch64-linux-gnu.conf
+# Multiarch support
+/lib/aarch64-linux-gnu
+/usr/lib/aarch64-linux-gnu
+$ cat /etc/ld.so.conf.d/libc.conf
+# libc default configuration
+/usr/local/lib
+</code></pre>
+<p>By traversing <code>/etc/ld.so.conf.d/</code> in alphabetical order, shared libraries in <code>/usr/local/lib</code> would be loaded before <code>/usr/lib/$(uname -m)-linux-gnu</code> on <code>x86_64</code>, while the opposite is true for <code>arm64</code>!</p>
+<p>Internal discussion resulted in us not changing the system default search order, but instead use the <a href="https://en.wikipedia.org/wiki/Rpath">linker flag <code>--rpath</code></a> to request the runtime loader to explicitly search our <code>/usr/local/lib</code> location first.</p>
+<p>This issue applies to both the emulated and physical ARM64 environments, which is a boon for the emulation framework we’ve just put together.</p>
+<h4 id="nativebuildsandci">Native Builds and CI</h4>
+<p>Cross- and emulated compilation brought over 99% of our edge codebase, but there were still a handful of packages that did not fit the models we defined. Some packages, e.g. <code>llvm</code>, parallelize their build so well that the cost of userspace emulation slowed the build time to over 6 hours. Other packages called more esoteric functions which QEMU was not prepared to handle.</p>
+<p>Rather than devote resources to emulating the long tail, we allocated a few ARM64 machines for developer access, and one machine for a native CI agent. Maintainers of the long tail could iterate in peace, knowing their failing test cases were never due to the emulation layer. When ready, CI would pick up their changes and build an official package, post-review.</p>
+<p>While native compilation is the least error-prone build method, limited supply of machines made this option unattractive; the more machines we allocate for development and CI mean the more machines we take away from our proving grounds.</p>
+<p>Ideally, we should follow the <a href="https://github.com/golang/go/issues/13024#issuecomment-164894790">Go team’s recommendation of running code natively</a>, but as long as our developers iterate on their <code>x86_64</code> laptops, supporting emulation is necessary for us.</p>
+<h3 id="otherchallenges">Other Challenges</h3>
+<p>With the most glaring blockers out of the way, we have now given our developers an even footing to easily build for multiple architectures.</p>
+<p>The rest of the time was spent coordinating over a hundred packages, split between dozens of tech teams. At the beginning, responsibility of building ARM64 packages laid on the porting team. Working on a changing codebase required close collaboration between maintainer and porter.</p>
+<p>Once we deemed our ARM64 platform production-ready, a self-guided procedure was created to use the build methods listed above, and a request was sent out to all of engineering to support ARM64 as a first-class citizen.</p>
+<p>The end result of our stack is currently being tested, profiled, and optimized, with results coming soon!</p>
+<hr>
+<h6 id="manymoreopportunitiesexistforsystemsintegrationdebuggingdeepdivescrossteamcollaborationandinternaltoolsdevelopmentcomejoinusifyoureinterested">Many more opportunities exist for systems integration, debugging deep dives, cross-team collaboration, and internal tools development. <a href="https://www.cloudflare.com/careers/">Come join us</a> if you’re interested!</h6>
+<hr class="footnotes-sep">
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p>ARM64 is sometimes used interchangeably with aarch64 and ARMv8 <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+<li id="fn2" class="footnote-item"><p><code>binfmt_misc</code> is also what <a href="https://docs.docker.com/docker-for-mac/multi-arch/">Docker for Mac uses to leverage multi-architecture support</a>; we’re supporting something very similar, albeit from Linux to Linux, versus macOS to Linux. <a href="#fnref2" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/rust/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Rust</a>
+        <a href="/tag/go/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Go</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-10-01T18:00:00+01:00">October 01, 2017 6:00PM</p>
+        <a href="/go-hack-nights/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Go Hack Nights at Cloudflare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Recently we launched an internal monthly Go Hack Night at our San Francisco office, open to anyone who works at Cloudflare regardless of their department or position....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-djurovich/" class="fw5 f2 black no-underline">Ryan Djurovich</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/hackathon/" class="no-underline f1 fw2 blue3 underline-hover">Hackathon</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/events/" class="no-underline f1 fw2 blue3 underline-hover">Events</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-04-05T13:05:01+01:00">April 05, 2016 1:05PM</p>
+        <a href="/revenge-listening-sockets/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The revenge of the listening sockets</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Back in November we wrote a blog post about one latency spike. Today I'd like to share a continuation of that story. As it turns out, the misconfigured rmem setting wasn't the only source of added latency. It looked like Mr Wolf hadn't finished his job....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-12-17T14:15:37Z">December 17, 2015 2:15PM</p>
+        <a href="/partial-kernel-bypass-merged-netmap/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Partial kernel bypass merged into netmap main</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a previous post we described our work on a new netmap mode called single-rx-queue. After submitting the pull request, the netmap maintainers told us that the patch was interesting, but they would prefer something more configurable instead of a tailored custom mode....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/gilberto-bertin/" class="fw5 f2 black no-underline">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-06-30T12:38:28+01:00">June 30, 2015 12:38PM</p>
+        <a href="/how-to-achieve-low-latency/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How to achieve low latency with 10Gbps Ethernet</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a recent blog post we explained how to tweak a simple UDP application to maximize throughput. This time we are going to optimize our UDP application for latency. Fighting with latency is a great excuse to discuss modern features of multiqueue NICs....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

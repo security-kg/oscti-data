@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>The Curious Case of Caching CSRF Tokens</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/the-curious-case-of-caching-csrf-tokens/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="The Curious Case of Caching CSRF Tokens" />
+    <meta property="og:description" content="It is now commonly accepted as fact that web performance is critical for business. Slower sites can affect conversion rates on e-commerce stores, they can affect your sign-up rate on your SaaS service and lower the readership of your content." />
+    <meta property="og:url" content="https://blog.cloudflare.com/the-curious-case-of-caching-csrf-tokens/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2017/11/23910AEA00000578-2852835-Shoppers_scramble_to_pick_up_one-8_1417169462181-1.jpg" />
+    <meta property="article:published_time" content="2017-12-13T14:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-01-28T23:31:44.000Z" />
+    <meta property="article:tag" content="Cache Everything" />
+    <meta property="article:tag" content="Page Rules" />
+    <meta property="article:tag" content="SaaS" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="HTTPS" />
+    <meta property="article:tag" content="Debugging" />
+    <meta property="article:tag" content="Cache" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="The Curious Case of Caching CSRF Tokens" />
+    <meta name="twitter:description" content="It is now commonly accepted as fact that web performance is critical for business. Slower sites can affect conversion rates on e-commerce stores, they can affect your sign-up rate on your SaaS service and lower the readership of your content." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/the-curious-case-of-caching-csrf-tokens/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2017/11/23910AEA00000578-2852835-Shoppers_scramble_to_pick_up_one-8_1417169462181-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Junade Ali" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Cache Everything, Page Rules, SaaS, Speed &amp; Reliability, HTTPS, Debugging, Cache" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@IcyApril" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Junade Ali",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/G1VwuaxB.jpg",
+        "url": "https://blog.cloudflare.com/author/junade-ali/",
+        "sameAs": [
+            "https://twitter.com/IcyApril"
+        ]
+    },
+    "headline": "The Curious Case of Caching CSRF Tokens",
+    "url": "https://blog.cloudflare.com/the-curious-case-of-caching-csrf-tokens/",
+    "datePublished": "2017-12-13T14:00:00.000Z",
+    "dateModified": "2021-01-28T23:31:44.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2017/11/23910AEA00000578-2852835-Shoppers_scramble_to_pick_up_one-8_1417169462181-1.jpg",
+    "keywords": "Cache Everything, Page Rules, SaaS, Speed & Reliability, HTTPS, Debugging, Cache",
+    "description": "It is now commonly accepted as fact that web performance is critical for business. Slower sites can affect conversion rates on e-commerce stores, they can affect your sign-up rate on your SaaS service and lower the readership of your content.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-cache-everything tag-page-rules tag-saas tag-speed-and-reliability tag-https tag-debugging tag-cache sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-cache-everything tag-page-rules tag-saas tag-speed-and-reliability tag-https tag-debugging tag-cache ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">The Curious Case of Caching CSRF Tokens</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-12-13T14:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 13, 2017 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/junade-ali/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/G1VwuaxB.jpg" alt="Junade Ali" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/junade-ali" class="fw5 f3 no-underline black mr3">Junade Ali</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>It is now commonly accepted as fact that web performance is critical for business. Slower sites can affect conversion rates on e-commerce stores, they can affect your sign-up rate on your SaaS service and lower the readership of your content.</p>
+<p>In the run-up to Thanksgiving and Black Friday, e-commerce sites turned to services like Cloudflare to help optimise their performance and withstand the traffic spikes of the shopping season.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/23910AEA00000578-2852835-Shoppers_scramble_to_pick_up_one-8_1417169462181.jpg" alt=""></p>
+<p>In preparation, an e-commerce customer joined Cloudflare on the 9th November, a few weeks before the shopping season. Instead of joining via our Enterprise plan, they were a self-serve customer who signed-up by subscribing to our Business plan online and switching their nameservers over to us.</p>
+<p>Their site was running Magento, a notably slow e-commerce platform - filled with lots of interesting PHP, with a considerable amount of soft code in XML. Running version 1.9, the platform was somewhat outdated (Magento was totally rewritten in version 2.0 and subsequent releases).</p>
+<p>Despite the somewhat dated technology, the e-commerce site was &quot;good enough&quot; for this customer and had done it's job for many years.</p>
+<p>They were the first to notice an interesting technical issue surrounding how performance and security can often feel at odds with each other. Although they were the first to highlight this issue, into the run-up of Black Friday, we ultimately saw around a dozen customers on Magento 1.8/1.9 have similar issues.</p>
+<h3 id="initialoptimisations">Initial Optimisations</h3>
+<p>After signing-up for Cloudflare, the site owners attempted to make some changes to ensure their site was loading quickly.</p>
+<p>The website developers had already ensured the site was loading over HTTPS, in doing so they were able to ensure their site was loading over the new HTTP/2 Protocol and made some changes to ensure their site was optimised for HTTP/2 (for details, see our blog post on <a href="https://blog.cloudflare.com/http-2-for-web-developers/">HTTP/2 For Web Developers</a>).</p>
+<p>At Cloudflare we've taken steps to ensure that there isn't a latency overhead for establishing a secure TLS connection, here is a non-complete list of optimisations we use:</p>
+<ul>
+<li><a href="https://blog.cloudflare.com/tls-session-resumption-full-speed-and-secure/">TLS Session Resumption</a></li>
+<li><a href="https://blog.cloudflare.com/high-reliability-ocsp-stapling/">OCSP Stapling</a></li>
+<li>Fast <a href="https://blog.cloudflare.com/a-relatively-easy-to-understand-primer-on-elliptic-curve-cryptography/">Elliptic Curve Cryptography</a> prioritised</li>
+<li><a href="https://blog.cloudflare.com/optimizing-tls-over-tcp-to-reduce-latency/">Dynamic TLS Record Sizing</a></li>
+</ul>
+<p>Additionally, they had enabled <a href="https://blog.cloudflare.com/announcing-support-for-http-2-server-push-2/">HTTP/2 Server Push</a> to ensure critical CSS/JS assets could be pushed to clients when they made their first request. Without Server Push, a client has to download the HTML response, interpret it and then work out assets it needs to download.</p>
+<p>Big images were Lazy Loaded, only downloading them when they needed to be seen by the users. Additionally, they had enabled a Cloudflare feature called <a href="https://blog.cloudflare.com/a-very-webp-new-year-from-cloudflare/">Polish</a>. With this enabled, Cloudflare dynamically works out whether it's faster serve an image in <a href="https://developers.google.com/speed/webp/">WebP</a> (a new image format developed by Google) or whether it's faster to serve it in a different format.</p>
+<p>These optimisations did make some improvement to performance, but their site was still slow.</p>
+<h3 id="respectthettfb">Respect The TTFB</h3>
+<p>In web performance, there are a few different things which can affect the response times - I've crudely summarised them into the following three categories:</p>
+<ul>
+<li><strong>Connection &amp; Request Time</strong> - Before a request can be sent off for a website to load something, a few things need to happen: DNS queries, a TCP handshake to establish the connection with the web server and a TLS handshake to establish a secure connection</li>
+<li><strong>Page Render</strong> - A dynamic site needs to query databases, call APIs, write logs, render views, etc before a response can be made to a client</li>
+<li><strong>Response Speed</strong> - Downloading the response from web server, browser-side rendering of the HTML and pulling the other resources linked in the HTML</li>
+</ul>
+<p>The e-commerce site had taken steps to improve their <em>Response Speed</em> by enabling HTTP/2 and performing other on-site optimisations. They had also optimised their <em>Connection &amp; Response Time</em> by using a CDN service like Cloudflare to provide fast DNS and reduce latency when optimising TLS/TCP connections.</p>
+<p>However, they now realised the critical step they needed to optimise was around the <em>Page Render</em> that would happen on their web server.</p>
+<p>By looking at a Waterfall View of how their site loaded (similar to the one below) they could see the main constraint.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/time-to-first-byte.png" alt=""><br>
+<small>Example Waterfall view from WebSiteOptimization.com</small></p>
+<p>On the initial request, you can see the green &quot;Time to First Byte&quot; view taking a very long time.</p>
+<p>Many browsers have tools for viewing Waterfall Charts like the one above, Google provide some excellent documentation for Chrome on doing this: <a href="https://developers.google.com/web/tools/chrome-devtools/network-performance/">Get Started with Analyzing Network Performance in Chrome DevTools</a>. You can also generate these graphs fairly easily from site speed test tools like <a href="https://www.webpagetest.org/">WebPageTest.org</a>.</p>
+<p>Time to First Byte itself is an often misunderstood metric and often can't be attributed to a single fault. For example; using a CDN service like Cloudflare may increase TTFB by a few milliseconds, but do so to the benefit of an overall load time. This can be as the CDN is adding additional compression functionality to speed up the response, or simply as it has to establish a connection back to the origin web server (which isn't visible by the client).</p>
+<p>There are instances where it is important to debug why TTFB is a problem. For example; in this instance, the e-commerce platform was taking upwards of 3 seconds just to generate the HTML response. In this case, it was clear the constraint was the server-side <em>Page Render</em>.</p>
+<p>When the web server was generating dynamic content, it was having to query databases and perform logic before a request could be served. In most instances (i.e. a product page) the page would be identical to every other request. It would only be when someone would add something to their shopping cart that the site would really become dynamic.</p>
+<h3 id="enablingcookiebasedcaching">Enabling Cookie-Based Caching</h3>
+<p>Before someone logs into the the Magento admin panel or adds something to their shopping cart, the page view is anonymous and will be served up identically to every visitor. It will only be the when an anonymous visitor logs in or adds something to their shopping cart that they will see a page that's dynamic and unlike every other page that's been rendered.</p>
+<p>It therefore is possible to cache those anonymous requests so that Magento on an origin server doesn't need to constantly regenerate the HTML.</p>
+<p>Cloudflare users on our Business Plan are able to cache anonymous page views when using Magneto using our Bypass Cache on Cookie functionality. This allows for static HTML to be cached at our edge, with no need for it to be regenerated from request to request.</p>
+<p>This provides a huge performance boost for the first few page visits of a visitor, and allows them still to interact with the dynamic site when they need to. Additionally, it helps keep load down on the origin server in the event of traffic spikes, sparing precious server CPU time for those who need it to complete dynamic actions like paying for an order.</p>
+<p>Here's an example of how this can be configured in Cloudflare using the Page Rules functionality:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/Screen-Shot-2017-11-30-at-13.57.40.png" alt="Magento Cache Cookie Bypass"></p>
+<p>The Page Rule configuration above instructs Cloudflare to &quot;Cache Everything (including HTML), but bypass the cache when it sees a request which contains any of the cookies: <code>external_no_cache</code>, <code>PHPSESSID</code> or <code>adminhtml</code>. The final <code>Edge Cache TTL</code> setting just instructs Cloudflare to keep HTML files in cache for a month, this is necessary as Magento by default uses headers to discourage caching.</p>
+<p>The site administrator configured their site to work something like this:</p>
+<ol>
+<li>On the first request, the user is anonymous and their request indistinguishable from any other - their page can be served from the Cloudflare cache</li>
+<li>When the customer adds something to their shopping cart, they do that via a <code>POST</code> request - as methods like <code>POST</code>, <code>PUT</code> and <code>DELETE</code> are intended to change a resource, they bypass the Cloudflare cache</li>
+<li>On the <code>POST</code> request to add something to their shopping cart, Magento will set a cookie called <code>external_no_cache</code></li>
+<li>As the site owner has configured Cloudflare to bypass the cache when we see a request containing the <code>external_no_cache</code> cookie, all subsequent requests go direct to origin</li>
+</ol>
+<p>This behaviour can be summarised in the following crude diagram:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/12/Screen-Shot-2017-12-12-at-14.00.59.png" alt=""></p>
+<p>The site administrators initially enabled this configuration on a subdomain for testing purposes, but noticed something rather strange. When they would add something to the cart on their test site, the cart would show up empty. If they then tried again to add something to the cart, the item would be added successfully.</p>
+<p>The customer reported one additional, interesting piece of information - when they tried to mimic this cookie-based caching behaviour internally using Varnish, they faced the exact same issue.</p>
+<p>In essence, the <em>Add to Cart</em> functionality would fail, but only on the first request. This was indeed odd behaviour, and the customer reached out to Cloudflare Support.</p>
+<h3 id="debugging">Debugging</h3>
+<p>The customer wrote in just as our Singapore office were finishing up their afternoon and was initially triaged by a Support Engineer in that office.</p>
+<p>The Support Agent evaluated what the problem was and initially identified that if the <code>frontend</code> cookie was missing, the <em>Add to Cart</em> functionality would fail.</p>
+<p>No matter which page you access on Magento, it will attempt to set a <code>frontend</code> cookie, even if it doesn't add an <code>external_no_cache</code> cookie</p>
+<p>When Cloudflare caches static content, the default behaviour is to strip away any cookies coming from the server if the file is going to end up in cache - this is a security safeguard to prevent customers accidentally caching private session cookies. This applies when a cached response contains a <code>Set-Cookie</code> header, but does not apply when the cookie is set via JavaScript - in order to allow functionality like Google Analytics to work.</p>
+<p>They had identified that the caching logic at our network edge was working fine, but for whatever reason Magento would refuse to add something to a shopping cart without a valid <code>frontend</code> cookie. Why was this?</p>
+<p>As Singapore handed their shift work over to London, the Support Engineer working on this ticket decided to escalate the ticket up to me. This was largely as, towards the end of last year, I had owned the re-pricing of this feature (which opened it up to our self-service Business plan users, instead of being Enterprise-only). That said; I had not touched Magneto in many years, even when I was working in digital agencies I wasn't the most enthusiastic to build on it.</p>
+<p>The Support Agent provided some internal comments that described the issue in detail and their own debugging steps, with an effective &quot;TL;DR&quot; summary:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/Screen-Shot-2017-11-30-at-20.42.09.png" alt=""></p>
+<p>Debugging these kinds of customer issues is not as simple as putting breakpoints into a codebase. Often, for our Support Engineers, the customers origin server acts as a black-box and there can be many moving parts, and they of course have to manage the expectations of a real customer at the other end. This level of problem solving fun, is one of the reasons I still like answering customer support tickets when I get a chance.</p>
+<p>Before attempting to debug anything, I double checked that the Support Agent was correct that nothing had gone wrong on our end - I trusted their judgement and no others customers were reporting their caching functionality had broken, but it is always best to cross-check manual debugging work. I ran some checks to ensure that there were no regressions in our Lua codebase that controls caching logic:</p>
+<ul>
+<li>Checked that there were no changes to this logic in our internal code respository</li>
+<li>Check that automated tests are still in place and build successfully</li>
+<li>Run checks on production to verify that caching behaviour still works as normal</li>
+</ul>
+<p>As Cloudflare has customers across so many platforms, I also checked to ensure that there were no breaking changes in Magento codebase that would cause this bug to occur. Occasionally we find our customers accidentally come across bugs in CMS platforms which are unreported. This, fortunately, was not one of those instances.</p>
+<p>The next step is to attempt to replicate the issue locally and away from the customers site. I spun up a vanilla instance of Magento 1.9 and set it up with an identical Cloudflare configuration. The experiment was successful and I was able to replicate the customer issue.</p>
+<p>I had an instinctive feeling that it was the Cross Site Request Forgery Protection functionality that was at fault here and I started tweaking my own test Magento installation to see if this was the cases.</p>
+<p>Cross Site Request Forgery attacks work by exploiting the fact that one site on the internet can get a client to make requests to another site.</p>
+<p>For example; suppose you have an online bank account with the ability to send money to other accounts. Once logged in, there is a form to send money which uses the following HTML:</p>
+<pre><code class="language-html">&lt;form action=&quot;https://example.com/send-money&quot;&gt;
+Account Name:
+&lt;input type=&quot;text&quot; name=&quot;account_name&quot; /&gt;
+Amount:
+&lt;input type=&quot;text&quot; name=&quot;amount&quot; /&gt;
+&lt;input type=&quot;submit&quot; /&gt;
+&lt;/form&gt;
+</code></pre>
+<p>After logging in and doing your transactions, you don't log-out of the website - but you simply navigate elsewhere online. Whilst browsing around you come across a button on a website that contains the text &quot;Click me! Why not?&quot;. You click the button, and £10,000 goes from your bank account to mine.</p>
+<p>This happens because the button you clicked was connected to an endpoint on the banking website, and contained hidden fields instructing it to send me £10,000 of your cash:</p>
+<pre><code class="language-html">&lt;form action=&quot;https://example.com/send-money&quot;&gt;
+&lt;input type=&quot;hidden&quot; name=&quot;account_name&quot; value=&quot;Junade Ali&quot; /&gt;
+&lt;input type=&quot;hidden&quot; name=&quot;amount&quot; value=&quot;10,000&quot; /&gt;
+&lt;input type=&quot;submit&quot; value=&quot;Click me! Why not?&quot; /&gt;
+&lt;/form&gt;
+</code></pre>
+<p>In order to prevent these attacks, CSRF Tokens are inserted as hidden fields into web forms:</p>
+<pre><code class="language-html">&lt;form action=&quot;https://example.com/send-money&quot;&gt;
+Account Name:
+&lt;input type=&quot;text&quot; name=&quot;account_name&quot; /&gt;
+Amount:
+&lt;input type=&quot;text&quot; name=&quot;amount&quot; /&gt;
+&lt;input type=&quot;hidden&quot; name=&quot;csrf_protection&quot; value=&quot;hunter2&quot; /&gt;
+&lt;input type=&quot;submit&quot; /&gt;
+&lt;/form&gt;
+</code></pre>
+<p>A cookie is first set on the clients computer containing a random session cookie. When a form is served to the client, a CSRF token is generated using that cookie. The server will check that the CSRF token submitted in the HTML form actually matches the session cookie, and if it doesn't block the request.</p>
+<p>In this instance, as there was no session cookie ever set (Cloudflare would strip it out before it entered cache), the <code>POST</code> request to the <em>Add to Cart</em> functionality could never verify the CSRF token and the request would fail.</p>
+<p>Due to CSRF vulnerabilities, Magento applied CSRF protection to all forms; this broke Full Page Cache implementations in Magento 1.8.x/1.9.x. You can find all the details in the <a href="https://magento.com/security/patches/supee-6285">SUPEE-6285 patch documentation</a> from Magento.</p>
+<h3 id="cachingcontentwithcsrfprotectedforms">Caching Content with CSRF Protected Forms</h3>
+<p>To validate that CSRF Tokens were definitely at fault here, I completely disabled CSRF Protection in Magento. Obviously you should never do this in production, I found it slightly odd that they even had a UI toggle for this!</p>
+<p>Another method which was created in the Magento Community was an extension to disable CSRF Protection just for the Add To Cart functionality (<a href="https://github.com/deivisonarthur/Inovarti_FixAddToCartMage18/blob/master/README.md">Inovarti_FixAddToCartMage18</a>), under the argument that CSRF risks are far reduced when we're talking about <em>Add to Cart</em> functionality. This is still not ideal, we should ideally have CSRF Protection on every form when we're talking about actions which change site behaviour.</p>
+<p>There is, however, a third way. I did some digging and identified a Magento plugin that effectively uses JavaScript to inject a dynamic CSRF token the moment a user clicks the <em>Add to Cart</em> button but just before the request is actually submitted. There's quite a lengthy Github thread which outlines this issue and references the Pull Requests which fixed this behaviour in the <a href="https://github.com/nexcess/magento-turpentine/issues/345">the Magento Turpentine plugin</a>. I won't repeat the set-up instructions here, but they can be found in an article I've written on the Cloudflare Knowledge Base: <a href="https://support.cloudflare.com/hc/en-us/articles/236168808-Caching-Static-HTML-with-Magento-version-1-2-">Caching Static HTML with Magento (version 1 &amp; 2)</a></p>
+<p>Effectively what happens here is that the dynamic CSRF token is only injected into the web page the moment that it's needed. This is actually the behaviour that's implemented in other e-commerce platforms and Magento 2.0+, allowing Full Page Caching to be implemented quite easily. We had to recommend this plugin as it wouldn't be practical for the site owner to simply update to Magneto 2.</p>
+<p>One thing to be wary of when exposing CSRF tokens via an AJAX endpoint is <a href="https://stackoverflow.com/questions/2669690/why-does-google-prepend-while1-to-their-json-responses">JSON Hijacking</a>. There are some tips on how you can prevent this in the <a href="https://www.owasp.org/index.php/AJAX_Security_Cheat_Sheet#Always_return_JSON_with_an_Object_on_the_outside">OWASP AJAX Security Cheat Sheet</a>. Iain Collins has a Medium post with further discussion on the security merits of <a href="https://medium.com/@iaincollins/csrf-tokens-via-ajax-a885c7305d4a">CSRF Tokens via AJAX</a> (that said, however you're performing CSRF prevention, <a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">Same Origin Policies</a> and <a href="https://www.owasp.org/index.php/HttpOnly">HTTPOnly cookies</a> FTW!).</p>
+<p>There is an even cooler way you can do this using Cloudflare's <a href="https://blog.cloudflare.com/introducing-cloudflare-workers/">Edge Workers</a> offering. Soon this will allow you to run JavaScript at our Edge network, and you can use that to dynamically insert CSRF tokens into cached content (and, then either perform cryptographic validation of CSRF either at our Edge or the Origin itself using a shared secret).</p>
+<h3 id="butthishasbeenaproblemsince2015">But this has been a problem since 2015?</h3>
+<p>Another interesting observation is that the Magento patch which caused this interesting behaviour had been around since July 7, 2015. Why did our Support Team only see this issue in the run-up to Black Friday in 2017? What's more, we ultimately saw around a dozen support tickets around this exact issue on Magento 1.8/1.9 over the course over 6 weeks.</p>
+<p>When an Enterprise customer ordinarily joins Cloudflare, there is a named Solutions Engineer who gets them up and running and ensures there is no pain; however when you sign-up online with a credit card, your forgo this privilege.</p>
+<p>Last year, we released Bypass Cache on Cookie to self-serve users when a lot of e-commerce customers were in their Christmas/New Year release freeze and not making changes to their websites. Since then, there were no major shopping events; most the sites enabling this feature were new build websites using Magento 2 where this wasn't an issue.</p>
+<p>In the run-up to Black Friday, performance and coping under load became a key consideration for developers working on legacy e-commerce websites - and they turned to Cloudflare. Given the large, but steady, influx of e-commerce websites joining Cloudflare - the low overall percentage of those on Magento 1.8/1.9 became noticeable.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>Caching anonymous page views is an important, and in some cases, essential mechanism to dramatically improve site performance to substantially reduce site load, especially during traffic spikes. Whilst aggressively caching content when users are anonymous, you can bypass the cache and allow users to use the dynamic functionality your site has to offer.</p>
+<p>When you need to insert a dynamic state into cached content, JavaScript offers a nice compromise. JavaScript allows us to cache HTML for anonymous page visits, but insert a state when the users interact in a certain way. In essence, defusing this conflict between performance and security. In the future you'll be able to run this JavaScript logic at our network edge using Cloudflare <a href="https://blog.cloudflare.com/introducing-cloudflare-workers/">Edge Workers</a>.</p>
+<p>It also remains important to respect the RESTful properties of HTTP and ensure <code>GET</code>, <code>OPTIONS</code> and <code>HEAD</code> requests remain safe and instead using <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> as necessary.</p>
+<p>If you're interested in debugging interesting technical problems on a network that sees around 10% of global internet traffic, <a href="https://www.cloudflare.com/careers/departments/customer-support/">we're hiring for Support Engineers</a> in San Francisco, London, Austin and Singapore.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/cache-everything/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cache Everything</a>
+        <a href="/tag/page-rules/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Page Rules</a>
+        <a href="/tag/saas/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">SaaS</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/https/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTPS</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-12-12T17:15:19Z">December 12, 2016 5:15PM</p>
+        <a href="/caching-anonymous-page-views/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Caching Anonymous Page Views</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The load time of your website not only affects your search engine rankings, but is also correlated to the conversion rate on your site....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/junade-ali/" class="fw5 f2 black no-underline">Junade Ali</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/cache-everything/" class="no-underline f1 fw2 blue3 underline-hover">Cache Everything</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/page-rules/" class="no-underline f1 fw2 blue3 underline-hover">Page Rules</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/railgun/" class="no-underline f1 fw2 blue3 underline-hover">Railgun</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"si":10,"rayId":"633cc7a91eea57e4","version":"2021.2.0"}'></script>
+</body>
+
+</html>

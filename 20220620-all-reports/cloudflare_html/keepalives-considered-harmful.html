@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Keepalives considered harmful</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="You’d think keepalives would always be helpful, but turns out reality isn’t always what you expect it to be. It really helps if you read Why does one NGINX worker take all the load? first." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/keepalives-considered-harmful/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Keepalives considered harmful" />
+    <meta property="og:description" content="You’d think keepalives would always be helpful, but turns out reality isn’t always what you expect it to be. It really helps if you read Why does one NGINX worker take all the load? first." />
+    <meta property="og:url" content="https://blog.cloudflare.com/keepalives-considered-harmful/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/03/featured.png" />
+    <meta property="article:published_time" content="2020-03-19T12:57:35.000Z" />
+    <meta property="article:modified_time" content="2020-08-20T23:32:55.000Z" />
+    <meta property="article:tag" content="NGINX" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Performance" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Keepalives considered harmful" />
+    <meta name="twitter:description" content="You’d think keepalives would always be helpful, but turns out reality isn’t always what you expect it to be. It really helps if you read Why does one NGINX worker take all the load? first." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/keepalives-considered-harmful/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/03/featured.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ivan Babrou" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="NGINX, Linux, Performance" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ivan Babrou",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/ivan/",
+        "sameAs": []
+    },
+    "headline": "Keepalives considered harmful",
+    "url": "https://blog.cloudflare.com/keepalives-considered-harmful/",
+    "datePublished": "2020-03-19T12:57:35.000Z",
+    "dateModified": "2020-08-20T23:32:55.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/03/featured.png",
+    "keywords": "NGINX, Linux, Performance",
+    "description": "You’d think keepalives would always be helpful, but turns out reality isn’t always what you expect it to be. It really helps if you read Why does one NGINX worker take all the load? first.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-nginx tag-linux tag-performance sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-nginx tag-linux tag-performance ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Keepalives considered harmful</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-03-19T12:57:35Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 19, 2020 12:57PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Ivan Babrou" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ivan" class="fw5 f3 no-underline black mr3">Ivan Babrou</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>This may sound like a weird title, but hear me out. You’d think keepalives would always be helpful, but turns out reality isn’t always what you expect it to be. It really helps if you read <a href="https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/">Why does one NGINX worker take all the load?</a> first. This post is an adaptation of a rather old post on Cloudflare’s internal blog, so not all details are exactly as they are in production today but the lessons are still valid.<br></p><p>This is a story about how we were seeing some complaints about sporadic latency spikes, made some unconventional changes, and were able to slash the 99.9th latency percentile by 4x!</p><h3 id="request-flow-on-cloudflare-edge">Request flow on Cloudflare edge</h3><p>I'm going to focus only on two parts of our edge stack: FL and SSL.</p><ul><li>FL accepts plain HTTP connections and does the main request logic, including our WAF</li><li>SSL terminates SSL and passes connections to FL over local Unix socket:</li></ul><p>Here’s a diagram:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/Screen-Shot-2020-03-19-at-12.22.41.png" class="kg-image"></figure><p>These days we route all traffic through SSL for simplicity, but in the grand scheme of things it’s not going to matter much.</p><p>Each of these processes is not itself a single process, but rather a main process and a collection of workers that do actual processing. Another diagram for you to make this more visual:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/Screen-Shot-2020-03-19-at-12.22.55.png" class="kg-image"></figure><h3 id="keepalives">Keepalives</h3><p>Requests come over connections that are reused for performance reasons, which is sometimes referred to as “keepalive”. It's generally expensive for a client to open a new TCP connection and our servers keep some memory pools associated with connections that need to be recycled. In fact, one of the range of mitigations we use for attack traffic is disabling keepalives for abusive clients, forcing them to reopen connections, which slows them down considerably.</p><p>To illustrate the usefulness of keepalives, here's me requesting <a href="http://example.com/">http://example.com/</a> from curl over the same connection:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">$ curl -s -w &quot;Time to connect: %{time_connect} Time to first byte: %{time_starttransfer}\n&quot; -o /dev/null http://example.com/ -o /dev/null http://example.com/
+
+Time to connect: 0.012108 Time to first byte: 0.018724
+Time to connect: 0.000019 Time to first byte: 0.007391</code></pre>
+<!--kg-card-end: markdown--><p>The first request took 18.7ms and out of them 12.1ms were used to establish a new connection, which is not even a TLS one. When I sent another request over the same connection, I didn't need to pay extra and it took just 7.3ms to service my request. That's a big win, which gets even bigger if you need to establish a brand new connection (especially if it’s not <a href="https://www.cloudflare.com/learning-resources/tls-1-3/">TLSv1.3</a> or <a href="https://blog.cloudflare.com/http3-the-past-present-and-future/">QUIC</a>). DNS was also cached in the example above, but it may be another negative factor for domains with low TTL.</p><p>Keepalives tend to be used extensively, because they seem beneficial. Generally keepalives are enabled by default for this exact reason.</p><h3 id="taking-all-the-load">Taking all the load</h3><p>Due to how Linux works (see the first link in this blog post), most of the load goes to a few workers out of the pool. When that worker is not able to accept() a pending connection because it's busy processing requests, that connection spills to another worker. The process cascades until some worker is ready to pick up.</p><p>This leaves us with a ladder of load spread between workers:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">               CPU%                                       Runtime
+nobody    4254 51.2  0.8 5655600 1093848 ?     R    Aug23 3938:34 nginx: worker process
+nobody    4257 47.9  0.8 5615848 1071612 ?     S    Aug23 3682:05 nginx: worker process
+nobody    4253 43.8  0.8 5594124 1069424 ?     R    Aug23 3368:27 nginx: worker process
+nobody    4255 39.4  0.8 5573888 1070272 ?     S    Aug23 3030:01 nginx: worker process
+nobody    4256 36.2  0.7 5556700 1052560 ?     R    Aug23 2784:23 nginx: worker process
+nobody    4251 33.1  0.8 5563276 1063700 ?     S    Aug23 2545:07 nginx: worker process
+nobody    4252 29.2  0.8 5561232 1058748 ?     S    Aug23 2245:59 nginx: worker process
+nobody    4248 26.7  0.8 5554652 1057288 ?     S    Aug23 2056:19 nginx: worker process
+nobody    4249 24.5  0.7 5537276 1043568 ?     S    Aug23 1883:18 nginx: worker process
+nobody    4245 22.5  0.7 5552340 1048592 ?     S    Aug23 1736:37 nginx: worker process
+nobody    4250 20.7  0.7 5533728 1038676 ?     R    Aug23 1598:16 nginx: worker process
+nobody    4247 19.6  0.7 5547548 1044480 ?     S    Aug23 1507:27 nginx: worker process
+nobody    4246 18.4  0.7 5538104 1043452 ?     S    Aug23 1421:23 nginx: worker process
+nobody    4244 17.5  0.7 5530480 1035264 ?     S    Aug23 1345:39 nginx: worker process
+nobody    4243 16.6  0.7 5529232 1024268 ?     S    Aug23 1281:55 nginx: worker process
+nobody    4242 16.6  0.7 5537956 1038408 ?     R    Aug23 1278:40 nginx: worker process
+</code></pre>
+<!--kg-card-end: markdown--><p>The third column is instant CPU%, the time after the date is total on-CPU time. If you look at the the same processes and count their open sockets, you'll see this (using the same order of processes as above):</p><!--kg-card-begin: markdown--><pre><code class="language-rust">4254 2357
+4257 1833
+4253 2180
+4255 1609
+4256 1565
+4251 1519
+4252 1175
+4248 1065
+4249 1056
+4245 1201
+4250 886
+4247 908
+4246 968
+4244 1180
+4243 867
+4242 884
+</code></pre>
+<!--kg-card-end: markdown--><p>More load corresponds to more open sockets. More open sockets generate more load to serve these connections. It’s a vicious circle.</p><h3 id="the-twist">The twist</h3><p>Now that we have all these workers holding onto this connections, requests over these connections are also in a way pinned to workers:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/Screen-Shot-2020-03-19-at-12.23.16.png" class="kg-image"></figure><p>In FL we're doing some things that are <em>somewhat</em> compute intensive, which means that some workers can be busy for a <em>somewhat</em> prolonged period of time, while other workers will be sitting idle, increasing latency for requests. Ideally we want to always hand over a request to a worker that's idle, because that maximizes our chances of not being blocked, even if it takes a few event loop iterations to serve a request (meaning that we may still block down the road).</p><p>One part of dealing with the issue is <a href="https://blog.cloudflare.com/the-problem-with-event-loops/">offloading some of the compute intensive parts</a> of the request processing into a thread pool, but that was something that hadn’t happened at that point. We had to do something else in the meantime.</p><p>Clients have no way of knowing that their worker is busy and they should probably ask another worker to serve the connection. For clients over a real network this doesn't even make sense, since by the time their request comes to NGINX up to tens of milliseconds later, the situation will probably be different.</p><p>But our clients are not over a long haul network! They are local and they are SSL connecting over a Unix socket. It's not exactly that expensive to reopen a new connection for each request and what it gives is the ability to pass a fully formed request that's buffered in SSL into FL:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/Screen-Shot-2020-03-19-at-12.23.28.png" class="kg-image"></figure><p>Two key points here:</p><ul><li>The request is always picked up by an idle worker</li><li>The request is readily available for potentially compute intensive processing</li></ul><p>The former is the most important part.</p><h3 id="validating-the-hypothesis">Validating the hypothesis</h3><p>To validate this assumption, I wrote the following program:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">package main
+ 
+import (
+    &quot;flag&quot;
+    &quot;io/ioutil&quot;
+    &quot;log&quot;
+    &quot;net/http&quot;
+    &quot;os&quot;
+    &quot;time&quot;
+)
+ 
+func main() {
+    u := flag.String(&quot;url&quot;, &quot;&quot;, &quot;url to request&quot;)
+    p := flag.Duration(&quot;pause&quot;, 0, &quot;pause between requests&quot;)
+    t := flag.Duration(&quot;threshold&quot;, 0, &quot;threshold for reporting&quot;)
+    c := flag.Int(&quot;count&quot;, 10000, &quot;number of requests to send&quot;)
+    n := flag.Int(&quot;close&quot;, 1, &quot;close connection after every that many requests&quot;)
+ 
+    flag.Parse()
+ 
+    if *u == &quot;&quot; {
+        flag.PrintDefaults()
+        os.Exit(1)
+    }
+ 
+    client := http.Client{}
+ 
+    for i := 0; i &lt; *c; i++ {
+        started := time.Now()
+ 
+        request, err := http.NewRequest(&quot;GET&quot;, *u, nil)
+        if err != nil {
+            log.Fatalf(&quot;Error constructing request: %s&quot;, err)
+        }
+ 
+        if i%*n == 0 {
+            request.Header.Set(&quot;Connection&quot;, &quot;Close&quot;)
+        }
+ 
+        response, err := client.Do(request)
+        if err != nil {
+            log.Fatalf(&quot;Error performing request: %s&quot;, err)
+        }
+ 
+        _, err = ioutil.ReadAll(response.Body)
+        if err != nil {
+            log.Fatalf(&quot;Error reading request body: %s&quot;, err)
+        }
+ 
+        response.Body.Close()
+ 
+        elapsed := time.Since(started)
+        if elapsed &gt; *t {
+            log.Printf(&quot;Request %d took %dms&quot;, i, int(elapsed.Seconds()*1000))
+        }
+ 
+        time.Sleep(*p)
+    }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>The program connects to a requested URL and recycles the connection after X requests have completed. We also pause for a short time between requests.</p><p>If we close a connection after every request:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">$ go run /tmp/main.go -url http://test.domain/cdn-cgi/trace -count 10000 -pause 5ms -threshold 20ms -close 1
+2018/08/24 23:42:34 Request 453 took 32ms
+2018/08/24 23:42:38 Request 1044 took 24ms
+2018/08/24 23:43:00 Request 4106 took 83ms
+2018/08/24 23:43:12 Request 5778 took 27ms
+2018/08/24 23:43:16 Request 6292 took 27ms
+2018/08/24 23:43:20 Request 6856 took 21ms
+2018/08/24 23:43:32 Request 8578 took 45ms
+2018/08/24 23:43:42 Request 9938 took 22ms
+</code></pre>
+<!--kg-card-end: markdown--><p>We request an endpoint that's served in FL by Lua, so seeing any slow requests is unfortunate. There's an element of luck in this game and our program sees no cooperation from eyeballs or SSL, so it's somewhat expected.</p><p>Now, if we start closing the connection only after every other request, the situation immediately gets a lot worse:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">$ go run /tmp/main.go -url http://teste1.cfperf.net/cdn-cgi/trace -count 10000 -pause 5ms -threshold 20ms -close 2
+2018/08/24 23:43:51 Request 162 took 22ms
+2018/08/24 23:43:51 Request 220 took 21ms
+2018/08/24 23:43:53 Request 452 took 23ms
+2018/08/24 23:43:54 Request 540 took 41ms
+2018/08/24 23:43:54 Request 614 took 23ms
+2018/08/24 23:43:56 Request 900 took 40ms
+2018/08/24 23:44:02 Request 1705 took 21ms
+2018/08/24 23:44:03 Request 1850 took 27ms
+2018/08/24 23:44:03 Request 1878 took 36ms
+2018/08/24 23:44:08 Request 2470 took 21ms
+2018/08/24 23:44:11 Request 2926 took 22ms
+2018/08/24 23:44:14 Request 3350 took 37ms
+2018/08/24 23:44:14 Request 3404 took 21ms
+2018/08/24 23:44:16 Request 3598 took 32ms
+2018/08/24 23:44:16 Request 3606 took 22ms
+2018/08/24 23:44:19 Request 4026 took 33ms
+2018/08/24 23:44:20 Request 4250 took 74ms
+2018/08/24 23:44:22 Request 4483 took 20ms
+2018/08/24 23:44:23 Request 4572 took 21ms
+2018/08/24 23:44:23 Request 4644 took 23ms
+2018/08/24 23:44:24 Request 4758 took 63ms
+2018/08/24 23:44:25 Request 4808 took 39ms
+2018/08/24 23:44:30 Request 5496 took 28ms
+2018/08/24 23:44:31 Request 5736 took 88ms
+2018/08/24 23:44:32 Request 5845 took 43ms
+2018/08/24 23:44:33 Request 5988 took 52ms
+2018/08/24 23:44:34 Request 6042 took 26ms
+2018/08/24 23:44:34 Request 6049 took 23ms
+2018/08/24 23:44:40 Request 6872 took 86ms
+2018/08/24 23:44:40 Request 6940 took 23ms
+2018/08/24 23:44:40 Request 6964 took 23ms
+2018/08/24 23:44:44 Request 7532 took 32ms
+2018/08/24 23:44:49 Request 8224 took 22ms
+2018/08/24 23:44:49 Request 8234 took 29ms
+2018/08/24 23:44:51 Request 8536 took 24ms
+2018/08/24 23:44:55 Request 9028 took 22ms
+2018/08/24 23:44:55 Request 9050 took 23ms
+2018/08/24 23:44:55 Request 9092 took 26ms
+2018/08/24 23:44:57 Request 9330 took 25ms
+2018/08/24 23:45:01 Request 9962 took 48ms
+</code></pre>
+<!--kg-card-end: markdown--><p>If we close after every 5 requests, the number of slow responses almost doubles. This is counter-intuitive, keepalives are supposed to help with latency, not make it worse!</p><h3 id="trying-this-in-the-wild">Trying this in the wild</h3><p>To see how this works out in the real world, we disabled keepalives between SSL and FL in one location, forcing SSL to send every request over a separate connection (remember: cheap local Unix socket). Here’s how our probes toward that location reacted to this:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image5-6.png" class="kg-image"></figure><p>Here’s cumulative wait time between SSL and FL:<br></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image3-3.png" class="kg-image"></figure><p>And finally 99.9th percentile of the same measurement:<br></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image1-8.png" class="kg-image"></figure><p>This is a huge win.</p><p>Another telling graph is comparing our average “edge processing time” (which includes WAF) in a test location to a global value:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image2-5.png" class="kg-image"></figure><p>We reduced unnecessary wait time due to an imbalance without increasing the CPU load, which directly translates into improved user experience and lower resource consumption for us.</p><h3 id="the-downsides">The downsides</h3><p>There has to be a downside from this, right? The problem we introduced is that CPU imbalance between individual CPU cores went up:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image4-3.png" class="kg-image"></figure><p>Overall CPU usage did not change, just the distribution of it. We already know of a way of dealing with this: SO_REUSEPORT. Either that or <a href="https://lkml.org/lkml/2015/2/17/518">EPOLLROUNDROBIN</a>, which doesn’t have some of the drawbacks of SO_REUSEPORT (which does not work for a Unix socket, for example), but requires a patched kernel. If we combine both disabled keepalives and EPOLLROUNDROBIN changes, we can see CPUs allocated to FL converge in their utilization nicely:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/03/image6-3.png" class="kg-image"></figure><p>We’ve tried different combinations and having both EPOLLROUNDROBIN with disabled keepalives worked best. Having just one of them is not as beneficial to lower latency.</p><h3 id="conclusions">Conclusions</h3><p>We disabled keepalives between SSL and FL running on the same box and this greatly improved our tail latency caused by requests landing on non-optimal FL workers. This was an unexpected fix, but it worked and we are able to explain it.</p><p>This doesn’t mean that you should go and disable keepalives everywhere. Generally keepalives are great and should stay enabled, but in our case the latency of local connection establishment is much lower than the delay we can get from landing on a busy worker.</p><p>In reality this means that we can run our machines hotter and not see latency rise as much as it did before. Imagine moving the CPU cap from 50% to 80% with no effect on latency. The numbers are arbitrary, but the idea holds. Running hotter allows for fewer machines able to serve the same amount of traffic, reducing our overall footprint. 🌎<br></p>
+            </div>
+        </section>
+
+        <a href="/tag/nginx/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">NGINX</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/performance/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Performance</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-18T12:00:00Z">March 18, 2020 12:00PM</p>
+        <a href="/the-problem-with-event-loops/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The problem with thread^W event loops</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Back when Cloudflare was created, over 10 years ago now, the dominant HTTP server used to power websites was Apache httpd. However, we decided to build our infrastructure using the then relatively new NGINX server....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/julien-desgats/" class="fw5 f2 black no-underline">Julien Desgats</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-10-17T15:00:00+01:00">October 17, 2019 3:00PM</p>
+        <a href="/experiment-with-http-3-using-nginx-and-quiche/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Experiment with HTTP/3 using NGINX and quiche</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Just a few weeks ago we announced the availability on our edge network of HTTP/3, the new revision of HTTP intended to improve security and performance on the Internet. Everyone can now enable HTTP/3 on their Cloudflare zone...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alessandro-ghedini/" class="fw5 f2 black no-underline">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/chrome/" class="no-underline f1 fw2 blue3 underline-hover">Chrome</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http3/" class="no-underline f1 fw2 blue3 underline-hover">HTTP3</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-10-12T13:00:00+01:00">October 12, 2018 1:00PM</p>
+        <a href="/http-2-prioritization-with-nginx/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Optimizing HTTP/2 prioritization with BBR and tcp_notsent_lowat</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Getting the best end-user performance from HTTP/2 requires good support for resource prioritization.  While most web servers support HTTP/2 prioritization, getting it to work well all the way to the browser requires a fair bit of coordination across the networking stack....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/patrick-meenan/" class="fw5 f2 black no-underline">Patrick Meenan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-07-31T16:00:00+01:00">July 31, 2018 4:00PM</p>
+        <a href="/es-es/how-we-scaled-nginx-and-saved-the-world-54-years-every-day-es/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cómo escalamos NGINX y ahorramos 54 años al mundo todos los días</h2>
+        </a>
+
+        <p class="gray1 lh-copy">10 millones de sitios web, aplicaciones y API utilizan Cloudflare para proporcionar mayor velocidad a sus usuarios . En los picos, atendemos más de 10 millones de solicitudes por segundo a través de nuestros 151 centros de datos....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/khc/" class="fw5 f2 black no-underline">Ka-Hing Cheung</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rendimiento/" class="no-underline f1 fw2 blue3 underline-hover">Rendimiento</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/desarrolladores/" class="no-underline f1 fw2 blue3 underline-hover">Desarrolladores</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programacion/" class="no-underline f1 fw2 blue3 underline-hover">Programación</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Magic Transit: Network functions at Cloudflare scale</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/magic-transit-network-functions/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Magic Transit: Network functions at Cloudflare scale" />
+    <meta property="og:description" content="Today we announced Cloudflare Magic Transit, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions" />
+    <meta property="og:url" content="https://blog.cloudflare.com/magic-transit-network-functions/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/08/Screen-Shot-2019-08-12-at-1.53.42-PM.png" />
+    <meta property="article:published_time" content="2019-08-13T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-12-04T20:59:45.000Z" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Magic Transit" />
+    <meta property="article:tag" content="Network" />
+    <meta property="article:tag" content="Anycast" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="Product News" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Magic Transit: Network functions at Cloudflare scale" />
+    <meta name="twitter:description" content="Today we announced Cloudflare Magic Transit, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/magic-transit-network-functions/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/08/Screen-Shot-2019-08-12-at-1.53.42-PM.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Nick Wondra" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Speed &amp; Reliability, Magic Transit, Network, Anycast, TCP, Product News" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Nick Wondra",
+        "image": "https://blog.cloudflare.com/content/images/2018/02/3a99784.jpg",
+        "url": "https://blog.cloudflare.com/author/nick-wondra/",
+        "sameAs": []
+    },
+    "headline": "Magic Transit: Network functions at Cloudflare scale",
+    "url": "https://blog.cloudflare.com/magic-transit-network-functions/",
+    "datePublished": "2019-08-13T13:00:00.000Z",
+    "dateModified": "2019-12-04T20:59:45.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/08/Screen-Shot-2019-08-12-at-1.53.42-PM.png",
+    "keywords": "Speed & Reliability, Magic Transit, Network, Anycast, TCP, Product News",
+    "description": "Today we announced Cloudflare Magic Transit, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-speed-and-reliability tag-magic-transit tag-network tag-anycast tag-tcp tag-product-news sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-speed-and-reliability tag-magic-transit tag-network tag-anycast tag-tcp tag-product-news ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Magic Transit: Network functions at Cloudflare scale</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-08-13T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">August 13, 2019 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/nick-wondra/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/02/3a99784.jpg" alt="Nick Wondra" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/nick-wondra" class="fw5 f3 no-underline black mr3">Nick Wondra</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>Today we announced <a href="https://www.cloudflare.com/magic-transit">Cloudflare Magic Transit</a>, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions with Internet users and pass that data through new sessions they create with origin servers. With Magic Transit, we are now also operating at the IP layer: in addition to terminating sessions, our servers are applying a suite of network functions (DoS mitigation, firewalling, routing, and so on) on a packet-by-packet basis.</p><p>Over the past nine years, we’ve built a robust, scalable global network that currently spans 193 cities in over 90 countries and is ever growing. All Cloudflare customers benefit from this scale thanks to two important techniques. The first is anycast networking. Cloudflare was an <a href="https://blog.cloudflare.com/a-brief-anycast-primer/">early adopter</a> of anycast, using this routing technique to distribute Internet traffic across our data centers. It means that any data center can handle any customer’s traffic, and we can spin up new data centers without needing to acquire and provision new IP addresses. The second technique is homogeneous server architecture. Every server in each of our edge data centers is <a href="https://blog.cloudflare.com/cloudflare-architecture-and-how-bpf-eats-the-world/">capable of running every task</a>. We build our servers on commodity hardware, making it easy to quickly increase our processing capacity by adding new servers to existing data centers. Having no specialty hardware to depend on has also led us to develop an expertise in pushing the limits of what’s possible in networking using modern Linux kernel techniques.</p><p>Magic Transit is built on the same network using the same techniques, meaning our customers can now run their network functions at Cloudflare scale. Our fast, secure, reliable global edge becomes our customers’ edge. To explore how this works, let’s follow the journey of a packet from a user on the Internet to a Magic Transit customer’s network.</p><h2 id="putting-our-dos-mitigation-to-work-for-you-">Putting our DoS mitigation to work… for you!</h2><p>In the <a href="https://blog.cloudflare.com/magic-transit/">announcement blog post</a> we describe an example deployment for Acme Corp. Let’s continue with this example here. When Acme brings their IP prefix 203.0.113.0/24 to Cloudflare, we start announcing that prefix to our transit providers, peers, and to Internet exchanges in each of our data centers around the globe. Additionally, Acme stops announcing the prefix to their own ISPs. This means that any IP packet on the Internet with a destination address within Acme’s prefix is delivered to a nearby Cloudflare data center, not to Acme’s router.</p><p>Let’s say I want to access Acme’s FTP server on 203.0.113.100 from my computer in Cloudflare’s office in Champaign, IL. My computer generates a TCP SYN packet with destination address 203.0.113.100 and sends it out to the Internet. Thanks to <a href="https://www.cloudflare.com/learning/cdn/glossary/anycast-network/">anycast</a>, that packet ends up at Cloudflare’s data center in Chicago, which is the closest data center (in terms of Internet routing distance) to Champaign. The packet arrives on the data center’s router, which uses <a href="https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing">ECMP (Equal Cost Multi-Path) routing</a> to select which server should handle the packet and dispatches the packet to the selected server.</p><p>Once at the server, the packet flows through our <a href="https://blog.cloudflare.com/cloudflare-architecture-and-how-bpf-eats-the-world/">XDP- and iptables-based</a> DoS detection and mitigation functions. If this TCP SYN packet were determined to be part of an attack, it would be dropped and that would be the end of it. Fortunately for me, the packet is permitted to pass.</p><p>So far, this looks exactly like any other traffic on Cloudflare’s network. Because of our expertise in running a global anycast network we’re able to attract Magic Transit customer traffic to every data center and apply the <a href="https://blog.cloudflare.com/tag/ddos/">same DoS mitigation solution</a> that has been protecting Cloudflare for years. Our DoS solution has handled some of the largest attacks ever recorded, including a 942Gbps SYN flood in 2018. Below is a screenshot of a recent SYN flood of 300M packets per second. <a href="https://blog.cloudflare.com/how-cloudflares-architecture-allows-us-to-scale-to-stop-the-largest-attacks/">Our architecture lets us scale</a> to stop the largest attacks.</p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2019/08/large-syn-flood.png" class="kg-image"></figure><h2 id="network-namespaces-for-isolation-and-control">Network namespaces for isolation and control</h2><p>The above looked identical to how all other Cloudflare traffic is processed, but this is where the similarities end. For our other services, the TCP SYN packet would now be dispatched to a local proxy process (e.g. our nginx-based HTTP/S stack). For Magic Transit, we instead want to dynamically provision and apply customer-defined network functions like firewalls and routing. We needed a way to quickly spin up and configure these network functions while also providing inter-network isolation. For that, we turned to network namespaces.</p><p>Namespaces are a collection of Linux kernel features for creating lightweight virtual instances of system resources that can be shared among a group of processes. Namespaces are a fundamental building block for containerization in Linux. Notably, Docker is built on Linux namespaces. A <em>network namespace</em> is an isolated instance of the Linux network stack, including its own network interfaces (with their own eBPF hooks), routing tables, netfilter configuration, and so on. Network namespaces give us a low-cost mechanism to rapidly apply customer-defined network configurations in isolation, all with built-in Linux kernel features so there’s no performance hit from userspace packet forwarding or proxying.</p><p>When a new customer starts using Magic Transit, we create a brand new network namespace for that customer on every server across our edge network (did I mention that every server can run every task?). We built a daemon that runs on our servers and is responsible for managing these network namespaces and their configurations. This daemon is constantly reading configuration updates from <a href="https://blog.cloudflare.com/helping-to-build-cloudflare-part-4/">Quicksilver</a>, our globally distributed key-value store, and applying customer-defined configurations for firewalls, routing, etc, <em>inside the customer’s namespace</em>. For example, if Acme wants to provision a firewall rule to allow FTP traffic (TCP ports 20 and 21) to 203.0.113.100, that configuration is propagated globally through Quicksilver and the Magic Transit daemon applies the firewall rule by adding an nftables rule to the Acme customer namespace:</p><!--kg-card-begin: markdown--><pre><code># Apply nftables rule inside Acme’s namespace
+$ sudo ip netns exec acme_namespace nft add rule inet filter prerouting ip daddr 203.0.113.100 tcp dport 20-21 accept
+</code></pre>
+<!--kg-card-end: markdown--><p>Getting the customer’s traffic to their network namespace requires a little routing configuration in the default network namespace. When a network namespace is created, a pair of virtual ethernet (veth) interfaces is also created: one in the default namespace and one in the newly created namespace. This interface pair creates a “virtual wire” for delivering network traffic into and out of the new network namespace. In the default network namespace, we maintain a routing table that forwards Magic Transit customer IP prefixes to the veths corresponding to those customers’ namespaces. We use iptables to mark the packets that are destined for Magic Transit customer prefixes, and we have a routing rule that specifies that these specially marked packets should use the Magic Transit routing table.</p><p>(Why go to the trouble of marking packets in iptables and maintaining a separate routing table? Isolation. By keeping Magic Transit routing configurations separate we reduce the risk of accidentally modifying the default routing table in a way that affects how non-Magic Transit traffic flows through our edge.)</p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2019/08/067C8C9E-3C73-4DA0-AD77-35DAC9A5F182.png" class="kg-image"></figure><p>Network namespaces provide a lightweight environment where a Magic Transit customer can run and manage network functions in isolation, letting us put full control in the customer’s hands.</p><h2 id="gre-anycast-magic">GRE + anycast = magic</h2><p>After passing through the edge network functions, the TCP SYN packet is finally ready to be delivered back to the customer’s network infrastructure. Because Acme Corp. does not have a network footprint in a colocation facility with Cloudflare, we need to deliver their network traffic over the public Internet.</p><p>This poses a problem. The destination address of the TCP SYN packet is 203.0.113.100, but the only network announcing the IP prefix 203.0.113.0/24 on the Internet is Cloudflare. This means that we can’t simply forward this packet out to the Internet—it will boomerang right back to us! In order to deliver this packet to Acme we need to use a technique called tunneling.</p><p>Tunneling is a method of carrying traffic from one network over another network. In our case, it involves encapsulating Acme’s IP packets inside of IP packets that can be delivered to Acme’s router over the Internet. There are a number of <a href="https://en.wikipedia.org/wiki/Tunneling_protocol#Common_tunneling_protocols">common tunneling protocols</a>, but <a href="https://en.wikipedia.org/wiki/Generic_Routing_Encapsulation">Generic Routing Encapsulation</a> (GRE) is often used for its simplicity and widespread vendor support.</p><p>GRE tunnel endpoints are configured both on Cloudflare’s servers (inside of Acme’s network namespace) and on Acme’s router. Cloudflare servers then encapsulate IP packets destined for 203.0.113.0/24 inside of IP packets destined for a publicly-routable IP address for Acme’s router, which decapsulates the packets and emits them into Acme’s internal network.</p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2019/08/97ED9A08-71AA-490B-BD35-1E6D288EE1A3.png" class="kg-image"></figure><p>Now, I’ve omitted an important detail in the diagram above: the IP address of Cloudflare’s side of the GRE tunnel. Configuring a GRE tunnel requires specifying an IP address for each side, and the outer IP header for packets sent over the tunnel must use these specific addresses. But Cloudflare has thousands of servers, each of which may need to deliver packets to the customer through a tunnel. So how many Cloudflare IP addresses (and GRE tunnels) does the customer need to talk to? The answer: just one, thanks to the magic of anycast.</p><p>Cloudflare uses anycast IP addresses for our GRE tunnel endpoints, meaning that any server in any data center is capable of encapsulating and decapsulating packets for the same GRE tunnel. <em>How is this possible? Isn’t a tunnel a point-to-point link?</em> The GRE protocol itself is stateless—each packet is processed independently and without requiring any negotiation or coordination between tunnel endpoints. While the tunnel is technically bound to an <em>IP address</em> it need not be bound to a <em>specific device</em>. Any device that can strip off the outer headers and then route the inner packet can handle any GRE packet sent over the tunnel. Actually, in the context of anycast the term “tunnel” is misleading since it implies a link between two fixed points. With Cloudflare’s Anycast GRE, a single “tunnel” gives you a conduit to every server in every data center on Cloudflare’s global edge.</p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2019/08/228C64E9-DBE0-45AE-ACA9-8F1931998D4A.png" class="kg-image"></figure><p>One very powerful consequence of Anycast GRE is that it eliminates single points of failure. Traditionally, GRE-over-Internet can be problematic because an Internet outage between the two GRE endpoints fully breaks the “tunnel”. This means reliable data delivery requires going through the headache of setting up and maintaining redundant GRE tunnels terminating at different physical sites and rerouting traffic when one of the tunnels breaks. But because Cloudflare is encapsulating and delivering customer traffic from every server in every data center, there is no single “tunnel” to break. This means Magic Transit customers can enjoy the redundancy and reliability of terminating tunnels at multiple physical sites while only setting up and maintaining a single GRE endpoint, making their jobs simpler.</p><h2 id="our-scale-is-now-your-scale">Our scale is now your scale</h2><p>Magic Transit is a powerful new way to deploy network functions at scale. We’re not just giving you a virtual instance, we’re giving you a <em>global virtual edge</em>. Magic Transit takes the hardware appliances you would typically rack in your on-prem network and distributes them across every server in every data center in Cloudflare’s network. This gives you access to our global anycast network, our fleet of servers capable of running <em>your</em> tasks, and our engineering expertise building fast, reliable, secure networks. Our scale is now your scale.</p>
+            </div>
+        </section>
+
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/magic-transit/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Magic Transit</a>
+        <a href="/tag/network/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Network</a>
+        <a href="/tag/anycast/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Anycast</a>
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-19T22:38:20Z">November 19, 2020 10:38PM</p>
+        <a href="/improving-performance-and-search-rankings-with-cloudflare-for-fun-and-profit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving Performance and Search Rankings with Cloudflare for Fun and Profit</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Making things fast is one of the things we do at Cloudflare. More responsive websites, apps, APIs, and networks directly translate into improved conversion and user experience....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/rita/" class="fw5 f2 black no-underline">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/seo/" class="no-underline f1 fw2 blue3 underline-hover">SEO</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/browser-insights/" class="no-underline f1 fw2 blue3 underline-hover">Browser Insights</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/analytics/" class="no-underline f1 fw2 blue3 underline-hover">Analytics</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-12-31T19:13:58Z">December 31, 2019 7:13PM</p>
+        <a href="/adopting-a-new-approach-to-http-prioritization/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Adopting a new approach to HTTP prioritization</h2>
+        </a>
+
+        <p class="gray1 lh-copy">HTTP prioritization is important for web performance. This is the story behind a new approach recently adopted for further work in the IETF....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/lucas/" class="fw5 f2 black no-underline">Lucas Pardue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-08-13T14:01:00+01:00">August 13, 2019 2:01PM</p>
+        <a href="/magic-transit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Magic Transit makes your network smarter, better, stronger, and cheaper to operate</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we’re excited to announce Cloudflare Magic Transit. Magic Transit provides secure, performant, and reliable IP connectivity to the Internet. Out-of-the-box, Magic Transit deployed in front of your on-premise network protects it from DDoS attack...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-14T17:00:00+01:00">May 14, 2019 5:00PM</p>
+        <a href="/parallel-streaming-of-progressive-images/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Parallel streaming of progressive images</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Image-optimized HTTP/2 multiplexing makes all progressive images across the page appear visually complete in half of the time....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/kornel/" class="fw5 f2 black no-underline">Kornel Lesiński</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-week/" class="no-underline f1 fw2 blue3 underline-hover">Speed Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/optimization/" class="no-underline f1 fw2 blue3 underline-hover">Optimization</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

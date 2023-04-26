@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>How we use HashiCorp Nomad</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="A walkthrough on how we are improving the reliability of our management services running in each data center by using Nomad for dynamic task scheduling." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/how-we-use-hashicorp-nomad/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="How we use HashiCorp Nomad" />
+    <meta property="og:description" content="A walkthrough on how we are improving the reliability of our management services running in each data center by using Nomad for dynamic task scheduling." />
+    <meta property="og:url" content="https://blog.cloudflare.com/how-we-use-hashicorp-nomad/" />
+    <meta property="og:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/06/facebook-Linked_Image___preview-jun-5-2020.png" />
+    <meta property="article:published_time" content="2020-06-05T11:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-06-26T20:30:20.000Z" />
+    <meta property="article:tag" content="Edge" />
+    <meta property="article:tag" content="Availability" />
+    <meta property="article:tag" content="Nomad" />
+    <meta property="article:tag" content="HashiCorp" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How we use HashiCorp Nomad" />
+    <meta name="twitter:description" content="A walkthrough on how we are improving the reliability of our management services running in each data center by using Nomad for dynamic task scheduling." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/how-we-use-hashicorp-nomad/" />
+    <meta name="twitter:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/06/twitter-In-Stream_Wide___preview-jun-5-2020.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Thomas Lefebvre" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Edge, Availability, Nomad, HashiCorp, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta property="og:image:width" content="1139" />
+    <meta property="og:image:height" content="596" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Thomas Lefebvre",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/06/tlefebvre_photo.jpg",
+            "width": 300,
+            "height": 300
+        },
+        "url": "https://blog.cloudflare.com/author/thomas/",
+        "sameAs": []
+    },
+    "headline": "How we use HashiCorp Nomad",
+    "url": "https://blog.cloudflare.com/how-we-use-hashicorp-nomad/",
+    "datePublished": "2020-06-05T11:00:00.000Z",
+    "dateModified": "2020-06-26T20:30:20.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/06/image1.png",
+    "keywords": "Edge, Availability, Nomad, HashiCorp, Speed & Reliability",
+    "description": "A walkthrough on how we are improving the reliability of our management services running in each data center by using Nomad for dynamic task scheduling.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-edge tag-availability tag-nomad tag-hashicorp tag-speed-and-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-edge tag-availability tag-nomad tag-hashicorp tag-speed-and-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">How we use HashiCorp Nomad</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-06-05T12:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 05, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/thomas/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/06/tlefebvre_photo.jpg" alt="Thomas Lefebvre" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/thomas" class="fw5 f3 no-underline black mr3">Thomas Lefebvre</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>In this blog post, we will walk you through the reliability model of services running in our more than 200 edge cities worldwide. Then, we will go over how deploying a new dynamic task scheduling system, HashiCorp Nomad, helped us improve the availability of services in each of those data centers, covering how we deployed Nomad and the challenges we overcame along the way. Finally, we will show you both how we currently use Nomad and how we are planning on using it in the future.</p><h2 id="reliability-model-of-services-running-in-each-data-center">Reliability model of services running in each data center</h2><p>For this blog post, we will distinguish between two different categories of services running in each data center:</p><!--kg-card-begin: markdown--><ul>
+<li><strong>Customer-facing services</strong>: all of our stack of products that our customers use, such as caching, WAF, DDoS protection, rate-limiting, load-balancing, etc.</li>
+<li><strong>Management services</strong>: software required to operate the data center, that is not in the direct request path of customer traffic.</li>
+</ul>
+<!--kg-card-end: markdown--><h3 id="customer-facing-services">Customer-facing services</h3><p>The reliability model of our customer-facing services is to run them on all machines in each data center. This works well as it allows each data center’s capacity to scale dynamically by adding more machines.</p><p>Scaling is especially made easy thanks to our dynamic load balancing system, Unimog, which runs on each machine. Its role is to continuously re-balance traffic based on current resource usage and to check the health of services. This helps provide resiliency to individual machine failures and ensures resource usage is close to identical on all machines.</p><p>As an example, here is the CPU usage over a day in one of our data centers where each time series represents one machine and the different colors represent different generations of hardware. Unimog keeps all machines processing traffic and at roughly the same CPU utilization.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image2-1.png" class="kg-image"></figure><h3 id="management-services">Management services</h3><p>Some of our larger data centers have a substantial number of machines, but sometimes we need to reliably run just a single or a few instances of a management service in each location.</p><p>There are currently a couple of options to do this, each have their own pros and cons:</p><!--kg-card-begin: markdown--><ol>
+<li>Deploying the service to all machines in the data center:
+<ul>
+<li><strong>Pro</strong>: it ensures the service’s reliability</li>
+<li><strong>Con</strong>: it unnecessarily uses resources which could have been used to serve customer traffic and is not cost-effective</li>
+</ul>
+</li>
+<li>Deploying the service to a static handful of machines in each data center:
+<ul>
+<li><strong>Pro</strong>: it is less wasteful of resources and more cost-effective</li>
+<li><strong>Con</strong>: it runs the risk of service unavailability when those handful of machines unexpectedly fail</li>
+</ul>
+</li>
+</ol>
+<!--kg-card-end: markdown--><p>A third, more viable option, is to use dynamic task scheduling so that only the right amount of resources are used while ensuring reliability.</p><h3 id="a-need-for-more-dynamic-task-scheduling">A need for more dynamic task scheduling</h3><p>Having to pick between two suboptimal reliability model options for management services we want running in each data center was not ideal.</p><p>Indeed, some of those services, even though they are not in the request path, are required to continue operating the data center. If the machines running those services become unavailable, in some cases we have to temporarily disable the data center while recovering them. Doing so automatically re-routes users to the next available data center and doesn’t cause disruption. In fact, the entire Cloudflare network is designed to operate with data centers being disabled and brought back automatically. But it’s optimal to route end users to a data center near them so we want to minimize any data center level downtime.</p><p>This led us to realize we needed a system to ensure a certain number of instances of a service were running in each data center, regardless of which physical machine ends up running it.</p><p>Customer-facing services run on all machines in each data center and do not need to be onboarded to that new system. On the other hand, services currently running on a fixed subset of machines with sub-optimal reliability guarantees and services which don’t need to run on all machines are good candidates for onboarding.</p><h3 id="our-pick-hashicorp-nomad">Our pick: HashiCorp Nomad</h3><p>Armed with our set of requirements, we conducted some research on candidate solutions.</p><p>While Kubernetes was another option, we decided to use HashiCorp’s <a href="https://www.nomadproject.io/">Nomad</a> for the following reasons:</p><ul><li>Satisfies our initial requirement, which was reliably running a single instance of a binary with resource isolation in each data center.</li><li>Has few dependencies and a straightforward integration with Consul. Consul is another piece of HashiCorp software we had already deployed in each datacenter. It provides distributed key-value storage and service discovery capabilities.</li><li>Is lightweight (single Go binary), easy to deploy and provision new clusters which is a plus when deploying as many clusters as we have data centers.</li><li>Has a modular task driver (part responsible for executing tasks and providing resource isolation) architecture to support not only containers but also binaries and any custom task driver.</li><li>Is open source and written in Go. We have Go language experience within the team, and Nomad has a responsive community of maintainers on GitHub.</li></ul><h3 id="deployment-architecture">Deployment architecture</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image3.png" class="kg-image"></figure><p>Nomad is split in two different pieces:</p><ol><li><strong>Nomad Server:</strong> instances forming the cluster responsible for scheduling, five per data center to provide sufficient failure tolerance</li><li><strong>Nomad Client:</strong> instances executing the actual tasks, running on all machines in every data center</li></ol><p>To guarantee Nomad Server cluster reliability, we deployed instances on machines which are part of different failure domains:</p><ul><li>In different inter-connected physical data centers forming a single location</li><li>In different racks, connected to different switches</li><li>In different multi-node chassis (most of our edge hardware comes in the form of multi-node chassis, one chassis contains four individual servers)</li></ul><p>We also added logic to our configuration management tool to ensure we always keep a consistent number of Nomad Server instances regardless of the expansions and decommissions of servers happening on a close to daily basis.</p><p>The logic is rather simple, as server expansions and decommissions happen, the Nomad Server role gets redistributed to a new list of machines. Our configuration management tool then ensures that Nomad Server runs on the new machines before turning it off on the old ones.</p><p>Additionally, because server expansions and decommissions affect a subset of racks at a time and the Nomad Server role assignment logic provides rack-diversity guarantees, the cluster stays healthy as quorum is kept at all times.</p><h3 id="job-files">Job files</h3><p>Nomad job files are templated and checked into a git repository. Our configuration management tool then ensures the jobs are scheduled in every data center. From there, Nomad takes over and ensures the jobs are running at all times in each data center.</p><p>By exposing rack <a href="https://www.nomadproject.io/docs/job-specification/meta/">metadata</a> to each Nomad Client, we are able to make sure each instance of a particular service runs in a different rack and is tied to a different failure domain. This way we make sure that the failure of one rack of servers won’t impact the service health as the service is also running in a different rack, unaffected by the failure.</p><p>We achieve this with the following job file <a href="https://www.nomadproject.io/docs/job-specification/constraint/">constraint</a>:</p><!--kg-card-begin: markdown--><pre><code class="language-javascript">constraint {
+  attribute = &quot;${meta.rack}&quot;
+  operator  = &quot;distinct_property&quot;
+}
+</code></pre>
+<!--kg-card-end: markdown--><h3 id="service-discovery">Service discovery</h3><p>We leveraged Nomad integration with Consul to get Nomad jobs dynamically added to the Consul Service Catalog. This allows us to discover where a particular service is currently running in each data center by querying Consul. Additionally, with the Consul DNS Interface enabled, we can also use DNS-based lookups to target services running on Nomad.</p><h3 id="observability">Observability</h3><p>To be able to properly operate as many Nomad clusters as we have data centers, good observability on Nomad clusters and services running on those clusters was essential.</p><p>We use Prometheus to scrape Nomad Server and Client instances running in each data center and Alertmanager to alert on key metrics. Using Prometheus metrics, we built a Grafana dashboard to provide visibility on each cluster.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/image1-1.png" class="kg-image"></figure><p>We <a href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/#consul_sd_config">set up</a> our Prometheus instances to discover services running on Nomad by querying the Consul Service Directory and scraping their metrics periodically using the following Prometheus configuration:</p><!--kg-card-begin: markdown--><pre><code class="language-javascript">- consul_sd_configs:
+  - server: localhost:8500
+  job_name: management_service_via_consul
+  relabel_configs:
+  - action: keep
+    regex: management-service
+    source_labels:
+    - __meta_consul_service</code></pre>
+<!--kg-card-end: markdown--><p>We then use those metrics to create Grafana dashboards and set up alerts for services running on Nomad.</p><p>To restrict access to Nomad API endpoints, we enabled mutual TLS authentication and are generating client certificates for each entity interacting with Nomad. This way, only entities with a valid client certificate can interact with Nomad API endpoints in order to schedule jobs or perform any CLI operation.</p><h2 id="challenges">Challenges</h2><p>Deploying a new component always comes with its set of challenges; here is a list of a few hurdles we have had to overcome along the way.</p><h3 id="initramfs-rootfs-and-pivot_root">Initramfs rootfs and pivot_root</h3><p>When starting to use the <code>exec</code> driver to run binaries isolated in a <code>chroot</code> environment, we noticed our stateless root partition running on <a href="https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt">initramfs</a> was not supported as the task would not start and we got this error message in our logs:</p><p><code>Feb 12 19:49:03 machine nomad-client[258433]: 2020-02-12T19:49:03.332Z [ERROR] client.alloc_runner.task_runner: running driver failed: alloc_id=fa202-63b-33f-924-42cbd5 task=server error="failed to launch command with executor: rpc error: code = Unknown desc = container_linux.go:346: starting container process caused "process_linux.go:449: container init caused \"rootfs_linux.go:109: jailing process inside rootfs caused \\\"pivot_root invalid argument\\\"\"""</code></p><p>We filed a GitHub <a href="https://github.com/hashicorp/nomad/issues/7136">issue</a> and submitted a workaround <a href="https://github.com/hashicorp/nomad/pull/7149">pull request</a> which was promptly reviewed and merged upstream.</p><p>In parallel, for maximum isolation security, we worked on enabling <code>pivot_root</code> in our setup by modifying our boot process and other team members developed and proposed a patch to the <a href="https://lore.kernel.org/linux-fsdevel/20200305193511.28621-1-ignat@cloudflare.com/">kernel mailing list</a> to make it easier in the future.</p><h3 id="resource-usage-containment">Resource usage containment</h3><p>One very important aspect was to make sure the resource usage of tasks running on Nomad would not disrupt other services colocated on the same machine.</p><p>Disk space is a shared resource on every machine and being able to set a quota for Nomad was a must. We achieved this by isolating the Nomad data directory to a dedicated fixed-size mount point on each machine. Limiting disk bandwidth and IOPS, however, is not currently supported out of the box by Nomad.</p><p>Nomad job files have a <a href="https://www.nomadproject.io/docs/job-specification/resources/#memory">resources section</a> where memory and CPU usage can be limited (memory is in MB, cpu is in MHz):</p><!--kg-card-begin: markdown--><pre><code class="language-javascript">resources {
+  memory = 2000
+  cpu = 500
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>This uses cgroups under the hood and our testing showed that while memory limits are enforced as one would expect, the CPU limits are soft limits and not enforced as long as there is available CPU on the host machine.</p><h3 id="workload-un-predictability">Workload (un)predictability</h3><p>As mentioned above, all machines currently run the same customer-facing workload. Scheduling individual jobs dynamically with Nomad to run on single machines challenges that assumption.</p><p>While our dynamic load balancing system, Unimog, balances requests based on resource usage to ensure it is close to identical on all machines, batch type jobs with spiky resource usage can pose a challenge.</p><p>We will be paying attention to this as we onboard more services and:</p><ul><li>attempt to limit resource usage spikiness of Nomad jobs with constraints aforementioned</li><li>ensure Unimog adjusts to this batch type workload and does not end up in a positive feedback loop</li></ul><h2 id="what-we-are-running-on-nomad">What we are running on Nomad</h2><p>Now Nomad has been deployed in every data center, we are able to improve the reliability of management services essential to operations by gradually onboarding them. We took a first step by onboarding our reboot and maintenance management service.</p><h3 id="reboot-and-maintenance-management-service">Reboot and maintenance management service</h3><p>In each data center, we run a service which facilitates online unattended rolling reboots and maintenance of machines. This service used to run on a single well-known machine in each data center. This made it vulnerable to single machine failures and when down prevented machines from enabling automatically after a reboot. Therefore, it was a great first service to be onboarded to Nomad to improve its reliability.</p><p>We now have a guarantee this service is always running in each data center regardless of individual machine failures. Instead of other machines relying on a well-known address to target this service, they now query Consul DNS and dynamically figure out where the service is running to interact with it.</p><p>This is a big improvement in terms of reliability for this service, therefore many more management services are expected to follow in the upcoming months and we are very excited for this to happen.</p>
+            </div>
+        </section>
+
+        <a href="/tag/edge/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Edge</a>
+        <a href="/tag/availability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Availability</a>
+        <a href="/tag/nomad/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Nomad</a>
+        <a href="/tag/hashicorp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HashiCorp</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-01-27T16:46:02Z">January 27, 2021 4:46PM</p>
+        <a href="/automating-data-center-expansions-with-airflow/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Automating data center expansions with Airflow</h2>
+        </a>
+
+        <p class="gray1 lh-copy">How we automated data center expansions and cut by 90% the amount of time our team spent on tedious operational work....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jet/" class="fw5 f2 black no-underline">Jet Mariscal</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/edge/" class="no-underline f1 fw2 blue3 underline-hover">Edge</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/data-center/" class="no-underline f1 fw2 blue3 underline-hover">Data Center</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"version":"2021.2.0","rayId":"633cc8b5ac2974a3","si":10}'></script>
+</body>
+
+</html>

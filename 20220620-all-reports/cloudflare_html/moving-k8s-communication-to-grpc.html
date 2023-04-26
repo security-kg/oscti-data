@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Moving k8s communication to gRPC</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/moving-k8s-communication-to-grpc/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Moving k8s communication to gRPC" />
+    <meta property="og:description" content="How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs." />
+    <meta property="og:url" content="https://blog.cloudflare.com/moving-k8s-communication-to-grpc/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/03/Moving-k8s-communication-to-gRPC-og-1.png" />
+    <meta property="article:published_time" content="2021-03-20T14:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-03-20T14:00:00.000Z" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="gRPC" />
+    <meta property="article:tag" content="Kubernetes" />
+    <meta property="article:tag" content="HTTP2" />
+    <meta property="article:tag" content="QUIC" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Moving k8s communication to gRPC" />
+    <meta name="twitter:description" content="How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/moving-k8s-communication-to-grpc/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/03/Moving-k8s-communication-to-gRPC-og.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Alex Fattouche" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="DNS, gRPC, Kubernetes, HTTP2, QUIC" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Alex Fattouche",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/IMG_5986.jpg",
+            "width": 600,
+            "height": 600
+        },
+        "url": "https://blog.cloudflare.com/author/alex-fattouche/",
+        "sameAs": []
+    },
+    "headline": "Moving k8s communication to gRPC",
+    "url": "https://blog.cloudflare.com/moving-k8s-communication-to-grpc/",
+    "datePublished": "2021-03-20T14:00:00.000Z",
+    "dateModified": "2021-03-20T14:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/03/Group.png",
+    "keywords": "DNS, gRPC, Kubernetes, HTTP2, QUIC",
+    "description": "How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-dns tag-grpc tag-kubernetes tag-http2 tag-quic sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-dns tag-grpc tag-kubernetes tag-http2 tag-quic ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Moving k8s communication to gRPC</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-03-20T14:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 20, 2021 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/alex-fattouche/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/IMG_5986.jpg" alt="Alex Fattouche" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/alex-fattouche" class="fw5 f3 no-underline black mr3">Alex Fattouche</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/Group-1.png" class="kg-image" alt="Moving k8s communication to gRPC"></figure><p>Over the past year and a half, Cloudflare has been hard at work moving our back-end services running in our non-edge locations from bare metal solutions and Mesos Marathon to a more unified approach using <a href="https://kubernetes.io/">Kubernetes(K8s)</a>. We chose Kubernetes because it allowed us to split up our monolithic application into many different microservices with granular control of communication.</p><p>For example, a <a href="https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/">ReplicaSet</a> in Kubernetes can provide high availability by ensuring that the correct number of pods are always available. A <a href="https://kubernetes.io/docs/concepts/workloads/pods/">Pod</a> in Kubernetes is similar to a container in <a href="https://www.docker.com/">Docker</a>. Both are responsible for running the actual application. These pods can then be exposed through a Kubernetes <a href="https://kubernetes.io/docs/concepts/services-networking/service/">Service</a> to abstract away the number of replicas by providing a single endpoint that load balances to the pods behind it. The services can then be exposed to the Internet via an <a href="https://kubernetes.io/docs/concepts/services-networking/ingress/">Ingress</a>. Lastly, a network policy can protect against unwanted communication by ensuring the correct policies are applied to the application. These policies can include L3 or L4 rules.</p><p>The diagram below shows a simple example of this setup.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/2-3.png" class="kg-image" alt="The diagram below shows a simple example of this setup."></figure><p>Though Kubernetes does an excellent job at providing the tools for communication and traffic management, it does not help the developer decide the best way to communicate between the applications running on the pods. Throughout this blog we will look at some of the decisions we made and why we made them to discuss the pros and cons of two commonly used API architectures, REST and gRPC.</p><h3 id="out-with-the-old-in-with-the-new">Out with the old, in with the new</h3><p>When the DNS team first moved to Kubernetes, all of our pod-to-pod communication was done through REST APIs and in many cases also included Kafka. The general communication flow was as follows:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/1-5.png" class="kg-image" alt="When the DNS team first moved to Kubernetes, all of our pod-to-pod communication was done through REST APIs and in many cases also included Kafka. "></figure><p>We use Kafka because it allows us to handle large spikes in volume without losing information. For example, during a Secondary DNS Zone zone transfer, Service A tells Service B that the zone is ready to be published to the edge. Service B then calls Service A’s REST API, generates the zone, and pushes it to the edge. If you want more information about how this works, I wrote an entire blog post about the <a href="https://blog.cloudflare.com/secondary-dns-deep-dive/">Secondary DNS pipeline</a> at Cloudflare.</p><p>HTTP worked well for most communication between these two services. However, as we scaled up and added new endpoints, we realized that as long as we control both ends of the communication, we could improve the usability and performance of our communication. In addition, sending large DNS zones over the network using HTTP often caused issues with sizing constraints and compression.</p><p>In contrast, gRPC can easily stream data between client and server and is commonly used in microservice architecture. These qualities made gRPC the obvious replacement for our REST APIs.</p><h3 id="grpc-usability">gRPC Usability</h3><p>Often overlooked from a developer’s perspective, HTTP client libraries are clunky and require code that defines paths, handles parameters, and deals with responses in bytes. gRPC abstracts all of this away and makes network calls feel like any other function calls defined for a struct.</p><p>The example below shows a very basic schema to set up a GRPC client/server system. As a result of gRPC using <a href="https://developers.google.com/protocol-buffers">protobuf</a> for serialization, it is largely language agnostic. Once a schema is defined, the <em>protoc</em> command can be used to generate code for <a href="https://grpc.io/docs/languages/">many languages</a>.</p><p>Protocol Buffer data is structured as <em>messages, </em>with each <em>message</em> containing information stored in the form of fields. The fields are strongly typed, providing type safety unlike JSON or XML. Two messages have been defined, <em>Hello </em>and <em>HelloResponse</em>. Next we define a service called <em>HelloWorldHandler</em> which contains one RPC function called <em>SayHello</em> that must be implemented if any object wants to call themselves a <em>HelloWorldHandler</em>.</p><p>Simple Proto:</p><!--kg-card-begin: markdown--><pre><code class="language-js">message Hello{
+   string Name = 1;
+}
+
+message HelloResponse{}
+
+service HelloWorldHandler {
+   rpc SayHello(Hello) returns (HelloResponse){}
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Once we run our <em>protoc</em> command, we are ready to write the server-side code. In order to implement the <em>HelloWorldHandler</em>, we must define a struct that implements all of the RPC functions specified in the protobuf schema above<em>. </em>In this case, the struct <em>Server</em> defines a function <em>SayHello </em>that takes in two parameters, context and <em>*pb.Hello</em>. <em>*pb.Hello </em>was previously specified in the schema and contains one field, <em>Name. SayHello</em> must also return the <em>*pbHelloResponse</em> which has been defined without fields for simplicity.</p><p>Inside the main function, we create a TCP listener, create a new gRPC server, and then register our handler as a <em>HelloWorldHandlerServer</em>. After calling <em>Serve</em> on our gRPC server, clients will be able to communicate with the server through the function <em>SayHello</em>.</p><p>Simple Server:</p><!--kg-card-begin: markdown--><pre><code class="language-js">type Server struct{}
+
+func (s *Server) SayHello(ctx context.Context, in *pb.Hello) (*pb.HelloResponse, error) {
+    fmt.Println(&quot;%s says hello\n&quot;, in.Name)
+    return nil, nil
+}
+
+func main() {
+    lis, err := net.Listen(&quot;tcp&quot;, &quot;:8080&quot;)
+    if err != nil {
+        panic(err)
+    }
+    gRPCServer := gRPC.NewServer()
+    handler := Server{}
+    pb.RegisterHelloWorldHandlerServer(gRPCServer, &amp;handler)
+    if err := gRPCServer.Serve(lis); err != nil {
+        panic(err)
+    }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Finally, we need to implement the gRPC Client. First, we establish a TCP connection with the server. Then, we create a new <em>pb.HandlerClient</em>. The client is able to call the server's <em>SayHello</em> function by passing in a *<em>pb.Hello</em> object.</p><p>Simple Client:</p><!--kg-card-begin: markdown--><pre><code class="language-js">conn, err := gRPC.Dial(&quot;127.0.0.1:8080&quot;, gRPC.WithInsecure())
+if err != nil {
+    panic(err)
+}
+client := pb.HandlerClient(conn)
+client.SayHello(context.Background(), &amp;pb.Hello{Name: &quot;alex&quot;})
+</code></pre>
+<!--kg-card-end: markdown--><p>Though I have removed some code for simplicity, these <em>services</em> and <em>messages</em> can become quite complex if needed. The most important thing to understand is that when a server attempts to announce itself as a <em>HelloWorldHandlerServer</em>, it is required to implement the RPC functions as specified within the protobuf schema. This agreement between the client and server makes cross-language network calls feel like regular function calls.</p><p>In addition to the basic Unary server described above, gRPC lets you decide between four types of service methods:</p><ul><li><strong>Unary</strong> (example above): client sends a single request to the server and gets a single response back, just like a normal function call.</li><li><strong>Server Streaming:</strong> server returns a stream of messages in response to a client's request.</li><li><strong>Client Streaming:</strong> client sends a stream of messages to the server and the server replies in a single message, usually once the client has finished streaming.</li><li><strong>Bi-directional Streaming:</strong> the client and server can both send streams of messages to each other asynchronously.</li></ul><h3 id="grpc-performance">gRPC Performance</h3><p>Not all HTTP connections are created equal. Though Golang natively supports HTTP/2, the HTTP/2 transport must be set by the client and the server must also support HTTP/2. Before moving to gRPC, we were still using HTTP/1.1 for client connections. We could have switched to HTTP/2 for performance gains, but we would have lost some of the benefits of native protobuf compression and usability changes.</p><p>The best option available in HTTP/1.1 is pipelining. Pipelining means that although requests can share a connection, they must queue up one after the other until the request in front completes. HTTP/2 improved pipelining by using connection multiplexing. Multiplexing allows for multiple requests to be sent on the same connection and at the same time.</p><p>HTTP REST APIs generally use JSON for their request and response format. Protobuf is the native request/response format of gRPC because it has a standard schema agreed upon by the client and server during registration. In addition, protobuf is known to be significantly faster than JSON due to its serialization speeds. I’ve run some benchmarks on my laptop, source code can be found <a href="https://github.com/Fattouche/protobuf-benchmark">here</a>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image1-26.png" class="kg-image" alt="Protobuf performs better in small, medium, and large data sizes."></figure><p>As you can see, protobuf performs better in small, medium, and large data sizes. It is faster per operation, smaller after marshalling, and scales well with input size. This becomes even more noticeable when unmarshaling very large data sets. Protobuf takes 96.4ns/op but JSON takes 22647ns/op, a 235X reduction in time! For large DNS zones, this efficiency makes a massive difference in the time it takes us to go from record change in our API to serving it at the edge.</p><p>Combining the benefits of HTTP/2 and protobuf showed almost no performance change from our application’s point of view. This is likely due to the fact that our pods were already so close together that our connection times were already very low. In addition, most of our gRPC calls are done with small amounts of data where the difference is negligible. One thing that we did notice <strong>— </strong>likely related to the multiplexing of HTTP/2 <strong>— </strong>was greater efficiency when writing newly created/edited/deleted records to the edge. Our latency spikes dropped in both amplitude and frequency.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image2-19.png" class="kg-image" alt="Our latency spikes dropped in both amplitude and frequency."></figure><h3 id="grpc-security">gRPC Security</h3><p>One of the best features in Kubernetes is the NetworkPolicy. This allows developers to control what goes in and what goes out.</p><!--kg-card-begin: markdown--><pre><code class="language-js">apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 172.17.0.0/16
+        except:
+        - 172.17.1.0/24
+    - namespaceSelector:
+        matchLabels:
+          project: myproject
+    - podSelector:
+        matchLabels:
+          role: frontend
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/24
+    ports:
+    - protocol: TCP
+      port: 5978
+</code></pre>
+<!--kg-card-end: markdown--><p>In this example, taken from the <a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/">Kubernetes docs</a>, we can see that this will create a network policy called test-network-policy. This policy controls both ingress and egress communication to or from any pod that matches the role <em>db</em> and enforces the following rules:</p><p>Ingress connections allowed:</p><ul><li>Any pod in default namespace with label “role=frontend”</li><li>Any pod in any namespace that has a label “project=myproject”</li><li>Any source IP address in 172.17.0.0/16 except for 172.17.1.0/24</li></ul><p>Egress connections allowed:</p><ul><li>Any dest IP address in 10.0.0.0/24</li></ul><p>NetworkPolicies do a fantastic job of protecting APIs at the network level, however, they do nothing to protect APIs at the application level. If you wanted to control which endpoints can be accessed within the API, you would need k8s to be able to not only distinguish between pods, but also endpoints within those pods. These concerns led us to <a href="https://grpc.io/docs/guides/auth/">per RPC credentials</a>. Per RPC credentials are easy to set up on top of the pre-existing gRPC code. All you need to do is add interceptors to both your stream and unary handlers.</p><!--kg-card-begin: markdown--><pre><code class="language-js">func (s *Server) UnaryAuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+    // Get the targeted function
+    functionInfo := strings.Split(info.FullMethod, &quot;/&quot;)
+    function := functionInfo[len(functionInfo)-1]
+    md, _ := metadata.FromIncomingContext(ctx)
+
+    // Authenticate
+    err := authenticateClient(md.Get(&quot;username&quot;)[0], md.Get(&quot;password&quot;)[0], function)
+    // Blocked
+    if err != nil {
+        return nil, err
+    }
+    // Verified
+    return handler(ctx, req)
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>In this example code snippet, we are grabbing the username, password, and requested function from the info object. We then authenticate against the client to make sure that it has correct rights to call that function. This interceptor will run before any of the other functions get called, which means one implementation protects all functions. The client would initialize its secure connection and send credentials like so:</p><!--kg-card-begin: markdown--><pre><code class="language-js">transportCreds, err := credentials.NewClientTLSFromFile(certFile, &quot;&quot;)
+if err != nil {
+    return nil, err
+}
+perRPCCreds := Creds{Password: grpcPassword, User: user}
+conn, err := grpc.Dial(endpoint, grpc.WithTransportCredentials(transportCreds), grpc.WithPerRPCCredentials(perRPCCreds))
+if err != nil {
+    return nil, err
+}
+client:= pb.NewRecordHandlerClient(conn)
+// Can now start using the client
+</code></pre>
+<!--kg-card-end: markdown--><p>Here the client first verifies that the server matches with the certFile. This step ensures that the client does not accidentally send its password to a bad actor. Next, the client initializes the <em>perRPCCreds </em>struct with its username and password and dials the server with that information. Any time the client makes a call to an rpc defined function, its credentials will be verified by the server.</p><h3 id="next-steps">Next Steps</h3><p>Our next step is to remove the need for many applications to access the database and ultimately DRY up our codebase by pulling all DNS-related code into a single API, accessed from one gRPC interface. This removes the potential for mistakes in individual applications and makes updating our database schema easier. It also gives us more granular control over which functions can be accessed rather than which tables can be accessed.</p><p>So far, the DNS team is very happy with the results of our gRPC migration. However, we still have a long way to go before we can move entirely away from REST. We are also patiently waiting for <a href="https://github.com/grpc/grpc/issues/19126">HTTP/3 support</a> for gRPC so that we can take advantage of those super <a href="https://en.wikipedia.org/wiki/QUIC">quic</a> speeds!</p>
+            </div>
+        </section>
+
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+        <a href="/tag/grpc/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">gRPC</a>
+        <a href="/tag/kubernetes/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Kubernetes</a>
+        <a href="/tag/http2/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTP2</a>
+        <a href="/tag/quic/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">QUIC</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-08T14:00:00Z">March 08, 2021 2:00PM</p>
+        <a href="/the-benefits-of-serving-stale-dns-entries-when-using-consul/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The benefits of serving stale DNS entries when using Consul</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We use Consul for service discovery, and we’ve deployed a cluster that spans several of our data centers. We were aware from the start that the DNS query latencies were not great from certain parts of the world that were furthest away from these data centers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andre-cruz/" class="fw5 f2 black no-underline">André Cruz</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/unbound/" class="no-underline f1 fw2 blue3 underline-hover">Unbound</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-30T13:14:40Z">November 30, 2020 1:14PM</p>
+        <a href="/improving-the-resiliency-of-our-infrastructure-dns-zone/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving the Resiliency of Our Infrastructure DNS Zone</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've improved the resiliency and management of our infrastructure DNS zone. In this post, we guide you through some of the "whats", "whys" and "hows" we encountered along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-timken/" class="fw5 f2 black no-underline">Ryan Timken</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/kiran/" class="fw5 f2 black no-underline">Kiran Naidoo</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/availability/" class="no-underline f1 fw2 blue3 underline-hover">Availability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/octodns/" class="no-underline f1 fw2 blue3 underline-hover">OctoDNS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-13T19:06:13Z">November 13, 2020 7:06PM</p>
+        <a href="/sad-dns-explained/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SAD DNS Explained</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Researchers from UC Riverside and Tsinghua University found a new way to revive a decade-old DNS cache poisoning attack. Read our deep dive into how the SAD DNS attack on DNS resolvers works, how we protect against this attack in 1.1.1.1, and what the future holds for DNS cache poisoning attacks....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek/" class="fw5 f2 black no-underline">Marek Vavruša</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns-poisoning/" class="no-underline f1 fw2 blue3 underline-hover">DNS Poisoning</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/side-channels/" class="no-underline f1 fw2 blue3 underline-hover">Side Channels</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-30T12:00:00Z">October 30, 2020 12:00PM</p>
+        <a href="/unwrap-the-servfail/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Unwrap the SERVFAIL</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We recently released a new version of Cloudflare Resolver, which adds a piece of information called “Extended DNS Errors” (EDE) along with the response code under certain circumstances. This will be helpful in tracing DNS resolution errors and figure out what went wrong behind the scenes....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/anbang/" class="fw5 f2 black no-underline">Anbang Wen</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/resolver/" class="no-underline f1 fw2 blue3 underline-hover">Resolver</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

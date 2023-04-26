@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>However improbable: The story of a processor bug</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Last year at Cloudflare, we were affected by a bug in one of Intel’s processor models.  Here’s the story of how we found we had a mysterious problem, and how we tracked down the cause." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/however-improbable-the-story-of-a-processor-bug/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="However improbable: The story of a processor bug" />
+    <meta property="og:description" content="Processor problems have been in the news lately, due to the Meltdown and Spectre vulnerabilities. But generally, engineers writing software assume that computer hardware operates in a reliable, well-understood fashion, and that any problems lie on the software side of the software-hardware divide." />
+    <meta property="og:url" content="https://blog.cloudflare.com/however-improbable-the-story-of-a-processor-bug/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/01/Sherlock_holmes_pipe_hat-1-1.jpg" />
+    <meta property="article:published_time" content="2018-01-18T12:06:48.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T06:58:38.000Z" />
+    <meta property="article:tag" content="Reliability" />
+    <meta property="article:tag" content="Bugs" />
+    <meta property="article:tag" content="Vulnerabilities" />
+    <meta property="article:tag" content="NGINX" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="However improbable: The story of a processor bug" />
+    <meta name="twitter:description" content="Processor problems have been in the news lately, due to the Meltdown and Spectre vulnerabilities. But generally, engineers writing software assume that computer hardware operates in a reliable, well-understood fashion, and that any problems lie on the software side of the software-hardware divide." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/however-improbable-the-story-of-a-processor-bug/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/01/Sherlock_holmes_pipe_hat-1-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="David Wragg" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Reliability, Bugs, Vulnerabilities, NGINX" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "David Wragg",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/davidface2.jpg",
+        "url": "https://blog.cloudflare.com/author/david-wragg/",
+        "sameAs": []
+    },
+    "headline": "However improbable: The story of a processor bug",
+    "url": "https://blog.cloudflare.com/however-improbable-the-story-of-a-processor-bug/",
+    "datePublished": "2018-01-18T12:06:48.000Z",
+    "dateModified": "2018-08-29T06:58:38.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/01/Sherlock_holmes_pipe_hat-1-1.jpg",
+    "keywords": "Reliability, Bugs, Vulnerabilities, NGINX",
+    "description": "Processor problems have been in the news lately, due to the Meltdown and Spectre vulnerabilities. But generally, engineers writing software assume that computer hardware operates in a reliable, well-understood fashion, and that any problems lie on the software side of the software-hardware divide.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-reliability tag-bugs tag-vulnerabilities tag-nginx sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-reliability tag-bugs tag-vulnerabilities tag-nginx ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">However improbable: The story of a processor bug</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-01-18T12:06:48Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">January 18, 2018 12:06PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/david-wragg/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/davidface2.jpg" alt="David Wragg" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/david-wragg" class="fw5 f3 no-underline black mr3">David Wragg</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Processor problems have been in the news lately, due to the <a href="https://blog.cloudflare.com/meltdown-spectre-non-technical/">Meltdown and Spectre vulnerabilities</a>.  But generally, engineers writing software assume that computer hardware operates in a reliable, well-understood fashion, and that any problems lie on the software side of the software-hardware divide.  Modern processor chips routinely execute many billions of instructions in a second, so any erratic behaviour must be very hard to trigger, or it would quickly become obvious.</p>
+<p>But sometimes that assumption of reliable processor hardware doesn’t hold.  Last year at Cloudflare, we were affected by a bug in one of Intel’s processor models.  Here’s the story of how we found we had a mysterious problem, and how we tracked down the cause.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/01/Sherlock_holmes_pipe_hat-1.jpg" alt="Sherlock_holmes_pipe_hat-1"><br>
+<small><a href="http://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA-3.0</a> <a href="https://commons.wikimedia.org/wiki/File:Sherlock_holmes_pipe_hat.jpg">image</a> by Alterego</small></p>
+<h3 id="prologue">Prologue</h3>
+<p>Back in February 2017, Cloudflare <a href="https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/">disclosed a security problem</a> which became known as Cloudbleed.  The bug behind that incident lay in some code that ran on our servers to parse HTML.  In certain cases involving invalid HTML, the parser would read data from a region of memory beyond the end of the buffer being parsed. The adjacent memory might contain other customers’ data, which would then be returned in the HTTP response,  and the result was Cloudbleed.</p>
+<p>But that wasn’t the only consequence of the bug.  Sometimes it could lead to an invalid memory read, causing the NGINX process to crash, and we had metrics showing these crashes in the weeks leading up to the discovery of Cloudbleed.  So one of the measures we took to prevent such a problem happening again was to require that every crash be investigated in detail.</p>
+<p>We acted very swiftly to address Cloudbleed, and so ended the crashes due to that bug, but that did not stop all crashes.  We set to work investigating these other crashes.</p>
+<h3 id="crashisnotatechnicalterm">Crash is not a technical term</h3>
+<p>But what exactly does “crash” mean in this context? When a processor detects an attempt to access invalid memory (more precisely, an address without a valid page in the page tables), it signals a page fault to the operating system’s kernel.  In the case of Linux, these page faults result in the delivery of a SIGSEGV signal to the relevant process (the name SIGSEGV derives from the historical Unix term “segmentation violation”, also known as a segmentation fault or segfault). The default behaviour for SIGSEGV is to terminate the process.  It’s this abrupt termination that was one symptom of the Cloudbleed bug.</p>
+<p>This possibility of invalid memory access and the resulting termination is mostly relevant to processes written in C or C++.  Higher-level compiled languages, such as Go and JVM-based languages, use type systems which prevent the kind of low-level programming errors that can lead to accesses of invalid memory. Furthermore, such languages have sophisticated runtimes that take advantage of <a href="https://pdos.csail.mit.edu/6.828/2017/readings/appel-li.pdf">page faults for implementation tricks that make them more efficient</a> (a process can install a signal handler for SIGSEGV so that it does not get terminated, and instead can recover from the situation).  And for interpreted languages such as Python, the interpreter checks that conditions leading to invalid memory accesses cannot occur. So unhandled SIGSEGV signals tend to be restricted to programming in C and C++.</p>
+<p>SIGSEGV is not the only signal that indicates an error in a process and causes termination.  We also saw process terminations due to SIGABRT and SIGILL, suggesting other kinds of bugs in our code.</p>
+<p>If the only information we had about these terminated NGINX processes was the signal involved, investigating the causes would have been difficult.  But there is another feature of Linux (and other Unix-derived operating systems) that provided a path forward: core dumps.  A core dump is a file written by the operating system when a process is terminated abruptly.  It records the full state of the process at the time it was terminated, allowing post-mortem debugging.  The state recorded includes:</p>
+<ul>
+<li>The processor register values for all threads in the process (the values of some program variables will be held in registers)</li>
+<li>The contents of the process’ conventional memory regions (giving the values of other program variables and heap data)</li>
+<li>Descriptions of regions of memory that are read-only mappings of files, such as executables and shared libraries</li>
+<li>Information associated with the signal that caused termination, such as the address of an attempted memory access that led to a SIGSEGV</li>
+</ul>
+<p>Because core dumps record all this state, their size depends upon the program involved, but they can be fairly large.  Our NGINX core dumps are often several gigabytes.</p>
+<p>Once a core dump has been recorded, it can be inspected using a debugging tool such as gdb. This allows the state from the core dump to be explored in terms of the original program source code, so that you can inquire about the program stack and contents of variables and the heap in a reasonably convenient manner.</p>
+<p>A brief aside: Why are core dumps called core dumps?  It’s a historical term that originated in the 1960s when the principal form of random access memory was <a href="https://en.wikipedia.org/wiki/Magnetic-core_memory">magnetic core memory</a>. At the time, the word core was used as a shorthand for memory, so “core dump” means a dump of the contents of memory.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/01/coremem-2.jpg" alt="coremem-2"><br>
+<small><a href="http://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a> <a href="https://en.wikipedia.org/wiki/Magnetic-core_memory#/media/File:KL_CoreMemory.jpg">image</a> by Konstantin Lanzet</small></p>
+<h3 id="thegameisafoot">The game is afoot</h3>
+<p>As we examined the core dumps, we were able to track some of them back to more bugs in our code.  None of them leaked data as Cloudbleed had, or had other security implications for our customers.  Some might have allowed an attacker to try to impact our service, but the core dumps suggested that the bugs were being triggered under innocuous conditions rather than attacks. We didn’t have to fix many such bugs before the number of core dumps being produced had dropped significantly.</p>
+<p>But there were still some core dumps being produced on our servers — about one a day across our whole fleet of servers.  And finding the root cause of these remaining ones proved more difficult.</p>
+<p>We gradually began to suspect that these residual core dumps were not due to bugs in our code.  These suspicions arose because we found cases where the state recorded in the core dump did not seem to be possible based on the program code (and in examining these cases, we didn’t rely on the C code, but looked at the machine code produced by the compiler, in case we were dealing with compiler bugs). At first, as we discussed these core dumps among the engineers at Cloudflare, there was some healthy scepticism about the idea that the cause might lie outside of our code, and there was at least one joke about <a href="https://www.computerworld.com/article/3171677/it-industry/computer-crash-may-be-due-to-forces-beyond-our-solar-system.html">cosmic rays</a>.  But as we amassed more and more examples, it became clear that something unusual was going on.  Finding yet another “mystery core dump”, as we had taken to calling them, became routine, although the details of these core dumps were diverse, and the code triggering them was spread throughout our code base.  The common feature was their apparent impossibility.</p>
+<p>There was no obvious pattern to the servers which produced these mystery core dumps.  We were getting about one a day on average across our fleet of servers. So the sample size was not very big, but they seemed to be evenly spread across all our servers and datacenters, and no one server was struck twice.  The probability that an individual server would get a mystery core dump seemed to be very low (about one per ten years of server uptime, assuming they were indeed equally likely for all our servers).  But because of our large number of servers, we got a steady trickle.</p>
+<h3 id="inquestofasolution">In quest of a solution</h3>
+<p>The rate of mystery core dumps was low enough that it didn’t appreciably impact the service to our customers.  But we were still committed to examining every core dump that occurred.  Although we got better at recognizing these mystery core dumps, investigating and classifying them was a drain on engineering resources.  We wanted to find the root cause and fix it.  So we started to consider causes that seemed somewhat plausible:</p>
+<p>We looked at hardware problems.  Memory errors in particular are a real possibility. But our servers use ECC (Error-Correcting Code) memory which can detect, and in most cases correct, any memory errors that do occur. Furthermore, any memory errors should be recorded in the IPMI logs of the servers.  We do see some memory errors on our server fleet, but they were not correlated with the core dumps.</p>
+<p>If not memory errors, then could there be a problem with the processor hardware? We mostly use Intel Xeon processors, of various models.  These have a good reputation for reliability, and while the rate of core dumps was low, it seemed like it might be too high to be attributed to processor errors. We searched for reports of similar issues, and asked on the grapevine, but didn’t hear about anything that seemed to match our issue.</p>
+<p>While we were investigating, an <a href="https://lists.debian.org/debian-devel/2017/06/msg00308.html">issue with Intel Skylake processors</a> came to light.  But at that time we did not have Skylake-based servers in production, and furthermore that issue related to particular code patterns that were not a common feature of our mystery core dumps.</p>
+<p>Maybe the core dumps were being incorrectly recorded by the Linux kernel, so that a mundane crash due to a bug in our code ended up looking mysterious? But we didn’t see any patterns in the core dumps that pointed to something like this.  Also, upon an unhandled SIGSEGV, the kernel generates a log line with a small amount of information about the cause, like this:</p>
+<pre><code>segfault at ffffffff810c644a ip 00005600af22884a sp 00007ffd771b9550 error 15 in nginx-fl[5600aeed2000+e09000]
+</code></pre>
+<p>We checked these log lines against the core dumps, and they were always consistent.</p>
+<p>The kernel has a role in controlling the processor’s <a href="https://en.wikipedia.org/wiki/Memory_management_unit">Memory Management Unit</a> to provide virtual memory to application programs. So kernel bugs in that area can lead to surprising results (and we have encountered such a bug at Cloudflare in a different context). But we examined the kernel code, and searched for reports of relevant bugs against Linux, without finding anything.</p>
+<p>For several weeks, our efforts to find the cause were not fruitful. Due to the very low frequency of the mystery core dumps when considered on a per-server basis, we couldn’t follow the usual last-resort approach to problem solving - changing various possible causative factors in the hope that they make the problem more or less likely to occur.  We needed another lead.</p>
+<h3 id="thesolution">The solution</h3>
+<p>But eventually, we noticed something crucial that we had missed until that point: all of the mystery core dumps came from servers containing <a href="https://ark.intel.com/products/91767/Intel-Xeon-Processor-E5-2650-v4-30M-Cache-2_20-GHz">The Intel Xeon E5-2650 v4</a>.  This model belongs to the generation of Intel processors that had the codename “Broadwell”, and it’s the only model of that generation that we use in our edge servers, so we simply call these servers Broadwells. The Broadwells made up about a third of our fleet at that time, and they were in many of our datacenters.  This explains why the pattern was not immediately obvious.</p>
+<p>This insight immediately threw the focus of our investigation back onto the possibility of processor hardware issues.  We downloaded <a href="https://www.intel.co.uk/content/www/uk/en/processors/xeon/xeon-e5-v4-spec-update.html">Intel’s Specification Update</a> for this model. In these Specification Update documents Intel discloses all the ways that its processors deviate from their published specifications, whether due to benign discrepancies or bugs in the hardware (Intel entertainingly calls these “errata”).</p>
+<p>The Specification Update described 85 issues, most of which are obscure issues of interest mainly to the developers of the BIOS and operating systems. But one caught our eye: “BDF76 An Intel® Hyper-Threading Technology Enabled Processor May Exhibit Internal Parity Errors or Unpredictable System Behavior”. The symptoms described for this issue are very broad (“unpredictable system behavior may occur”), but what we were observing seemed to match the description of this issue better than any other.</p>
+<p>Furthermore, the Specification Update stated that BDF76 was fixed in a microcode update. Microcode is firmware that controls the lowest-level operation of the processor, and can be updated by the BIOS (from system vendor) or the OS.  Microcode updates can change the behaviour of the processor to some extent (exactly how much is a closely-guarded secret of Intel, although <a href="https://software.intel.com/sites/default/files/managed/c5/63/336996-Speculative-Execution-Side-Channel-Mitigations.pdf">the recent microcode updates to address the Spectre vulnerability</a> give some idea of the impressive degree to which Intel can reconfigure the processor’s behaviour).</p>
+<p>The most convenient way for us to apply the microcode update to our Broadwell servers at that time was via a BIOS update from the server vendor. But rolling out a BIOS update to so many servers in so many data centers takes some planning and time to conduct.  Due to the low rate of mystery core dumps, we would not know if BDF76 was really the root cause of our problems until a significant fraction of our Broadwell servers had been updated.  A couple of weeks of keen anticipation followed while we awaited the outcome.</p>
+<p>To our great relief, once the update was completed, the mystery core dumps stopped.  This chart shows the number of core dumps we were getting each day for the relevant months of 2017:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/01/coredumps.png" alt="coredumps"></p>
+<p>As you can see, after the microcode update there is a marked reduction in the rate of core dumps.  But we still get some core dumps.  These are not mysteries, but represent conventional issues in our software.  We continue to investigate and fix them to ensure they don’t represent security issues in our service.</p>
+<h3 id="theconclusion">The conclusion</h3>
+<p>Eliminating the mystery core dumps has made it easier to focus on any remaining crashes that are due to our code. It removes the temptation to dismiss a core dump because its cause is obscure.</p>
+<p>And for some of the core dumps that we see now, understanding the cause can be very challenging.  They correspond to very unlikely conditions, and often involve a root cause that is distant from the immediate issue that triggered the core dump.  For example, we see segfaults in LuaJIT (which we embed in NGINX via OpenResty) that are not due to problems in LuaJIT, but rather because LuaJIT is particularly susceptible to damage to its data structures by bugs in unrelated C code.</p>
+<p><em>Excited by core dump detective work?  Or building systems at a scale where once-in-a-decade problems can get triggered every day?  Then <a href="https://www.cloudflare.com/careers/">join our team</a>.</em></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+        <a href="/tag/bugs/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Bugs</a>
+        <a href="/tag/vulnerabilities/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Vulnerabilities</a>
+        <a href="/tag/nginx/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">NGINX</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-11-29T18:45:25Z">November 29, 2018 6:45PM</p>
+        <a href="/logs-from-the-edge/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Logs from the Edge</h2>
+        </a>
+
+        <p class="gray1 lh-copy">With Cloudflare Workers, it is possible to send traffic logs to arbitrary locations. In this post we are going to discuss an example Worker implementation on how to achieve this. So if you are building or maintaining your own traffic logging/analytics environment, read on....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/michael-tremante/" class="fw5 f2 black no-underline">Michael Tremante</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/logs/" class="no-underline f1 fw2 blue3 underline-hover">Logs</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-08-06T17:45:17+01:00">August 06, 2018 5:45PM</p>
+        <a href="/additional-record-types-available-with-cloudflare-dns/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Additional Record Types Available with Cloudflare DNS</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare recently updated the authoritative DNS service to support nine new record types. Since these records are less commonly used than what we previously supported, we thought it would be a good idea to do a brief explanation of each record type and how it is used....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sergi/" class="fw5 f2 black no-underline">Sergi Isasi</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/etienne-labaume/" class="fw5 f2 black no-underline">Etienne Labaume</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dnssec/" class="no-underline f1 fw2 blue3 underline-hover">DNSSEC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-06-01T02:13:53+01:00">June 01, 2018 2:13AM</p>
+        <a href="/today-we-mitigated-1-1-1-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Today we mitigated 1.1.1.1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare is protected from attacks by the Gatebot DDoS mitigation pipeline. Gatebot performs hundreds of mitigations a day, shielding our infrastructure and our customers from L3 and L7 attacks....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/postmortem/" class="no-underline f1 fw2 blue3 underline-hover">Post Mortem</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/mitigation/" class="no-underline f1 fw2 blue3 underline-hover">Mitigation</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/1-1-1-1/" class="no-underline f1 fw2 blue3 underline-hover">1.1.1.1</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-04-11T10:28:45+01:00">April 11, 2017 10:28AM</p>
+        <a href="/how-we-made-our-dns-stack-3x-faster/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How we made our DNS stack 3x faster</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare is now well into its 6th year and providing authoritative DNS has been a core part of infrastructure from the start. We’ve since grown to be the largest and one of the fastest managed DNS services on the Internet, hosting DNS for nearly 100,000 of the Alexa top 1M sites....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/tom/" class="fw5 f2 black no-underline">Tom Arnfeld</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cname/" class="no-underline f1 fw2 blue3 underline-hover">CNAME</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed/" class="no-underline f1 fw2 blue3 underline-hover">Speed</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

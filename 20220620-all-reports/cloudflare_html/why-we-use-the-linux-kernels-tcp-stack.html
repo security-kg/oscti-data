@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Why we use the Linux kernel&#x27;s TCP stack</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/why-we-use-the-linux-kernels-tcp-stack/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Why we use the Linux kernel&#x27;s TCP stack" />
+    <meta property="og:description" content="A recent blog post posed the question Why do we use the Linux kernel&#x27;s TCP stack?. It triggered a very interesting discussion on Hacker News." />
+    <meta property="og:url" content="https://blog.cloudflare.com/why-we-use-the-linux-kernels-tcp-stack/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/225724064_46fec2a98c_b.jpg" />
+    <meta property="article:published_time" content="2016-07-07T11:50:34.000Z" />
+    <meta property="article:modified_time" content="2020-08-17T18:19:54.000Z" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="Reliability" />
+    <meta property="article:tag" content="Linux" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Why we use the Linux kernel&#x27;s TCP stack" />
+    <meta name="twitter:description" content="A recent blog post posed the question Why do we use the Linux kernel&#x27;s TCP stack?. It triggered a very interesting discussion on Hacker News." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/why-we-use-the-linux-kernels-tcp-stack/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/225724064_46fec2a98c_b.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TCP, Reliability, Linux" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "Why we use the Linux kernel&#x27;s TCP stack",
+    "url": "https://blog.cloudflare.com/why-we-use-the-linux-kernels-tcp-stack/",
+    "datePublished": "2016-07-07T11:50:34.000Z",
+    "dateModified": "2020-08-17T18:19:54.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/225724064_46fec2a98c_b.jpg",
+    "keywords": "TCP, Reliability, Linux",
+    "description": "A recent blog post posed the question Why do we use the Linux kernel&#x27;s TCP stack?. It triggered a very interesting discussion on Hacker News.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tcp tag-reliability tag-linux sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tcp tag-reliability tag-linux ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Why we use the Linux kernel&#x27;s TCP stack</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2016-07-07T12:50:34+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 07, 2016 12:50PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>A recent blog post posed the question <a href="http://jvns.ca/blog/2016/06/30/why-do-we-use-the-linux-kernels-tcp-stack/">Why do we use the Linux kernel's TCP stack?</a>. It triggered a very interesting <a href="https://news.ycombinator.com/item?id=12021195">discussion on Hacker News</a>.</p>
+<p>I've also thought about this question while working at CloudFlare. My experience mostly comes from working with thousands of production machines here and I can try to answer the question from that perspective.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/07/225724064_46fec2a98c_b.jpg" alt=""><small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/jvetterli/225724064/">image</a> by <a href="https://www.flickr.com/photos/jvetterli">John Vetterli</a></small></p>
+<p>Let's start with a broader question - what is the point of running an operating system at all? If you planned on running a single application, having to use a kernel consisting of multiple million lines of code may sound like a burden.</p>
+<p>But in fact most of us decide to run some kind of OS and we do that for two reasons. Firstly, the OS layer adds hardware independence and easy to use APIs. With these we can focus on writing the code for any machine - not only the specialized hardware we have at the moment. Secondly, the OS adds a time sharing layer. This allows us to run more than one application at a time. Whether it's a second HTTP server or just a bash session, this ability to share resources between multiple processes is critical. All of the resources exposed by the kernel can be shared between multiple processes!</p>
+<h3 id="userspacenetworking">Userspace Networking</h3>
+<p>This is no different for the networking stack. By using the general purpose operating system network stack we gain the ability to run multiple network applications. This is lost if we dedicate the network card hardware to a single application in order to run a userspace network stack. By claiming the network card from one process you lose the ability to run, say an SSH session, concurrently with your servers.</p>
+<p>As crazy as it sounds, this is exactly what most off the shelf userspace network stack technologies propose. The common term for this is &quot;full kernel bypass&quot;. The idea is to bypass the kernel and use network hardware directly from userspace process.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/07/18174650566_bb7caa8a17_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/audiotecna/18174650566/in/photolist-tG2Qqf-doZFcH-5dUQtz-9TLCRR-5dUEPB-7KN1DT-5ZfUg4-39Fax6-5dUJot-5dUGxP-5dZ53w-5PA2W1-7A1AjN-km3MZn-ddgZzC-km5vtd-dHCLzh-7jVVb3-GwBUem-9TPrad-aWf6UZ-7yJAxD-c7YYMY-aMEM2V-4FLyP-a2UGuD-a2UFck-a2XwUQ-bgVJ9H-a2UGm6-a2Xx9C-a2UFyP-a2XwGf-a2XxS1-a2UGC2-a2UGQD-a2XxEm-a2UGap-5dUGiK-a2UFDp-7KRXV3-5dUGMP-a2UF9t-a2UFNg-4aBxT-fVMCS1-6CZhV1-a2Xydw-a2XxnC-a2UG2x">image</a> by <a href="https://www.flickr.com/photos/audiotecna/">Audiotecna Música</a></small></p>
+<p>In the Linux ecosystem there are a few available technologies. Not all are open source:</p>
+<ul>
+<li><a href="http://www.ntop.org/products/packet-capture/pf_ring/">PF_RING</a></li>
+<li><a href="https://github.com/snabbco/snabb">Snabbswitch</a></li>
+<li><a href="http://dpdk.org/">DPDK</a></li>
+<li><a href="http://info.iet.unipi.it/~luigi/netmap/">Netmap</a></li>
+</ul>
+<p>I've written about these in <a href="https://blog.cloudflare.com/kernel-bypass/">a previous post</a>. All of these technologies require handing over the full network card to a single process. In other words: it's totally possible to write your own network stack, make it brilliant, focusing on super features, and optimize for performance. But there is a big cost incurred - you will be restricted to running at most one process for each network card.</p>
+<p>There is a small twist about virtualized network cards (VFs), but let's cut it here - it doesn't work. I talked about this in <a href="https://blog.cloudflare.com/kernel-bypass/#virtualizationapproach">the &quot;Virtualization approach&quot; paragraph</a>.</p>
+<p>But even with all these road blocks, I can't just dismiss the benefits of kernel bypass. Many people do run custom network stacks and they do it for one of two reasons:</p>
+<ul>
+<li>latency</li>
+<li>performance (lower CPU cost, better throughput)</li>
+</ul>
+<p>The latency is very important for the HFT (high frequency trading) folks. Traders can afford custom hardware and fancy proprietary network stacks. I would feel very uncomfortable running a closed source TCP stack.</p>
+<h3 id="kernelbypassatcloudflare">Kernel bypass at CloudFlare</h3>
+<p>Having said that, at CloudFlare we do use kernel bypass. We are in the second group - we care about performance. More specifically we suffer from IRQ storms. The Linux networking stack has a limit on how many packets per second it can handle. When the limit is reached all CPUs become busy just receiving packets. In that case either the packets are dropped or the applications are starved of CPU. While we don't have to deal with IRQ storms during our normal operation, this does happen when we are the target of an L3 (layer 3 OSI) DDoS attack. This is a type of attack where the target is flooded with arbitrary packets not belonging to valid connections - typically spoofed packets.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/07/5939812628_7f22121e62_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a> <a href="https://www.flickr.com/photos/howardlake/5939812628/in/photolist-a3T6my-mvx2SL-mvx9GN-mvvYag-X6CLx-Xb9mh-bmjkSU-amciaJ-4MpEAP-4Vgs6Q-6cRVcG-c9FET9-e2Gx4d-4VcdZV-65y4Bs-GRMfH-6Vd9JY-92mK5y-92mJP3-dyhTr2-9grVVr-34A4qk-352xtB-7h1LK3-6daUPd-4UmGDb-4MtQh9-dUMgRP-7jMHn4-92iD1a-352xFk-4MpDUx-3577LS-352xzz-3577Ff-4pZZiN-bH5CK-3577rA-3577dN-aK4MAg-7jMGnT-352xiF-3577Vh-92i9MD-352xmi-6z6jjL-34EAF3-3577yW-34EAzq-2iCSpN">image</a> by <a href="https://www.flickr.com/photos/howardlake/">Howard Lake</a></small></p>
+<p>During some attacks we are flooded with up to 3M packets per second (pps) per server. A general rule is that Linux iptables can handle about 1Mpps on a decent server, while still having enough CPU for applications. This number can be increased by proper tuning.</p>
+<p>With this scale of attack the Linux kernel is not enough for us. We must work around it. We don't use the previously mentioned &quot;full kernel bypass&quot;, but instead we run what we call a &quot;partial kernel bypass&quot;. With this the kernel retains the ownership of the network card, and allows us to perform a bypass only on a single &quot;RX queue&quot;. We use <a href="https://www.solarflare.com/">Solarflare</a>'s EFVI API on Solarflare NICs. To support Intel NICs we added a partial kernel bypass feature to Netmap: that's described <a href="https://blog.cloudflare.com/single-rx-queue-kernel-bypass-with-netmap/">in this blog post</a>. With this technique we can offload our anti-DDoS iptables to a very fast userspace process. This saves Linux from processing attack packets, therefore avoiding IRQ storms situations.</p>
+<h3 id="whataboutafulluserspacetcpstack">What about a full userspace TCP stack?</h3>
+<p>My colleagues regularly ask me about: <em>Why don't we just run our NGINX with Solarflare <a href="http://www.openonload.org/">OpenOnload</a> framework, using a super fast userspace TCP?</em></p>
+<p>Yes, it would be faster, but there is no evidence it will actually make much of a practical difference. Most of the CPU used on our servers goes to the userspace NGINX processes and not to the operating system. The CPU is mostly spent on usual NGINX bookkeeping and our Lua application logic, not on network handling. I estimate with bypass we could save about 5-10% CPU, which is (currently) not worth the effort.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/07/8239882623_e54c104393_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/bakaotaku/8239882623/in/photolist-dy8y2M-5agSvS-HDgU1f-dye34N-ByBo-5QRSqj-4tw51P-g21SvY-7HotRb-7mUrEM-8CYXCb-pK97Yk-dT1LP2-dQU7DB-ocj55o-aT9gyV-oSXTr1-8JKS8q-9uaRmj-nGYc4N-Mh7K-bPdqrz-qfYS3U-ByBi-dVREbd-ByBy-A4vY2-HyXi7f-4aMV1X-4D8agk-p2upRe-ByBL-dWeHpZ-ByBr-58UcmL-pTHFMp-9u7QJK-9u7QMn-dSg4wP-dT7tjG-7FEZv8-7FEZuP-p4thUV-e7ZWar-ByBG-qnQuCg-5kmcHN-cXGcRA-a4K5t6-guWTgr">image</a> by <a href="https://www.flickr.com/photos/bakaotaku/">Charlie</a></small></p>
+<p>Next, using kernel bypass for NGINX would interfere with our usual debugging tools. <a href="https://github.com/openresty/nginx-systemtap-toolkit">Our systemtap scripts</a> would become useless. Linux netstat statistics will stop recording critical events and tcpdump won't work anymore.</p>
+<p>Then there is the issue of our DDoS mitigation stack. We are heavy users of iptables, as I documented in <a href="https://www.youtube.com/watch?v=pCVTEx1ouyk">this BlackHat presentation</a>. Custom TCP stacks just don't have things like &quot;hashlimits&quot; and &quot;ipsets&quot;.</p>
+<p>But not only firewall features. The Linux TCP stack has some extremely useful non-trivial support for things like <a href="http://www.ietf.org/rfc/rfc4821.txt">RFC4821</a> with the <code>sys.net.ipv4.tcp_mtu_probing</code> sysctl. Support for this is critical when a user is behind an ICMP black hole. Read more <a href="https://blog.cloudflare.com/path-mtu-discovery-in-practice/">in this blog posts about PMTU</a>.</p>
+<p>Finally, each TCP stack comes with its own set of bugs and quirks. We've documented three non-obvious quirks in the Linux TCP stack:</p>
+<ul>
+<li><a href="https://blog.cloudflare.com/the-story-of-one-latency-spike/">Garbage collector kicking in on a read buffer</a>;</li>
+<li>Problems with too many <a href="https://blog.cloudflare.com/revenge-listening-sockets/">listening sockets</a>;</li>
+<li><a href="https://blog.cloudflare.com/the-curious-case-of-slow-downloads/">What it means for a socket to be writeable</a>.</li>
+</ul>
+<p>Imagine debugging issues like that in a closed source or a young TCP stack (or both!).</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>There are two general themes: first, there is no stable open-source partial kernel bypass technology yet. We hope Netmap will occupy this niche, and <a href="https://blog.cloudflare.com/partial-kernel-bypass-merged-netmap/">we are actively supporting it with our patches</a>. Second, the Linux TCP stack has many critical features and very good debugging capabilities. It will take years to compete with this rich ecosystem.</p>
+<p>For these reasons it's unlikely userspace networking will become mainstream. In practice I can think only of a few reasonable applications of kernel bypass techniques:</p>
+<ul>
+<li>Software switches or routers. Here you want to hand over network cards to the application, deal with raw packets and skip the kernel altogether.</li>
+<li>Dedicated loadbalancers. Similarly, if the machine is only doing packet shuffling skipping the kernel makes sense.</li>
+<li>Partial bypass for selected high throughput / low latency applications. This is the setup we use for our DDoS mitigations. Unfortunately I'm not aware of a stable open source TCP stack that fits this category.</li>
+</ul>
+<p>For the general user the Linux network stack is the right choice. Although it's less exciting than rewriting TCP stacks, we should focus on <a href="https://blog.cloudflare.com/how-to-achieve-low-latency/">understanding the Linux stack performance</a> and fixing its problems. There are some <a href="http://lists.openwall.net/netdev/2016/01/15/51">serious initiatives underway</a> to improve the performance of the good old Linux TCP stack.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-02-18T13:13:02Z">February 18, 2019 1:13PM</p>
+        <a href="/sockmap-tcp-splicing-of-the-future/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SOCKMAP - TCP splicing of the future</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Proper TCP socket splicing reduces the load on userspace processes and enables more efficient data forwarding. We realized that Linux Kernel's SOCKMAP infrastructure can be reused for this purpose....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-11-07T10:15:00Z">November 07, 2017 10:15AM</p>
+        <a href="/perfect-locality-and-three-epic-systemtap-scripts/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Perfect locality and three epic SystemTap scripts</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a recent blog post we discussed epoll behavior causing uneven load among NGINX worker processes. We suggested a work around - the REUSEPORT socket option....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-08-02T15:01:15+01:00">August 02, 2016 3:01PM</p>
+        <a href="/introducing-the-p0f-bpf-compiler/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing the p0f BPF compiler</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Two years ago we blogged about our love of BPF (BSD packet filter) bytecode. Today we are very happy to open source another component of the bpftools: our p0f BPF compiler!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/gilberto-bertin/" class="fw5 f2 black no-underline">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tips/" class="no-underline f1 fw2 blue3 underline-hover">Tips</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-06-21T07:29:00+01:00">June 21, 2012 7:29AM</p>
+        <a href="/the-bandwidth-of-a-boeing-747-and-its-impact/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The bandwidth of a Boeing 747 and its impact on web browsing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Suppose you needed to transfer 1TB of data (perhaps your home movie collection) from San Francisco to London. What would be the fastest route? Put the disk on British Airways flight 286 at SFO, or transfer it across the Internet using a 100 Mbps connection?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/bandwidth/" class="no-underline f1 fw2 blue3 underline-hover">Bandwidth</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"version":"2021.2.0","rayId":"633cc7419ee97455","si":10}'></script>
+</body>
+
+</html>

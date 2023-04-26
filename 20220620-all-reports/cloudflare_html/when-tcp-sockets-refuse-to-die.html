@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>When TCP sockets refuse to die</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="When TCP sockets refuse to die" />
+    <meta property="og:description" content="We noticed something weird - the TCP sockets which we thought should have been closed - were lingering around. We realized we don&#x27;t really understand when TCP sockets are supposed to time out!
+
+We naively thought enabling TCP keepalives would be enough... but it isn&#x27;t!" />
+    <meta property="og:url" content="https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/09/637px-Tcp_state_diagram_fixed_new.svg-1.png" />
+    <meta property="article:published_time" content="2019-09-20T15:53:33.000Z" />
+    <meta property="article:modified_time" content="2019-09-20T16:58:12.000Z" />
+    <meta property="article:tag" content="SYN" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="Spectrum" />
+    <meta property="article:tag" content="Tech Talks" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="When TCP sockets refuse to die" />
+    <meta name="twitter:description" content="We noticed something weird - the TCP sockets which we thought should have been closed - were lingering around. We realized we don&#x27;t really understand when TCP sockets are supposed to time out!
+
+We naively thought enabling TCP keepalives would be enough... but it isn&#x27;t!" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/09/637px-Tcp_state_diagram_fixed_new.svg-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="SYN, TCP, Spectrum, Tech Talks" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "When TCP sockets refuse to die",
+    "url": "https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/",
+    "datePublished": "2019-09-20T15:53:33.000Z",
+    "dateModified": "2019-09-20T16:58:12.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/09/637px-Tcp_state_diagram_fixed_new.svg-1.png",
+    "keywords": "SYN, TCP, Spectrum, Tech Talks",
+    "description": "We noticed something weird - the TCP sockets which we thought should have been closed - were lingering around. We realized we don&#x27;t really understand when TCP sockets are supposed to time out!\n\nWe naively thought enabling TCP keepalives would be enough... but it isn&#x27;t!",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-syn tag-tcp tag-spectrum tag-tech-talks sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-syn tag-tcp tag-spectrum tag-tech-talks ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">When TCP sockets refuse to die</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-09-20T16:53:33+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">September 20, 2019 4:53PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>While working on our <a href="https://www.cloudflare.com/products/cloudflare-spectrum/">Spectrum server</a>, we noticed something weird: the TCP sockets which we thought should have been closed were lingering around. We realized we don't really understand when TCP sockets are supposed to time out!</p>
+<p><img src="https://blog.cloudflare.com/content/images/2019/09/Tcp_state_diagram_fixed_new.svga.png" alt="Tcp_state_diagram_fixed_new.svga"></p>
+<center><small><a href="https://commons.wikimedia.org/wiki/File:Tcp_state_diagram_fixed_new.svg">Image</a> by Sergiodc2 CC BY SA 3.0</small></center>
+<p>In our code, we wanted to make sure we don't hold connections to dead hosts. In our early code we naively thought enabling TCP keepalives would be enough... but it isn't. It turns out a fairly modern <a href="https://tools.ietf.org/html/rfc5482">TCP_USER_TIMEOUT</a> socket option is equally as important. Furthermore it interacts with TCP keepalives in subtle ways. <a href="http://codearcana.com/posts/2015/08/28/tcp-keepalive-is-a-lie.html">Many people</a> are confused by this.</p>
+<p>In this blog post, we'll try to show how these options work. We'll show how a TCP socket can timeout during various stages of its lifetime, and how TCP keepalives and user timeout influence that. To better illustrate the internals of TCP connections, we'll mix the outputs of the <code>tcpdump</code> and the <code>ss -o</code> commands. This nicely shows the transmitted packets and the changing parameters of the TCP connections.</p>
+<h2 id="synsent">SYN-SENT</h2>
+<p>Let's start from the simplest case - what happens when one attempts to establish a connection to a server which discards inbound SYN packets?</p>
+<p>The scripts used here <a href="https://github.com/cloudflare/cloudflare-blog/tree/master/2019-09-tcp-keepalives">are available on our Github</a>.</p>
+<pre style="font-size:70%">$ sudo ./test-syn-sent.py
+# all packets dropped
+00:00.000 IP host.2 > host.1: Flags [S] # initial SYN
+
+State    Recv-Q Send-Q Local:Port Peer:Port
+SYN-SENT 0      1      host:2     host:1    timer:(on,940ms,0)
+
+00:01.028 IP host.2 > host.1: Flags [S] # first retry
+00:03.044 IP host.2 > host.1: Flags [S] # second retry
+00:07.236 IP host.2 > host.1: Flags [S] # third retry
+00:15.427 IP host.2 > host.1: Flags [S] # fourth retry
+00:31.560 IP host.2 > host.1: Flags [S] # fifth retry
+01:04.324 IP host.2 > host.1: Flags [S] # sixth retry
+02:10.000 connect ETIMEDOUT
+</pre>
+<p>Ok, this was easy. After the <code>connect()</code> syscall, the operating system sends a SYN packet. Since it didn't get any response the OS will by default retry sending it 6 times. This can be tweaked by the sysctl:</p>
+<pre style="font-size:70%">$ sysctl net.ipv4.tcp_syn_retries
+net.ipv4.tcp_syn_retries = 6
+</pre>
+<p>It's possible to overwrite this setting per-socket with the TCP_SYNCNT setsockopt:</p>
+<pre style="font-size:70%">setsockopt(sd, IPPROTO_TCP, TCP_SYNCNT, 6);
+</pre>
+<p>The retries are staggered at 1s, 3s, 7s, 15s, 31s, 63s marks (the inter-retry time starts at 2s and then doubles each time). By default the whole process takes 130 seconds, until the kernel gives up with the ETIMEDOUT errno. At this moment in the lifetime of a connection, SO_KEEPALIVE settings are ignored, but TCP_USER_TIMEOUT is not. For example, setting it to 5000ms, will cause the following interaction:</p>
+<pre style="font-size:70%">$ sudo ./test-syn-sent.py 5000
+# all packets dropped
+00:00.000 IP host.2 > host.1: Flags [S] # initial SYN
+
+State    Recv-Q Send-Q Local:Port Peer:Port
+SYN-SENT 0      1      host:2     host:1    timer:(on,996ms,0)
+
+00:01.016 IP host.2 > host.1: Flags [S] # first retry
+00:03.032 IP host.2 > host.1: Flags [S] # second retry
+00:05.016 IP host.2 > host.1: Flags [S] # what is this?
+00:05.024 IP host.2 > host.1: Flags [S] # what is this?
+00:05.036 IP host.2 > host.1: Flags [S] # what is this?
+00:05.044 IP host.2 > host.1: Flags [S] # what is this?
+00:05.050 connect ETIMEDOUT
+</pre>
+<p>Even though we set user-timeout to 5s, we still saw the six SYN retries on the wire. This behaviour is probably a bug (as tested on 5.2 kernel): we would expect only two retries to be sent - at 1s and 3s marks and the socket to expire at 5s mark. Instead we saw this, but also we saw further 4 retransmitted SYN packets aligned to 5s mark - which makes no sense. Anyhow, we learned a thing - the TCP_USER_TIMEOUT does affect the behaviour of <code>connect()</code>.</p>
+<h2 id="synrecv">SYN-RECV</h2>
+<p>SYN-RECV sockets are usually hidden from the application. They live as mini-sockets on the SYN queue. We wrote about <a href="https://blog.cloudflare.com/syn-packet-handling-in-the-wild/">the SYN and Accept queues in the past</a>. Sometimes, when SYN cookies are enabled, the sockets may skip the SYN-RECV state altogether.</p>
+<p>In SYN-RECV state, the socket will retry sending SYN+ACK 5 times as controlled by:</p>
+<pre style="font-size:70%">$ sysctl net.ipv4.tcp_synack_retries
+net.ipv4.tcp_synack_retries = 5
+</pre>
+<p>Here is how it looks on the wire:</p>
+<pre style="font-size:70%">$ sudo ./test-syn-recv.py
+00:00.000 IP host.2 > host.1: Flags [S]
+# all subsequent packets dropped
+00:00.000 IP host.1 > host.2: Flags [S.] # initial SYN+ACK
+
+State    Recv-Q Send-Q Local:Port Peer:Port
+SYN-RECV 0      0      host:1     host:2    timer:(on,996ms,0)
+
+00:01.033 IP host.1 > host.2: Flags [S.] # first retry
+00:03.045 IP host.1 > host.2: Flags [S.] # second retry
+00:07.301 IP host.1 > host.2: Flags [S.] # third retry
+00:15.493 IP host.1 > host.2: Flags [S.] # fourth retry
+00:31.621 IP host.1 > host.2: Flags [S.] # fifth retry
+01:04:610 SYN-RECV disappears
+</pre>
+<p>With default settings, the SYN+ACK is re-transmitted at 1s, 3s, 7s, 15s, 31s marks, and the SYN-RECV socket disappears at the 64s mark.</p>
+<p>Neither SO_KEEPALIVE nor TCP_USER_TIMEOUT affect the lifetime of SYN-RECV sockets.</p>
+<h2 id="finalhandshakeack">Final handshake ACK</h2>
+<p>After receiving the second packet in the TCP handshake - the SYN+ACK - the client socket moves to an ESTABLISHED state. The server socket remains in SYN-RECV until it receives the final ACK packet.</p>
+<p>Losing this ACK doesn't change anything - the server socket will just take a bit longer to move from SYN-RECV to ESTAB. Here is how it looks:</p>
+<pre style="font-size:70%">00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.]
+00:00.000 IP host.2 > host.1: Flags [.] # initial ACK, dropped
+
+State    Recv-Q Send-Q Local:Port  Peer:Port
+SYN-RECV 0      0      host:1      host:2 timer:(on,1sec,0)
+ESTAB    0      0      host:2      host:1
+
+00:01.014 IP host.1 > host.2: Flags [S.]
+00:01.014 IP host.2 > host.1: Flags [.]  # retried ACK, dropped
+
+State    Recv-Q Send-Q Local:Port Peer:Port
+SYN-RECV 0      0      host:1     host:2    timer:(on,1.012ms,1)
+ESTAB    0      0      host:2     host:1
+</pre>
+<p>As you can see SYN-RECV, has the &quot;on&quot; timer, the same as in example before. We might argue this final ACK doesn't really carry much weight. This thinking lead to the development of TCP_DEFER_ACCEPT feature - it basically causes the third ACK to be silently dropped. With this flag set the socket remains in SYN-RECV state until it receives the first packet with actual data:</p>
+<pre style="font-size:70%">$ sudo ./test-syn-ack.py
+00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.]
+00:00.000 IP host.2 > host.1: Flags [.] # delivered, but the socket stays as SYN-RECV
+
+State    Recv-Q Send-Q Local:Port Peer:Port
+SYN-RECV 0      0      host:1     host:2    timer:(on,7.192ms,0)
+ESTAB    0      0      host:2     host:1
+
+00:08.020 IP host.2 > host.1: Flags [P.], length 11  # payload moves the socket to ESTAB
+
+State Recv-Q Send-Q Local:Port Peer:Port
+ESTAB 11     0      host:1     host:2
+ESTAB 0      0      host:2     host:1
+</pre>
+<p>The server socket remained in the SYN-RECV state even after receiving the final TCP-handshake ACK. It has a funny &quot;on&quot; timer, with the counter stuck at 0 retries. It is converted to ESTAB - and moved from the SYN to the accept queue - after the client sends a data packet or after the TCP_DEFER_ACCEPT timer expires. Basically, with DEFER ACCEPT the SYN-RECV mini-socket <a href="https://marc.info/?l=linux-netdev&amp;m=118793048828251&amp;w=2">discards the data-less inbound ACK</a>.</p>
+<h2 id="idleestabisforever">Idle ESTAB is forever</h2>
+<p>Let's move on and discuss a fully-established socket connected to an unhealthy (dead) peer. After completion of the handshake, the sockets on both sides move to the ESTABLISHED state, like:</p>
+<pre style="font-size:70%">State Recv-Q Send-Q Local:Port Peer:Port
+ESTAB 0      0      host:2     host:1
+ESTAB 0      0      host:1     host:2
+</pre>
+<p>These sockets have no running timer by default - they will remain in that state forever, even if the communication is broken. The TCP stack will notice problems only when one side attempts to send something. This raises a question - what to do if you don't plan on sending any data over a connection? How do you make sure an idle connection is healthy, without sending any data over it?</p>
+<p>This is where TCP keepalives come in. Let's see it in action - in this example we used the following toggles:</p>
+<ul>
+<li>SO_KEEPALIVE = 1 - Let's enable keepalives.</li>
+<li>TCP_KEEPIDLE = 5 - Send first keepalive probe after 5 seconds of idleness.</li>
+<li>TCP_KEEPINTVL = 3 - Send subsequent keepalive probes after 3 seconds.</li>
+<li>TCP_KEEPCNT = 3 - Time out after three failed probes.</li>
+</ul>
+<pre style="font-size:70%">$ sudo ./test-idle.py
+00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.]
+00:00.000 IP host.2 > host.1: Flags [.]
+
+State Recv-Q Send-Q Local:Port Peer:Port
+ESTAB 0      0      host:1     host:2
+ESTAB 0      0      host:2     host:1  timer:(keepalive,2.992ms,0)
+
+# all subsequent packets dropped
+00:05.083 IP host.2 > host.1: Flags [.], ack 1 # first keepalive probe
+00:08.155 IP host.2 > host.1: Flags [.], ack 1 # second keepalive probe
+00:11.231 IP host.2 > host.1: Flags [.], ack 1 # third keepalive probe
+00:14.299 IP host.2 > host.1: Flags [R.], seq 1, ack 1
+</pre>
+<p>Indeed! We can clearly see the first probe sent at the 5s mark, two remaining probes 3s apart - exactly as we specified. After a total of three sent probes, and a further three seconds of delay, the connection dies with ETIMEDOUT, and final the RST is transmitted.</p>
+<p>For keepalives to work, the send buffer must be empty. You can notice the keepalive timer active in the &quot;timer:(keepalive)&quot; line.</p>
+<h2 id="keepaliveswithtcp_user_timeoutareconfusing">Keepalives with TCP_USER_TIMEOUT are confusing</h2>
+<p>We mentioned the TCP_USER_TIMEOUT option before. It sets the maximum amount of time that transmitted data may remain unacknowledged before the kernel forcefully closes the connection. On its own, it doesn't do much in the case of idle connections. The sockets will remain ESTABLISHED even if the connectivity is dropped. However, this socket option does change the semantics of TCP keepalives. <a href="https://linux.die.net/man/7/tcp">The tcp(7) manpage</a> is somewhat confusing:</p>
+<p><i>Moreover, when used with the TCP keepalive (SO_KEEPALIVE)  option, TCP_USER_TIMEOUT will override keepalive to determine when to close a connection due to keepalive failure.</i></p>
+<p>The original commit message has slightly more detail:</p>
+<ul>
+<li><a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=dca43c75e7e545694a9dd6288553f55c53e2a3a3">tcp: Add TCP_USER_TIMEOUT socket option</a></li>
+</ul>
+<p>To understand the semantics, we need to look at the <a href="https://github.com/torvalds/linux/blob/b41dae061bbd722b9d7fa828f35d22035b218e18/net/ipv4/tcp_timer.c#L693-L697">kernel code in linux/net/ipv4/tcp_timer.c:693</a>:</p>
+<pre style="font-size:70%">if ((icsk->icsk_user_timeout != 0 &&
+    elapsed >= msecs_to_jiffies(icsk->icsk_user_timeout) &&
+    icsk->icsk_probes_out > 0) ||
+</pre>
+<p>For the user timeout to have any effect, the <code>icsk_probes_out</code> must not be zero. The check for user timeout is done only <em>after</em> the first probe went out. Let's check it out. Our connection settings:</p>
+<ul>
+<li>TCP_USER_TIMEOUT =  5*1000 - 5 seconds</li>
+<li>SO_KEEPALIVE = 1 - enable keepalives</li>
+<li>TCP_KEEPIDLE = 1 - send first probe quickly - 1 second idle</li>
+<li>TCP_KEEPINTVL = 11 - subsequent probes every 11 seconds</li>
+<li>TCP_KEEPCNT = 3 - send three probes before timing out</li>
+</ul>
+<pre style="font-size:70%">00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.]
+00:00.000 IP host.2 > host.1: Flags [.]
+
+# all subsequent packets dropped
+00:01.001 IP host.2 > host.1: Flags [.], ack 1 # first probe
+00:12.233 IP host.2 > host.1: Flags [R.] # timer for second probe fired, socket aborted due to TCP_USER_TIMEOUT
+</pre>
+<p>So what happened? The connection sent the first keepalive probe at the 1s mark. Seeing no response the TCP stack then woke up 11 seconds later to send a second probe. This time though, it executed the USER_TIMEOUT code path, which decided to terminate the connection immediately.</p>
+<p>What if we bump TCP_USER_TIMEOUT to larger values, say between the second and third probe? Then, the connection will be closed on the third probe timer. With TCP_USER_TIMEOUT set to 12.5s:</p>
+<pre style="font-size:70%">00:01.022 IP host.2 > host.1: Flags [.] # first probe
+00:12.094 IP host.2 > host.1: Flags [.] # second probe
+00:23.102 IP host.2 > host.1: Flags [R.] # timer for third probe fired, socket aborted due to TCP_USER_TIMEOUT
+</pre>
+<p>We’ve shown how TCP_USER_TIMEOUT interacts with keepalives for small and medium values. The last case is when TCP_USER_TIMEOUT is extraordinarily large. Say we set it to 30s:</p>
+<pre style="font-size:70%">00:01.027 IP host.2 > host.1: Flags [.], ack 1 # first probe
+00:12.195 IP host.2 > host.1: Flags [.], ack 1 # second probe
+00:23.207 IP host.2 > host.1: Flags [.], ack 1 # third probe
+00:34.211 IP host.2 > host.1: Flags [.], ack 1 # fourth probe! But TCP_KEEPCNT was only 3!
+00:45.219 IP host.2 > host.1: Flags [.], ack 1 # fifth probe!
+00:56.227 IP host.2 > host.1: Flags [.], ack 1 # sixth probe!
+01:07.235 IP host.2 > host.1: Flags [R.], seq 1 # TCP_USER_TIMEOUT aborts conn on 7th probe timer
+</pre>
+<p>We saw six keepalive probes on the wire! With TCP_USER_TIMEOUT set, the TCP_KEEPCNT is totally ignored. If you want TCP_KEEPCNT to make sense, the only sensible USER_TIMEOUT value is slightly smaller than:</p>
+<pre><code>TCP_KEEPIDLE + TCP_KEEPINTVL * TCP_KEEPCNT
+</code></pre>
+<h2 id="busyestabsocketisnotforever">Busy ESTAB socket is not forever</h2>
+<p>Thus far we have discussed the case where the connection is idle. Different rules apply when the connection has unacknowledged data in a send buffer.</p>
+<p>Let's prepare another experiment - after the three-way handshake, let's set up a firewall to drop all packets. Then, let's do a <code>send</code> on one end to have some dropped packets in-flight. An experiment shows the sending socket dies after ~16 minutes:</p>
+<pre style="font-size:70%">00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.]
+00:00.000 IP host.2 > host.1: Flags [.]
+
+# All subsequent packets dropped
+00:00.206 IP host.2 > host.1: Flags [P.], length 11 # first data packet
+00:00.412 IP host.2 > host.1: Flags [P.], length 11 # early retransmit, doesn't count
+00:00.620 IP host.2 > host.1: Flags [P.], length 11 # 1st retry
+00:01.048 IP host.2 > host.1: Flags [P.], length 11 # 2nd retry
+00:01.880 IP host.2 > host.1: Flags [P.], length 11 # 3rd retry
+
+State Recv-Q Send-Q Local:Port Peer:Port
+ESTAB 0      0      host:1     host:2
+ESTAB 0      11     host:2     host:1    timer:(on,1.304ms,3)
+
+00:03.543 IP host.2 > host.1: Flags [P.], length 11 # 4th
+00:07.000 IP host.2 > host.1: Flags [P.], length 11 # 5th
+00:13.656 IP host.2 > host.1: Flags [P.], length 11 # 6th
+00:26.968 IP host.2 > host.1: Flags [P.], length 11 # 7th
+00:54.616 IP host.2 > host.1: Flags [P.], length 11 # 8th
+01:47.868 IP host.2 > host.1: Flags [P.], length 11 # 9th
+03:34.360 IP host.2 > host.1: Flags [P.], length 11 # 10th
+05:35.192 IP host.2 > host.1: Flags [P.], length 11 # 11th
+07:36.024 IP host.2 > host.1: Flags [P.], length 11 # 12th
+09:36.855 IP host.2 > host.1: Flags [P.], length 11 # 13th
+11:37.692 IP host.2 > host.1: Flags [P.], length 11 # 14th
+13:38.524 IP host.2 > host.1: Flags [P.], length 11 # 15th
+15:39.500 connection ETIMEDOUT
+</pre>
+<p>The data packet is retransmitted 15 times, as controlled by:</p>
+<pre style="font-size:70%">$ sysctl net.ipv4.tcp_retries2
+net.ipv4.tcp_retries2 = 15
+</pre>
+<p>From the <a href="https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt"><code>ip-sysctl.txt</code></a> documentation:</p>
+<i>
+The default value of 15 yields a hypothetical timeout of 924.6 seconds and is a lower bound for the effective timeout. TCP will effectively time out at the first RTO which exceeds the hypothetical timeout.
+</i>
+<p>The connection indeed died at ~940 seconds. Notice the socket has the &quot;on&quot; timer running. It doesn't matter at all if we set SO_KEEPALIVE - when the &quot;on&quot; timer is running, keepalives are not engaged.</p>
+<p>TCP_USER_TIMEOUT keeps on working though. The connection will be aborted <em>exactly</em> after user-timeout specified time since the last received packet. With the user timeout set the <code>tcp_retries2</code> value is ignored.</p>
+<h2 id="zerowindowestabisforever">Zero window ESTAB is... forever?</h2>
+<p>There is one final case worth mentioning. If the sender has plenty of data, and the receiver is slow, then TCP flow control kicks in. At some point the receiver will ask the sender to stop transmitting new data. This is a slightly different condition than the one described above.</p>
+<p>In this case, with flow control engaged, there is no in-flight or unacknowledged data. Instead the receiver throttles the sender with a &quot;zero window&quot; notification. Then the sender periodically checks if the condition is still valid with &quot;window probes&quot;. In this experiment we reduced the receive buffer size for simplicity. Here's how it looks on the wire:</p>
+<pre style="font-size:70%">00:00.000 IP host.2 > host.1: Flags [S]
+00:00.000 IP host.1 > host.2: Flags [S.], win 1152
+00:00.000 IP host.2 > host.1: Flags [.]
+
+00:00.202 IP host.2 > host.1: Flags [.], length 576 # first data packet
+00:00.202 IP host.1 > host.2: Flags [.], ack 577, win 576
+00:00.202 IP host.2 > host.1: Flags [P.], length 576 # second data packet
+00:00.244 IP host.1 > host.2: Flags [.], ack 1153, win 0 # throttle it! zero-window
+
+00:00.456 IP host.2 > host.1: Flags [.], ack 1 # zero-window probe
+00:00.456 IP host.1 > host.2: Flags [.], ack 1153, win 0 # nope, still zero-window
+
+State Recv-Q Send-Q Local:Port Peer:Port
+ESTAB 1152   0      host:1     host:2
+ESTAB 0      129920 host:2     host:1  timer:(persist,048ms,0)
+</pre>
+<p>The packet capture shows a couple of things. First, we can see two packets with data, each 576 bytes long. They both were immediately acknowledged. The second ACK had &quot;win 0&quot; notification: the sender was told to stop sending data.</p>
+<p>But the sender is eager to send more! The last two packets show a first &quot;window probe&quot;: the sender will periodically send payload-less &quot;ack&quot; packets to check if the window size had changed. As long as the receiver keeps on answering, the sender will keep on sending such probes forever.</p>
+<p>The socket information shows three important things:</p>
+<ul>
+<li>The read buffer of the reader is filled - thus the &quot;zero window&quot; throttling is expected.</li>
+<li>The write buffer of the sender is filled - we have more data to send.</li>
+<li>The sender has a &quot;persist&quot; timer running, counting the time until the next &quot;window probe&quot;.</li>
+</ul>
+<p>In this blog post we are interested in timeouts - what will happen if the window probes are lost? Will the sender notice?</p>
+<p>By default the window probe is retried 15 times - adhering to the usual <code>tcp_retries2</code> setting.</p>
+<p>The tcp timer is in <code>persist</code> state, so the TCP keepalives will <em>not</em> be running. The SO_KEEPALIVE settings don't make any difference when window probing is engaged.</p>
+<p>As expected, the TCP_USER_TIMEOUT toggle keeps on working. A slight difference is that similarly to user-timeout on keepalives, it's engaged only when the retransmission timer fires. During such an event, if more than user-timeout seconds since the last good packet passed, the connection will be aborted.</p>
+<h2 id="noteaboutusingapplicationtimeouts">Note about using application timeouts</h2>
+<p>In the past we have shared an interesting war story:</p>
+<ul>
+<li><a href="https://blog.cloudflare.com/the-curious-case-of-slow-downloads/">The curious case of slow downloads</a></li>
+</ul>
+<p>Our HTTP server gave up on the connection after an application-managed timeout fired. This was a bug - a slow connection might have correctly slowly drained the send buffer, but the application server didn't notice that.</p>
+<p>We abruptly dropped slow downloads, even though this wasn't our intention. We just wanted to make sure the client connection was still healthy. It would be better to use TCP_USER_TIMEOUT than rely on application-managed timeouts.</p>
+<p>But this is not sufficient. We also wanted to guard against a situation where a client stream is valid, but is stuck and doesn't drain the connection. The only way to achieve this is to periodically check the amount of unsent data in the send buffer, and see if it shrinks at a desired pace.</p>
+<p>For typical applications sending data to the Internet, I would recommend:</p>
+<ol>
+<li>
+<p>Enable TCP keepalives. This is needed to keep some data flowing in the idle-connection case.</p>
+</li>
+<li>
+<p>Set TCP_USER_TIMEOUT to <code>TCP_KEEPIDLE + TCP_KEEPINTVL * TCP_KEEPCNT</code>.</p>
+</li>
+<li>
+<p>Be careful when using application-managed timeouts. To detect TCP failures use TCP keepalives and user-timeout. If you want to spare resources and make sure sockets don't stay alive for too long, consider periodically checking if the socket is draining at the desired pace. You can use <code>ioctl(TIOCOUTQ)</code> for that, but it counts both data buffered (notsent) on the socket and in-flight (unacknowledged) bytes. A better way is to use TCP_INFO tcpi_notsent_bytes parameter, which reports only the former counter.</p>
+</li>
+</ol>
+<p>An example of checking the draining pace:</p>
+<pre style="font-size:70%">while True:
+    notsent1 = get_tcp_info(c).tcpi_notsent_bytes
+    notsent1_ts = time.time()
+    ...
+    poll.poll(POLL_PERIOD)
+    ...
+    notsent2 = get_tcp_info(c).tcpi_notsent_bytes
+    notsent2_ts = time.time()
+    pace_in_bytes_per_second = (notsent1 - notsent2) / (notsent2_ts - notsent1_ts)
+    if pace_in_bytes_per_second > 12000:
+        # pace is above effective rate of 96Kbps, ok!
+    else:
+        # socket is too slow...
+</pre>
+<p>There are ways to further improve this logic. We could use <a href="https://lwn.net/Articles/560082/"><code>TCP_NOTSENT_LOWAT</code></a>, although it's generally only useful for situations where the send buffer is relatively empty. Then we could use the <a href="https://www.kernel.org/doc/Documentation/networking/timestamping.txt"><code>SO_TIMESTAMPING</code></a> interface for notifications about when data gets delivered. Finally, if we are done sending the data to the socket, it's possible to just call <code>close()</code> and defer handling of the socket to the operating system. Such a socket will be stuck in FIN-WAIT-1 or LAST-ACK state until it correctly drains.</p>
+<h2 id="summary">Summary</h2>
+<p>In this post we discussed five cases where the TCP connection may notice the other party going away:</p>
+<ul>
+<li>SYN-SENT: The duration of this state can be controlled by <code>TCP_SYNCNT</code> or <code>tcp_syn_retries</code>.</li>
+<li>SYN-RECV: It's usually hidden from application. It is tuned by <code>tcp_synack_retries</code>.</li>
+<li>Idling ESTABLISHED connection, will never notice any issues. A solution is to use TCP keepalives.</li>
+<li>Busy ESTABLISHED connection, adheres to <code>tcp_retries2</code> setting, and ignores TCP keepalives.</li>
+<li>Zero-window ESTABLISHED connection, adheres to <code>tcp_retries2</code> setting, and ignores TCP keepalives.</li>
+</ul>
+<p>Especially the last two ESTABLISHED cases can be customized with TCP_USER_TIMEOUT, but this setting also affects other situations. Generally speaking, it can be thought of as a hint to the kernel to abort the connection after so-many seconds since the last good packet. This is a dangerous setting though, and if used in conjunction with TCP keepalives should be set to a value slightly lower than <code>TCP_KEEPIDLE + TCP_KEEPINTVL * TCP_KEEPCNT</code>. Otherwise it will affect, and potentially cancel out, the TCP_KEEPCNT value.</p>
+<p>In this post we presented scripts showing the effects of timeout-related socket options under various network conditions. Interleaving the <code>tcpdump</code> packet capture with the output of <code>ss -o</code> is a great way of understanding the networking stack. We were able to create reproducible test cases showing the &quot;on&quot;, &quot;keepalive&quot; and &quot;persist&quot; timers in action. This is a very useful framework for further experimentation.</p>
+<p>Finally, it's surprisingly hard to tune a TCP connection to be confident that the remote host is actually up. During our debugging we found that looking at the send buffer size and currently active TCP timer can be very helpful in understanding whether the socket is actually healthy. The bug in our Spectrum application turned out to be a wrong TCP_USER_TIMEOUT setting - without it sockets with large send buffers were lingering around for way longer than we intended.</p>
+<p>The scripts used in this article <a href="https://github.com/cloudflare/cloudflare-blog/tree/master/2019-09-tcp-keepalives">can be found on our Github</a>.</p>
+<p>Figuring this out has been a collaboration across three Cloudflare offices. Thanks to <a href="https://twitter.com/Hirenpanchasara">Hiren Panchasara</a> from San Jose, <a href="https://twitter.com/warrncn">Warren Nelson</a> from Austin and <a href="https://twitter.com/jkbs0">Jakub Sitnicki</a> from Warsaw. Fancy joining the team? <a href="https://www.cloudflare.com/careers/departments/?utm_referrer=blog">Apply here!</a></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/syn/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">SYN</a>
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+        <a href="/tag/spectrum/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Spectrum</a>
+        <a href="/tag/tech-talks/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Tech Talks</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-01-15T13:49:09Z">January 15, 2018 1:49PM</p>
+        <a href="/syn-packet-handling-in-the-wild/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SYN packet handling in the wild</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Here at Cloudflare, we have a lot of experience of operating servers on the wild Internet. But we are always improving our mastery of this black art. On this very blog we have touched on multiple dark corners of the Internet protocols: like understanding FIN-WAIT-2 or receive buffer tuning....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/syn/" class="no-underline f1 fw2 blue3 underline-hover">SYN</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

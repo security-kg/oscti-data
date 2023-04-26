@@ -1,0 +1,1432 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+
+<script>
+    var companyDetails6Sense = localStorage.getItem('_6senseCompanyDetails');
+
+    if(null != companyDetails6Sense || companyDetails6Sense != "" || companyDetails6Sense != undefined){
+		var jsonVal = JSON.parse(companyDetails6Sense);
+
+        var companyRevenueRange = jsonVal.company.revenue_range;
+        var companyCountry = jsonVal.company.country;
+        var companyIndustry = jsonVal.company.industry;
+        var companyName = jsonVal.company.name;
+        var companyRegion = jsonVal.company.region;
+        var companyDomain = jsonVal.company.domain;
+    	var segments = JSON.stringify(jsonVal.segments);
+    	
+        window.dataLayer=window.dataLayer ||[];
+        window.dataLayer.push({
+                "company_industry" : companyIndustry,
+                "company_name" : companyName,
+                "company_revenue" : companyRevenueRange,
+                "company_country" : companyCountry,
+                "company_region" : companyRegion,
+            	"company_domain" : companyDomain,
+            	"segments" : segments
+        });
+    }
+
+</script>
+
+<style>.async-hide { opacity: 0 !important} </style>
+<script>(function(a,s,y,n,c,h,i,d,e){s.className+=' '+y;h.start=1*new Date;
+h.end=i=function(){s.className=s.className.replace(RegExp(' ?'+y),'')};
+(a[n]=a[n]||[]).hide=h;setTimeout(function(){i();h.end=null},c);h.timeout=c;
+})(window,document.documentElement,'async-hide','dataLayer',4000,
+{"GTM-5ZX7QTZ":true});</script>
+
+<title>BIOS Boots What? Finding Evil in Boot Code at Scale! | FireEye Inc</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="alternate" type="application/atom+xml" title="Atom Feed for &#39;BIOS Boots What? Finding Evil in Boot Code at Scale!&#39;" href="/content/fireeye-www/en_US/blog/threat-research/2018/08/bios-boots-what-finding-evil-in-boot-code-at-scale/_jcr_content.feed">
+<link rel="canonical" href="https://www.fireeye.com/blog/threat-research/2018/08/bios-boots-what-finding-evil-in-boot-code-at-scale.html">
+<meta name="language" content="en">
+<meta name="locale" content="en_US">
+<meta http-equiv="cleartype" content="on">
+<meta name="HandheldFriendly" content="True">
+<meta name="MobileOptimized" content="320">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="This post details the challenges FireEye faced examining boot records at scale and our solution to find evil boot records in large enterprise networks.
+">
+
+<meta itemprop="name" content="BIOS Boots What? Finding Evil in Boot Code at Scale!">
+<meta itemprop="description" content="This post details the challenges FireEye faced examining boot records at scale and our solution to find evil boot records in large enterprise networks.
+">
+<meta itemprop="image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta name="twitter:site" content="@FireEye">
+<meta name="twitter:title" content="BIOS Boots What? Finding Evil in Boot Code at Scale!">
+<meta name="twitter:description" content="This post details the challenges FireEye faced examining boot records at scale and our solution to find evil boot records in large enterprise networks.
+">
+<meta name="twitter:creator" content="@FireEye">
+<meta name="twitter:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+
+<meta property="og:title" content="BIOS Boots What? Finding Evil in Boot Code at Scale!">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.fireeye.com/blog/threat-research/2018/08/bios-boots-what-finding-evil-in-boot-code-at-scale.html">
+<meta property="og:image" content="https://www.fireeye.com/content/dam/fireeye-www/fw/images/fireeye-2-color-square.png">
+<meta property="og:description" content="This post details the challenges FireEye faced examining boot records at scale and our solution to find evil boot records in large enterprise networks.
+">
+<meta property="og:site_name" content="FireEye">
+<meta property="fb:admins" content="45127269202">
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery.min.js"></script>
+
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MVGC8KK');</script>
+
+
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite/csrf.min.js"></script>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_nav.min.js"></script>
+<script type="text/javascript">
+var cookiesOK = $.cookie("ec-privacy");
+var fdc =fdc || {};
+var onAccept = function () {
+	$.cookie("ec-privacy", "accept", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var onDecline = function () {
+	$.cookie("ec-privacy", "decline", { path: "/", expires: 365 });
+	jQuery("#cookie-privacy-banner").hide();
+};
+
+var ipLocation = (function () {
+	var banner ="#cookie-privacy-banner";
+
+	/* Show the privacy notification banner. */
+	var showBanner = function (banner) {
+		jQuery(banner).show();
+	};
+
+	/* Suppress the privacy notification banner. */
+	var hideBanner = function (banner) {
+		jQuery(banner).hide();
+	};
+
+	/* These are the country codes for the countries subject to EC privacy laws.
+	 * We will check to see if a visitor is coming from one of these countries.
+	 * If they are, we display a privacy notification banner. If not, we
+	 * do nothing. */
+	var countries = {
+		"AT": true,"BE": true,"BG": true,"HR": true,"CY": true,"CZ": true,"DK": true,
+		"EE": true,"FI": true,"FR": true,"DE": true,"GR": true,"HU": true,"IE": true,
+		"IT": true,"LV": true,"LT": true,"LU": true,"MT": true,"NL": true,"PL": true,
+		"PT": true,"RO": true,"SK": true,"SI": true,"ES": true,"SE": true,"GB": true
+	};
+	var defaultSite = "US";
+
+	var onSuccess = function (geoipResponse) {
+		fdc.geoipresponse=geoipResponse;
+		/* There's no guarantee that a successful response object
+		 * has any particular property, so we need to code defensively. */
+		if (!geoipResponse.country.iso_code) {
+			hideBanner(banner);
+			return;
+		}
+		//
+		if (location.host.indexOf("stage") >= 0 && geoipResponse.country.iso_code === "SG") {
+            geoipResponse.country.iso_code = "ES"
+        }
+		/* ISO country codes are in upper case. */
+		var code = geoipResponse.country.iso_code;
+			
+		
+		if ((countries[code]) && (cookiesOK == undefined)) {
+			showBanner(banner);
+		}
+		else {
+			hideBanner(banner);
+		}
+	};
+
+	/* We don't really care what the error is. */
+	var onError = function (error) {
+		hideBanner(banner);
+	};
+
+	return function () {
+		geoip2.country( onSuccess, onError );
+	};
+}());
+ipLocation();
+</script>
+<div class="htmlpassthru_836d htmlpassthru">
+
+<script type="text/javascript">
+    if (!String.prototype.includes) {
+        String.prototype.includes = function() {
+            return String.prototype.indexOf.apply(this, arguments) !== -1;
+        };
+    }
+var userAgent = navigator.userAgent,
+gomezAgent = userAgent.includes("GomezAgent"),
+prtgAgent = userAgent.includes("PRTG Network Monitor");
+
+if (gomezAgent || prtgAgent) {
+    cookiesOK = "decline";
+}
+
+if (cookiesOK != "decline") {
+    // Google Analytics was here. Now it's in Tealium and GTM.
+}
+// Temporary patch for AA issue.
+if(typeof _satellite == "undefined") {
+    _satellite = {};
+    _satellite.track = function(){};
+}
+</script>
+<style>
+@media ( max-width : 959px) {
+    .g04 .megamenu .n03-sub_table .n03-sub_cell, .g04 .megamenu .separator {
+        display: block;
+    }
+    .g04 .megamenu .n03_list-item-sub>.megamenu-cta {
+        padding: 0;
+    }
+    .g04 .megamenu .n03-sub_cell.n03-sub_cell-utility {
+        padding: 11px 0 11px 10px;
+    }
+}
+
+@media ( min-width : 48em) {
+    .cta-bar .n01 .n01_cell {
+        width: auto;
+    }
+}
+
+/* styles for the CTA bar test */
+.n01.n01v1 .n01_cell {
+    background-color: #222;
+    border: 1px solid #444;
+}
+
+.n01.n01v1 .n01_cell .ficon, .n01.n01v1 .n01_cell .n01_label, .n01.n01v1 .n01_text
+    {
+    color: #fff;
+}
+
+@media ( min-width : 48em) {
+    .n01.n01v1 .n01_cell {
+        background-color: transparent;
+        border: none;
+    }
+    .n01.n01v1 .n01_link {
+        background-color: #222;
+        border: 1px solid #444;
+        border-right: 0;
+    }
+}
+/* fix for new footer */
+.g03v1 .g03-s-i:after {
+    left: -3px;
+}
+/* fix for tables */
+span.nowrap {
+    white-space: nowrap;
+}
+/* fix for blog cta */
+.blog-cta {
+    border: 1px solid #dadadb;
+    background-color: #ebebed;
+    margin-bottom: 10px;
+    line-height: 0;
+}
+</style>
+<link rel="stylesheet" type="text/css" href="https://cloud.typography.com/6746836/6977592/css/fonts.css" />
+<link rel="stylesheet" type="text/css" href="/content/dam/fireeye-www/fw/css/patch.css?v=1" />
+<script type="text/javascript">
+var addthis_config = addthis_config||{};
+    addthis_config.data_track_clickback = false;
+var addthis_share = {
+   url: window.location.href
+};
+</script>
+<style>
+/* fix for IE */
+.uc-he01v1 .uc-he01_container .background {
+    max-height: 470px;
+    position: absolute;
+}
+.uc-he01v2 .uc-he01_container .background {
+    position: absolute;
+}
+@media (max-width: 48em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 320px;
+    }
+}
+@media (min-width: 54em) {
+    .uc-he01v1 .uc-he01_container .background {
+        max-height: 600px;
+    }
+}
+</style>
+<style>
+/* Update the images used in the Table component. */
+.c09v1 .tablesorter-default .header, .c09v1 .tablesorter-default .tablesorter-header {
+background-position-x: calc(100% - 4px);
+background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjc2NDE0RUUyNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjc2NDE0RUUzNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkY2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI1MDA2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz567IGQAAAApklEQVR42mL8//8/A0kApAELlgJiG2xyTDjMcQFiayDmRJfApkEbiJWgiq2J0eCCxLYBYkF8GjAUAIEvLg2C2JwAdZ42Ng022DyJ7kwmJFOM8YS+INRABkZSI45sDSAnxRFQuweIj8D8cA+Iz+JR/B6kGD2UQALf8ZiOEawgU45iUQyy/SqumD4C1YgMNhNKS3vwGYBNw1WoM75jdSKpGYjkiAMIMAAPu279CuYueAAAAABJRU5ErkJggg==)
+}
+.c09v1 .tablesorter-default thead .headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerSortUp,.c09v1 .tablesorter-default thead .tablesorter-headerAsc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEY5Njc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZBNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0Rjc2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0Rjg2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5TuQesAAAAp0lEQVR42mL8//8/A0kApAELNgbicmxyuDTsBuJ3QCxIjIbQ/wjQQYyGu/9RgRI+DeX/McFuXBqUoO7GBkKxaZj5Hze4i67B5T9hAA5mRlIjjmwNSkAcR0DtHiA+wgTl3APis3gUvwcpBjGYkARBAt/xmM6ArgFkylEsikG2X8WmAWbLezSxzcgcJnzWYzMAm4arUGd8x+pEHPlBCohtsMmRHHEAAQYAbP+KkOIl8zUAAAAASUVORK5CYII=)}
+.c09v1 .tablesorter-default thead .headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerSortDown,.c09v1 .tablesorter-default thead .tablesorter-headerDesc{background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAUCAYAAAC58NwRAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTQwIDc5LjE2MDQ1MSwgMjAxNy8wNS8wNi0wMTowODoyMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTggTWFjaW50b3NoIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU4OTMyNEZENjc2QjExRThBNEFDQTFFRUMyNzIyRjM4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU4OTMyNEZFNjc2QjExRThBNEFDQTFFRUMyNzIyRjM4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTg5MzI0RkI2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTg5MzI0RkM2NzZCMTFFOEE0QUNBMUVFQzI3MjJGMzgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6nOhWUAAAAqElEQVR42mL8//8/AymACYe4FBDbkKLBBYitgZiTGA3aQKwEVWxNjAYXJDbIWYL4NGAoAAJfXBoEsTkB6jxtbBpssHkS3ZlMSKYY4wl+QVgwM1Ir4ghqALnxPwFcDlYJchIUz/yPG9yFqUPWoATE73BoCMWmAYTLsSjejawGXQMD1HpkoERIQyiS4g50eWwaGKDOAPlHEF2OBUdwV0CD+j26BMkxDRBgALvSCpUQlZEGAAAAAElFTkSuQmCC)}
+.c09v1 .tablesorter-default thead .sorter-false {
+    background-image: none;
+}
+@media (max-width: 41.9125em){
+    .c09.c09v1.has-data-label tr>:not(:first-child):before {
+        width: auto; min-width: 35%;
+    }
+}
+</style>
+<script>
+$(document).ready(function(){
+    if(typeof(ipLocation) !== "undefined" && typeof fdc.geoipResponse === "undefined"){ipLocation();}
+    if(typeof fdc.geoipResponse !== "undefined"){showCountryNotification(fdc.geoipResponse);}
+    if(typeof fdc.geoipResponse !== "undefined" && typeof fdc.geoipResponse.country !== "undefined" && fdc.geoipResponse.country.is_in_european_union && ($.cookie("ec-privacy") == undefined)){jQuery("#cookie-privacy-banner").show();}
+});
+function showCountryNotification(geoipResponse) {
+	if (!geoipResponse.country || !geoipResponse.country.iso_code) {
+        return;
+    }
+	var code = geoipResponse.country.iso_code,
+	    langIndex = code === "FR" ? 2 : code === "DE" ? 3 : code === "JP" ? 4 : code === "KR" ? 5 : 1;
+	if (langIndex > 1) {
+		$('.c08_modal.lang').addClass("is-open");
+		$('.c08_modal.lang .col:nth-child(' + (langIndex - 1) + ')').show();
+		$('.c08_modal.lang, .c08_modal.lang [data-behavior="dismiss-c08"]').click(function(){
+		    $.cookie("country-notification", "decline", { path: "/", expires: 365 });
+		    closec08();
+		});
+		$('.c08_modal.lang .c08').click(function(e){
+		    e.stopPropagation();
+		});
+		if (($.cookie("country-notification") === "decline") || $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href").indexOf(".html") < 0) {
+		    closec08();
+		} else {
+		    $(".c08_modal.lang .btn").eq(langIndex - 2).attr("href", $(".g01_options_list li:nth-child(" + langIndex + ") a").attr("href"));
+		}
+	}
+}
+</script>
+<script>    
+     var _6SenseJsonObj = localStorage.getItem('_6senseCompanyDetails'),
+         _6SenseTime = localStorage.getItem('_6senseCompanyDetails-timestamp'),
+         isJsonStale = _6SenseTime === null ? true : Date.now() - parseInt(_6SenseTime) > 86400000; // 86400000 = 1 day in ms
+     
+     window._6si = window._6si || [];
+     window._6si.push(['enableEventTracking', true]);
+     window._6si.push(['setToken', '1322340356018696d853e0ac6f7ce3a2']);
+     window._6si.push(['setEndpoint', 'b.6sc.co']);
+     if(_6SenseJsonObj === null || isJsonStale){
+       window._6si.push(['enableCompanyDetails', true]);
+       window._6si.push(['setEpsilonKey', '325d6d60e24c7cfc3a782839d85ce08c8d3bb27c']);
+       localStorage.setItem('_6senseCompanyDetails-timestamp', Date.now());
+     }  
+    (function () {
+          var gd = document.createElement('script');
+      gd.type = 'text/javascript';
+      gd.async = true;
+      gd.src = '//j.6sc.co/6si.min.js';
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(gd, s);
+     })();
+</script>
+<script>
+    var jsonObj;
+
+    function targetPageParams() { 
+        jsonObj = localStorage.getItem('_6senseCompanyDetails');
+        if(jsonObj) {
+        	var jsonVal = JSON.parse(jsonObj);
+            return { 
+                "companyRevenueRange": jsonVal.company.revenue_range, 
+                "companyCountry": jsonVal.company.country, 
+                "companyIndustry": jsonVal.company.industry,
+                "companyName": jsonVal.company.name,
+                "companyRegion": jsonVal.company.region,
+                "companyDomain": jsonVal.company.domain,
+                "segments": JSON.stringify(jsonVal.segments)
+            }; 
+        }
+     }; 
+</script>
+<script>
+$(document).ready(function(){
+    $(".loadmore").on("click", function(){$(".list.parbase").addClass("no-max-height");});
+    // Don't show title text for textures.
+    $(".texture img").attr("title", "");
+});
+</script>
+<style>
+.no-max-height .c11v9 h4{
+    max-height: none !important;
+}
+.g04 #header-search .search-field_submit:after {
+    font-size: 9px;
+}
+.c11v8.hideLinkText .btn {
+    display: inline-block;
+}
+/* CTA fix */
+.g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+    padding: 0;
+    margin: 0 0 0 10px;
+    max-width: 1210px;
+}
+.g04 .megamenu-tab .has-inner-cta .col-wrap {
+    padding: 40px 0;
+}
+.g04 .n03-sub_container[data-columns="1"] .megamenu-cta {
+    width: 50%;
+}
+.g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+    width: 33.9%;
+}
+.g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell {
+    width: calc(50% - 60px);
+}
+.g04 .n03-sub_container[data-columns="3"] .megamenu-cta {
+    width: 25%;
+}
+.g04 .n03-sub_container[data-columns="4"] .megamenu-cta {
+    width: 20%;
+}
+.g04 .megamenu-cta h5 {
+    line-height: 1.4;
+}
+html .g04 header .megamenu-cta h5 {
+    font-weight: 500;
+    font-size: 15px;
+    color: #44474d;
+}
+html .g04 header .megamenu-cta p {
+    text-transform: none;
+}
+.g04 .n03-sub_table > .megamenu-cta {
+    background: none;
+    padding: 0;
+}
+.g04 .megamenu-cta .n03_utility {
+    border: none;
+    height: 100%;
+}
+.g04 .megamenu-cta .n03_utility_cell {
+    display: block;
+    width: auto;
+    margin-left: 30px;
+}
+/* Un/re-comment to add/remove in the line to the left of the CTA in the megamenu. */
+/*.g04 .n03-sub_table .col-wrap:not(:last-child) .separator.disabled {
+    border-right-color: #ebebed;
+}*/
+
+/* Put a grid over the texture from a neighboring grid. */
+.force {
+    z-index: 15;
+    position: relative;
+}
+/* Remove the gradient above the tiles on blog pages and reduce the space there. */
+.iparsys + .l_container>div.gradient-top {
+    background-image: none;
+}
+.iparsys + .l_container>.gradient-top>div>.g {
+    padding: 0;
+}
+@media (min-width: 35em) {
+    .entries .highlightFirst .c11v9 .c11-image-div {
+        border-left: 1px solid #dadadb;
+        border-right: 1px solid #dadadb;
+    }
+}
+@media (max-width: 1024px) {
+    .uc-he01v2 .panel .asset .image img {
+        max-height: 200px;
+	max-width: 300px;
+    }
+}
+/* mobile view for MegaMenu CTA. */
+@media (max-width: 1024px) {
+    .g04 .megamenu-tab.open .n03_list-item-sub.has-inner-cta {
+        padding-bottom: 0;
+    }
+    .g04 .has-inner-cta > [data-columns="2"] .n03-sub_cell,
+    .g04 .n03-sub_container[data-columns="2"] .megamenu-cta {
+        width: 100%;
+        display: block;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container {
+        margin: 0;
+    }
+    .g04 .megamenu-tab .has-inner-cta .n03-sub_container .col-wrap {
+        padding: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell {
+        margin-left: 15px;
+        margin-right: 22px;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(1) {
+        padding-bottom: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell:nth-child(2) {
+        padding-top: 0;
+    }
+    .g04 .megamenu-cta .n03_utility_cell h5,
+    .g04 .megamenu-cta .n03_utility_cell p {
+        font-size: 12px;
+    }
+    .content-2-par .megamenus .n03-sub_table .megamenu-cta {
+        border-radius: 0;
+    }
+}
+/* Training pages side design. */
+  .training-side-box {background: url('/content/dam/fireeye-www/brand/homepage-banner-images/hpb-bg-testimonial-red.jpg') left no-repeat; background-size: cover; padding:30px; border: 1px solid #dadadb; margin-bottom: 20px;}
+  .training-side-text {color: #ffffff;}
+  .training-side-text a:hover {color: #ffffff; text-decoration: underline;}
+
+/* Avoid column breaks in ordered lists. */
+  .c00 ol > li {page-break-inside: avoid; margin-bottom: 15px;}
+
+/* Safari needs this on html to stop side scrolling, not just on the body. */
+html {overflow-x:hidden;}
+/* Make sure the footer is above a texture that precedes it. */
+#g03-footer {z-index: 725;}
+/* Allow border for linked images. */
+.border>a>img {border: 1px solid #dadadb;}
+/* Allows for easy scrollable text boxes on blog pages right in the Blog Text component. */
+table.limitedHeight td {
+    height: 350px;
+    display: block;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding-bottom: 0;
+}
+/* Fix for edge case in Safari where page title in breadcrumbs wraps when the title is just the right length. */
+.g02_list_item:last-child span {
+    min-width: 360px;
+    display: block;
+}
+/* fix issue of hidden Event Spotlights having margin when used with .row-count-2 */
+.parsys > .spotlight-event.section:empty {
+    display: none;
+}
+@media (min-width: 60em) {
+.row-count-2 .parsys>div:nth-child(even):not(:empty) {
+    margin-right: 40px;
+}
+}
+/* Don't also vertically center a nested column. */
+.l_container.vertically-center .g > div:not(.stacked) > .g-content .g > div > .g-content {
+    top: auto;
+    transform: none;
+    position: unset;
+}
+
+/* Footer SVG resize. */
+@media (max-width: 25em) {
+  .g03 .g03_copyright {background-size: 36px;}
+}
+
+/* HPB padding and resize. */
+@media (max-width: 81em) {
+  .hero-container-v3 {padding: 0 60px !important;}
+}
+@media (max-width: 64em) {
+  .hero-container-v3 {padding: 0 20px !important;}
+}
+@media (max-width: 42em) {
+  .hero-container-v3 {padding: 0 10px !important;}
+  .uc-he01v2 .uc-he01_title {font-size: 1.75rem !important;}
+  .uc-he01v2 .uc-he01_description {font-size: 1.0rem !important;}
+}
+
+/* Some 2021 Redesign changes. */
+html .a02 .search .search-field_text {
+    border: 1px solid #dadadb;
+    border-radius: 5px 0 0 5px;
+}
+html .a02 .search .search-field_submit {
+    background-color: #bf2129;
+    border: 1px solid #dadadb;
+    border-radius: 0 5px 5px 0;
+    height: 29px;
+}
+html .a02 .search .search-field_submit:after {
+    top: 8px;
+    left: 6px;
+}
+html.backdropfilter .g04.masthead {
+    -webkit-backdrop-filter: saturate(150%) blur(15px);
+}
+.blog p, .blog li, .blog .entrytext p, .blog .entrytext li {
+    font-size: 0.9375rem;
+}
+
+</style></div>
+
+<link rel="stylesheet" href="/etc/designs/fireeye-www/clientlibs_fw-2021.min.css" type="text/css">
+<link rel="stylesheet" href="/etc/clientlibs/fireeye-blog/clientlibs_base.min.css" type="text/css">
+<link rel="icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+<link rel="shortcut icon" type="image/vnd.microsoft.icon" href="/content/dam/fireeye-www/brand/logos/fireeye.ico">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" data-redesign="redesign-2021"><script type="text/javascript">window.Granite = window.Granite || {}; window.Granite.csrf = true;</script>
+
+
+<div class="clientcontext parbase"><script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/utils.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/jquery/granite.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/jquery.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/foundation/clientlibs/shared.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/clientlibs/granite/lodash/modern.min.js"></script>
+<script type="text/javascript" src="/etc.clientlibs/cq/personalization/clientlib/personalization/kernel.min.js"></script>
+<script type="text/javascript">
+    $CQ(function() {
+        CQ_Analytics.SegmentMgr.loadSegments("\/etc\/segmentation");
+        CQ_Analytics.ClientContextUtils.init("\/etc\/clientcontext\/default", "\/content\/fireeye\u002Dwww\/en_US\/blog\/threat\u002Dresearch\/2018\/08\/bios\u002Dboots\u002Dwhat\u002Dfinding\u002Devil\u002Din\u002Dboot\u002Dcode\u002Dat\u002Dscale");
+
+        
+    });
+</script>
+</div>
+
+
+<div class="masthead_v2 masthead-v2">
+<div class="g04 masthead g04v1">
+<header role="banner" itemscope itemtype="http://schema.org/WPHeader">
+<div class="language-and-search"> <div class="search">
+<div class="content-searchbox searchbox">
+<a class="g01_options-option option-search" href="#header-search" data-for="q" data-behavior="showHeaderMenu focusField">Search</a>
+<div class="option-menu option-menu_search" id="header-search">
+<form method="get" action="/search.html">
+<fieldset class="search-field" title="Search FireEye.com">
+<label class="search-field_label" for="q">Search FireEye.com</label>
+<input class="input-text search-field_text" type="text" name="q" id="q" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-locale="en_US" placeholder="Search FireEye.com">
+<div id="searchboxsuggestions"></div>
+<button class="btn btn-secondary search-field_submit" type="submit">Go</button>
+</fieldset>
+</form>
+</div>
+</div>
+</div>
+</div>
+<div class="logo-and-megamenu">
+<div class="logo" itemscope itemtype="https://schema.org/Brand">
+<a href="https://www.fireeye.com"><img src="/content/dam/fireeye-www/fw/images/fe-logo-white.svg" alt="FireEye" itemprop="logo" class="fireeye" /></a>
+</div>
+<nav class="megamenu">
+<ul><li class="megamenu-tab" data-curry="/blog.html" data-link="/products.html">
+<h4 class="megamenu-title">
+<a href="/products.html" itemprop="url" class="MegaMenus">Products</a>
+</h4>
+<div class="content-0-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Enterprise Security</h4><ul><li itemprop="url"><a href="/products/helix.html" itemprop="name" class="MegaMenus">Helix Security Platform</a></li>
+<li itemprop="url"><a href="/products/network-security.html" itemprop="name" class="MegaMenus">Network Security and Forensics</a></li>
+<li itemprop="url"><a href="/products/endpoint-security.html" itemprop="name" class="MegaMenus">Endpoint Security</a></li>
+<li itemprop="url"><a href="/products/email-security.html" itemprop="name" class="MegaMenus">Email Security</a></li>
+<li itemprop="url"><a href="/products/cloudvisory.html" itemprop="name" class="MegaMenus">Cloudvisory</a></li>
+<li itemprop="url"><a href="/products/detection-on-demand.html" itemprop="name" class="MegaMenus">Detection On Demand</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Security For:</h4><ul><li itemprop="url"><a href="/products/cloud-security.html" itemprop="name" class="MegaMenus">Cloud</a></li>
+<li itemprop="url"><a href="/products/financial-services.html" itemprop="name" class="MegaMenus">Financial Services</a></li>
+<li itemprop="url"><a href="/products/government.html" itemprop="name" class="MegaMenus">Government</a></li>
+<li itemprop="url"><a href="/products/healthcare.html" itemprop="name" class="MegaMenus">Healthcare</a></li>
+<li itemprop="url"><a href="/products/education.html" itemprop="name" class="MegaMenus">Higher Education</a></li>
+<li itemprop="url"><a href="/products/industrial-systems-and-critical-infrastructure-security.html" itemprop="name" class="MegaMenus">Industrial &amp; Critical Infrastructure</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+  .content-0-par .n03_utility {background-color: transparent;}
+  .n03_utility_cell {padding: 0 13px 0 0;}
+</style></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>FireEye XDR</h5>
+<p>Simplify threat detection and response with FireEye&nbsp;XDR.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><a class="btn btn-B2282D compact" href="/products/xdr.html">Explore FireEye XDR</a></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="view-all-bar">
+<a href="/products.html" class="MegaMenus">
+VIEW ALL PRODUCTS</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/customers.html">
+<h4 class="megamenu-title">
+<a href="/company/customers.html" itemprop="url" class="MegaMenus">Customers</a>
+</h4>
+<div class="content-1-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Customers</h4><ul><li itemprop="url"><a href="/customers.html" itemprop="name" class="MegaMenus">Customer Stories</a></li>
+<li itemprop="url"><a href="/company/customers.html" itemprop="name" class="MegaMenus">Customer Success</a></li>
+<li itemprop="url"><a href="https://csportal.fireeye.com/" target="_blank" itemprop="name" class="MegaMenus">Customer Portal</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Get Support</h4><ul><li itemprop="url"><a href="/support/contacts.html" itemprop="name" class="MegaMenus">Contact Support</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Find Answers</h4><ul><li itemprop="url"><a href="/support/programs.html" itemprop="name" class="MegaMenus">Support Programs</a></li>
+<li itemprop="url"><a href="/support/notices.html" itemprop="name" class="MegaMenus">Support Notices</a></li>
+<li itemprop="url"><a href="/support/products.html" itemprop="name" class="MegaMenus">Supported Products</a></li>
+<li itemprop="url"><a href="https://community.fireeye.com/" target="_blank" itemprop="name" class="MegaMenus">Communities</a></li>
+<li itemprop="url"><a href="https://docs.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">Documentation Portal</a></li>
+</ul></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Support</h5>
+<p>A global network of support experts available 24x7. We offer simple and flexible support programs to maximize the value of your FireEye products and services.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><a class="btn btn-44474D expand" href="/support.html">Get support</a></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/partners.html">
+<h4 class="megamenu-title">
+<a href="/partners.html" itemprop="url" class="MegaMenus">Partners</a>
+</h4>
+<div class="content-2-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub has-inner-cta ">
+<div class="n03-sub_container" data-columns="2">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Partners</h4><ul><li itemprop="url"><a href="/partners.html" itemprop="name" class="MegaMenus">Partners Overview</a></li>
+<li itemprop="url"><a href="/partners/resellers.html" itemprop="name" class="MegaMenus">FireEye Affinity Resellers</a></li>
+<li itemprop="url"><a href="/partners/strategic-technology-partners.html" itemprop="name" class="MegaMenus">Technology Partners</a></li>
+<li itemprop="url"><a href="/partners/global-solution-providers.html" itemprop="name" class="MegaMenus">Global Solution Providers</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Partner Resources</h4><ul><li itemprop="url"><a href="https://partners.fireeye.com/directory/" target="_blank" itemprop="name" class="MegaMenus">Partner Locator</a></li>
+<li itemprop="url"><a href="http://training.fireeye.com/" target="_blank" itemprop="name" class="MegaMenus">Partner Education Center</a></li>
+<li itemprop="url"><a href="/support.html" itemprop="name" class="MegaMenus">Support</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Partnering with FireEye</h4><ul><li itemprop="url"><a href="https://www2.fireeye.com/Partner-Request-LP-New.html" target="_blank" itemprop="name" class="MegaMenus">Become a Partner</a></li>
+</ul></div>
+</div>
+</div><div class="separator disabled"></div></div><div class="megamenu-cta">
+
+<div class="n03_utility">
+<div class="n03_utility_container">
+<div class="n03_utility_table">
+<div class="n03_utility_cell">
+<h5>Partner Portal</h5>
+<p>Access for our registered Partners to help you be successful with FireEye.
+Collateral, deal registration, request for funds, training, enablement, and more.</p>
+</div>
+<div class="n03_utility_cell"><div class="button"><a class="btn btn-44474D compact" href="https://partners.fireeye.com/" target="_blank">Access the portal</a></div>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/current-threats.html">
+<h4 class="megamenu-title">
+<a href="/current-threats.html" itemprop="url" class="MegaMenus">Resources</a>
+</h4>
+<div class="content-3-par parsys"><div class="megamenus section">
+
+<div class="n03_list-item-sub ">
+<div class="n03-sub_container" data-columns="3">
+<div class="n03-sub_table">
+<div class="col-wrap">
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Cyber Security</h4><ul><li itemprop="url"><a href="/current-threats/what-is-cyber-security.html" itemprop="name" class="MegaMenus">What is Cyber Security?</a></li>
+<li itemprop="url"><a href="/current-threats/detect-and-prevent.html" itemprop="name" class="MegaMenus">Advanced Detection and Prevention</a></li>
+<li itemprop="url"><a href="/current-threats/how-cyber-attackers-get-in.html" itemprop="name" class="MegaMenus">How Cyber Attacks Compromise Your Network</a></li>
+<li itemprop="url"><a href="/current-threats/what-is-cyber-security/ransomware.html" itemprop="name" class="MegaMenus">What is Ransomware?</a></li>
+<li itemprop="url"><a href="/current-threats/what-is-a-zero-day-exploit.html" itemprop="name" class="MegaMenus">What is a Zero-Day Exploit?</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<style>
+.g04 .megamenu-list a{padding-right:38px;line-height:1.358;padding-bottom:2px}@media (min-width:60em){.g04 .n03-sub_container{padding-bottom:23px}}@media(min-width:64em) and (max-width:64.5em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:14px}}@media (min-width:68em) and (max-width:69em){.g04 .megamenu-tab:first-child .megamenu-title{padding-left:30px}}
+.g04 .megamenu-tab {text-transform: none !important;}
+
+</style></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">FireEye Blogs</h4><ul><li itemprop="url"><a href="/blog.html" itemprop="name" class="MegaMenus">Read the FireEye Blogs</a></li>
+</ul></div>
+<div class="megamenu-list section">
+<h4 class="n03-sub_title">Training</h4><ul><li itemprop="url"><a href="/services/training.html" itemprop="name" class="MegaMenus">Education and Training</a></li>
+</ul></div>
+</div>
+</div><div class="separator"></div>
+<div class="n03-sub_cell">
+<div class="parsys"><div class="megamenu-list section">
+<h4 class="n03-sub_title">Free Tools & Newsletters</h4><ul><li itemprop="url"><a href="https://fireeye.market" target="_blank" itemprop="name" class="MegaMenus">FireEye Market</a></li>
+<li itemprop="url"><a href="https://vision.fireeye.com" target="_blank" itemprop="name" class="MegaMenus">The Vision – Digital Magazine</a></li>
+</ul></div>
+</div>
+</div><div class="separator disabled"></div></div></div>
+</div>
+<div class="view-all-bar">
+<a href="/current-threats.html" class="MegaMenus">
+VIEW ALL RESOURCES</a>
+</div></div>
+</div>
+</div>
+</li><li class="megamenu-tab" data-curry="/blog.html" data-link="/contact-us.html">
+<h4 class="megamenu-title">
+<a href="/company/contact-us.html" itemprop="url" class="MegaMenus">Contact</a>
+</h4>
+<div class="content-4-par parsys">
+</div>
+</li></ul>
+</nav>
+</div>
+<span class="burger ficon ficon-menu"></span>
+</header>
+</div>
+</div>
+
+
+<div id="cookie-privacy-banner" style="display:none;">
+<div class="l_container">
+<div class="g">
+<div class="g-u-1">
+<div class="g-content">
+<div class="cookie-banner">
+<p class="cookie-text">
+To give you the best possible experience, this site uses cookies.&nbsp; Find out more on <a href='/company/privacy.html' target='_blank'>how we use cookies</a>.<button type="button" class="cookie-button highlighted" onclick='javascript:onAccept();'>Accept</button>
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="breadcrumbs breadcrumb">
+<div class="l_container is-full">
+<div class="g02 g02v0" id="g02-breadcrumbs">
+<div class="g02_container">
+<div class="g02_content">
+<ul class="list-inline g02_list" itemscope itemtype="http://schema.org/BreadcrumbList">
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/"><span itemprop="name">Home</span></a><meta itemprop="position" content="1" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog.html"><span itemprop="name">FireEye Blogs</span></a><meta itemprop="position" content="2" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><a itemprop="item" class="BreadCrumb" href="/blog/threat-research.html"><span itemprop="name">Threat Research</span></a><meta itemprop="position" content="3" /></li>
+<li class="g02_list_item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem"><span itemprop="name">BIOS Boots What? Finding Evil in Boot Code at Scal...<meta itemprop="position" content="6" /></span>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<main class="l_main" role="main">
+<div class="l_container">
+<div class="g g-alt ">
+<div class="g-u-17-24 l_g-u-1">
+<div class="g-content">
+<div class="blog main"><div itemscope itemtype="http://schema.org/BlogPosting">
+<div class="summary entrytextteaser">
+</div>
+<div class="title entrytitle">
+<h2 class="category-name">Threat Research Blog</h2>
+<h1 class="blogpostlanding red" itemprop="headline">BIOS Boots What? Finding Evil in Boot Code at Scale!</h1>
+<div class="c00 c00v0 entry-meta-block selfClear">
+<time class="entry-date" itemprop="datePublished" content="2018-08-08T14:45:00Z">August 08, 2018</time>
+<span class="sep"> | </span>
+<span class="by-author" itemscope itemptype="http://schema.org/Person">by <a href="/blog/threat-research.html/category/etc/tags/fireeye-blog-authors/ryan-fisher" title="View all entries filed under 'Fireeye - Authors : Ryan Fisher'">Ryan Fisher</a>, <a href="/blog/threat-research.html/category/etc/tags/fireeye-blog-authors/cap-andrew-davis" title="View all entries filed under 'Fireeye - Authors : Andrew Davis'">Andrew Davis</a><meta itemprop="author" content="Ryan Fisher" /><meta itemprop="contributor" content="Andrew Davis" /></span>
+<div class="tags-section">
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/malware"> <span class="tagbutton">Malware</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/fireeye"> <span class="tagbutton">FireEye</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/find-evil"> <span class="tagbutton">Find Evil</span></a><br class="on-mobile" />
+<a class="tagList" href="/blog/threat-research.html/category/etc/tags/fireeye-blog-tags/analysis"> <span class="tagbutton">analysis</span></a><br class="on-mobile" />
+</div>
+</div>
+</div>
+<div class="par parsys"><div class="text parbase section"><div class="c00 c00v0">
+<p>Malware continues to take advantage of a legacy component of modern
+systems designed in the 1980s. Despite the cyber threat landscape
+continuing to evolve at an ever-increasing pace, the exploitation of
+the classic BIOS boot process is still very much a threat to
+enterprises around the world. Furthermore, since malware that tampers
+with the boot process (aka bootkits) execute before the operating
+system, such compromises often persist even after incident responders
+think the incident has been remediated.</p>
+<p>This post details the challenges FireEye faced examining boot
+records at scale and our solution to find evil boot records in large
+enterprise networks.</p>
+<h4>Challenges Faced</h4>
+<p>The challenge that incident responders and network defenders face
+when confronted with large enterprise networks is twofold.</p>
+</div>
+</div>
+<div class="grid-50-50-full fdc-grids section">
+<div class="l_container g-m"><div class="g g-m">
+<div class="g-u-1-2 m_g-u-1">
+<div class="g-content">
+<div class="grid-50-left parsys"><div class="text parbase section"><div class="c00 c00v0">
+<p>First is the collection of boot records from target systems. Boot
+records consist of Master Boot Records and Volume Boot Records.
+Bootkits are notorious for hooking legitimate API calls in an attempt
+to hide bytes they have overwritten in the boot code. Because of this,
+collecting the bytes by reading the disk from user space is
+unreliable, as a bootkit may be intercepting the reads and returning
+legitimate-looking code.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="g-u-1-2 m_g-u-1">
+<div class="g-content">
+<div class="grid-50-right parsys"><div class="text parbase section"><div class="c00 c00v0">
+<table cellpadding="1" cellspacing="0" border="1"> <tbody>
+<tr>
+<td><p>
+<b>Bootkit</b>: An advanced and specialized form of malware
+that gains execution very early in the boot process, giving it
+persistence and making it difficult to identify. For
+additional details on the boot process and a specific VBR
+bootkit, see our <a href="https://www.fireeye.com/blog/threat-research/2015/12/fin1-targets-boot-record.html">ROCKBOOT
+post</a>.</p> </td> </tr></tbody></table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+<div class="clear-all"></div></div>
+<div class="entrytext section"><div class="c00 c00v0" itemprop="articleBody">
+<p>The second issue is that reverse engineering all boot records is impractical. Given the job of determining if a single system is infected with a bootkit, a malware analyst could acquire a disk image and then reverse engineer the boot bytes to determine if anything malicious is present in the boot chain. However, this process takes time and even an army of skilled reverse engineers wouldn’t scale to the size of modern enterprise networks. To put this in context, the compromised enterprise network referenced in our <a href="https://www.fireeye.com/blog/threat-research/2015/12/fin1-targets-boot-record.html" style="text-align: center;">ROCKBOOT blog post</a> had approximately <b style="text-align: center;">10,000</b> hosts. Assuming a minimum of two boot records per host, a Master Boot Record (MBR) and a Volume Boot Record (VBR), that is an average of <b style="text-align: center;">20,000</b> boot records to analyze! An initial reaction is probably, “Why not just hash the boot records and only analyze the unique ones?” One would assume that corporate networks are mostly homogeneous, particularly with respect to boot code, yet this is not the case. Using the same network as an example, the 20,000 boot records reduced to only 6,000 unique records based on MD5 hash. Table 1 demonstrates this using data we’ve collected across our engagements for various enterprise sizes.</p>
+<table border="1" cellspacing="0" cellpadding="0">
+<tbody><tr><td width="108" valign="bottom"><p><i>Enterprise Size (# hosts)</i></p>
+</td>
+<td width="201" valign="bottom"><p><i>Avg # Unique Boot Records (md5)</i></p>
+</td>
+</tr></tbody><tbody><tr><td width="108" valign="top"><p>100-1000</p>
+</td>
+<td width="201" valign="top"><p>428</p>
+</td>
+</tr><tr><td width="108" valign="top"><p>1000-10000</p>
+</td>
+<td width="201" valign="top"><p>4,738</p>
+</td>
+</tr><tr><td width="108" valign="top"><p>10000+</p>
+</td>
+<td width="201" valign="top"><p>8,717</p>
+</td>
+</tr></tbody></table>
+<p><span class="type-XS">Table 1&nbsp;– Unique boot records by MD5 hash</span></p>
+<p>Now, the next thought might be, “Rather than hashing the entire record, why not implement a custom hashing technique where only subsections of the boot code are hashed, thus avoiding the dynamic data portions?” We tried this as well. For example, in the case of Master Boot Records, we used the bytes at the following two offsets to calculate a hash:</p>
+<p>md5( offset[0:218] + offset[224:440] )</p>
+<p>In one network this resulted in approximately 185,000 systems reducing to around 90 unique MBR hashes. However, this technique had drawbacks. Most notably, it required accounting for numerous special cases for applications such as Altiris, SafeBoot, and PGPGuard. This required small adjustments to the algorithm for each environment, which in turn required reverse engineering many records to find the appropriate offsets to hash.</p>
+<p>Ultimately, we concluded that to solve the problem we needed a solution that provided the following:</p>
+<ul style="list-style-position: inside;">
+<li>A reliable collection of boot records from systems</li>
+<li>A behavioral analysis of boot records, not just static analysis</li>
+<li>The ability to analyze tens of thousands of boot records in a timely manner</li>
+</ul>
+<p>The remainder of this post describes how we solved each of these challenges.</p>
+<h4>Collect the Bytes</h4>
+<p>Malicious drivers insert themselves into the disk driver stack so they can intercept disk I/O as it traverses the stack. They do this to hide their presence (the real bytes) on disk. To address this attack vector, we developed a custom kernel driver (henceforth, our “Raw Read” driver) capable of targeting various altitudes in the disk driver stack. Using the Raw Read driver, we identify the lowest level of the stack and read the bytes from that level (Figure 1).</p>
+<p><img src="/content/dam/fireeye-www/blog/images/BIOSBoot/BIOS%20Boot%20Fig1a.png"><br>
+<span class="type-XS">Figure 1: Malicious driver inserts itself as a filter driver in the stack, raw read driver reads bytes from lowest level</span></p>
+<p>This allows us to bypass the rest of the driver stack, as well as any user space hooks. (It is important to note, however, that if the lowest driver on the I/O stack has an inline code hook an attacker can still intercept the read requests.) Additionally, we can compare the bytes read from the lowest level of the driver stack to those read from user space. <i>Introducing our first indicator of a compromised boot system: the bytes retrieved from user space don’t match those retrieved from the lowest level of the disk driver stack.</i></p>
+<h4>Analyze the Bytes</h4>
+<p>As previously mentioned, reverse engineering and static analysis are impractical when dealing with hundreds of thousands of boot records. Automated dynamic analysis is a more practical approach, specifically through emulating the execution of a boot record. In more technical terms, we are emulating the real mode instructions of a boot record.</p>
+<p>The emulation engine that we chose is the <a href="http://www.unicorn-engine.org/">Unicorn project</a>. Unicorn is based on the QEMU emulator and supports 16-bit real mode emulation. As boot samples are collected from endpoint machines, they are sent to the emulation engine where high-level functionality is captured during emulation. This functionality includes events such as memory access, disk reads and writes, and other interrupts that execute during emulation.</p>
+<h4>The Execution Hash</h4>
+<p>Folding down (aka stacking) duplicate samples is critical to reduce the time needed on follow-up analysis by a human analyst. An interesting quality of the boot samples gathered at scale is that while samples are often functionally identical, the data they use (e.g. strings or offsets) is often very different. This makes it quite difficult to generate a hash to identify duplicates, as demonstrated in Table 1. So how can we solve this problem with emulation? Enter the “execution hash”. The idea is simple: during emulation, hash the <u>mnemonic</u> of every assembly instruction that executes (e.g., “md5(‘and’ + ‘mov’ + ‘shl’ + ‘or’)”). Figure 2 illustrates this concept of hashing the assembly instruction as it executes to ultimately arrive at the “execution hash”</p>
+<p><img src="/content/dam/fireeye-www/blog/images/BIOSBoot/BIOS%20Boots%20Fig2a.png"><br>
+<span class="type-XS">Figure 2: Execution hash</span></p>
+<p>Using this method, the 650,000 unique boot samples we’ve collected to date can be grouped into a little more than 300 unique execution hashes. This reduced data set makes it far more manageable to identify samples for follow-up analysis. <i>Introducing our second indicator of a compromised boot system: an execution hash that is only found on a few systems in an enterprise!</i></p>
+<h4>Behavioral Analysis</h4>
+<p>Like all malware, suspicious activity executed by bootkits can vary widely. To avoid the pitfall of writing detection signatures for individual malware samples, we focused on identifying behavior that deviates from normal OS bootstrapping. To enable this analysis, the series of instructions that execute during emulation are fed into an analytic engine. Let&#39;s look in more detail at an example of malicious functionality exhibited by several bootkits that we discovered by analyzing the results of emulation.</p>
+<p>Several malicious bootkits we discovered hooked the interrupt vector table (IVT) and the BIOS Data Area (BDA) to intercept system interrupts and data during the boot process. This can provide an attacker the ability to intercept disk reads and also alter the maximum memory reported by the system. By hooking these structures, bootkits can attempt to hide themselves on disk or even in memory.</p>
+<p>These hooks can be identified by memory writes to the memory ranges reserved for the IVT and BDA during the boot process. The IVT structure is located at the memory range 0000:0000h to 0000:03FCh and the BDA is located at 0040:0000h. The malware can hook the interrupt 13h handler to inspect and modify disk writes that occur during the boot process. Additionally, bootkit malware has been observed modifying the memory size reported by the BIOS Data Area in order to potentially hide itself in memory.</p>
+<p><i>This leads us to our final category of indicators of a compromised boot system: detection of suspicious behaviors such as IVT hooking, decoding and executing data from disk, suspicious screen output from the boot code, and modifying files or data on disk.</i></p>
+<h4>Do it at Scale</h4>
+<p>Dynamic analysis gives us a drastic improvement when determining the behavior of boot records, but it comes at a cost. Unlike static analysis or hashing, it is orders of magnitude slower. In our cloud analysis environment, the average time to emulate a single record is 4.83 seconds. Using the compromised enterprise network that contained ROCKBOOT as an example (approximately 20,000 boot records), it would take more than 26 hours to dynamically analyze (emulate) the records serially! In order to provide timely results to our analysts we needed to easily scale our analysis throughput relative to the amount of incoming data from our endpoint technologies. To further complicate the problem, boot record analysis tends to happen in batches, for example, when our endpoint technology is first deployed to a new enterprise.</p>
+<p>With the advent of serverless cloud computing, we had the opportunity to create an emulation analysis service that scales to meet this demand – all while remaining cost effective. One of the advantages of serverless computing versus traditional cloud instances is that there are no compute costs during inactive periods; the only cost incurred is storage. Even when our cloud solution receives tens of thousands of records at the start of a new customer engagement, it can rapidly scale to meet demand and maintain near real-time detection of malicious bytes.</p>
+<p>The cloud infrastructure we selected for our application is Amazon Web Services (AWS). Figure 3 provides an overview of the architecture.</p>
+<p><img src="/content/dam/fireeye-www/blog/images/BIOSBoot/BIOS%20Boot%20Fig3.png"><br>
+<span class="type-XS">Figure 3: Boot record analysis workflow</span></p>
+<p>Our design currently utilizes:</p>
+<ul style="list-style-position: inside;">
+<li><b>API Gateway</b> to provide a RESTful interface.</li>
+<li><b>Lambda</b> functions to do validation, emulation, analysis, as well as storage and retrieval of results.</li>
+<li><b>DynamoDB </b>to track progress of processed boot records through the system.</li>
+<li><b>S3</b> to store boot records and emulation reports.</li>
+</ul>
+<p>The architecture we created exposes a RESTful API that provides a handful of endpoints. At a high level the workflow is:</p>
+<ol style="list-style-position: inside;">
+<li>Endpoint agents in customer networks automatically collect boot records using FireEye’s custom developed Raw Read kernel driver (see “Collect the bytes” described earlier) and return the records to FireEye’s Incident Response (IR) server.</li>
+<li>The IR server submits batches of boot records to the AWS-hosted REST interface, and polls the interface for batched results.</li>
+<li>The IR server provides a UI for analysts to view the aggregated results across the enterprise, as well as automated notifications when malicious boot records are found.</li>
+</ol>
+<p>The REST API endpoints are exposed via AWS’s API Gateway, which then proxies the incoming requests to a “submission” Lambda. The submission Lambda validates the incoming data, stores the record (aka boot code) to S3, and then fans out the incoming requests to “analysis” Lambdas.</p>
+<p>The analysis Lambda is where boot record emulation occurs. Because Lambdas are started on demand, this model allows for an incredibly high level of parallelization. AWS provides various settings to control the maximum concurrency for a Lambda function, as well as memory/CPU allocations and more. Once the analysis is complete, a report is generated for the boot record and the report is stored in S3. The reports include the results of emulation and other metadata extracted from the boot record (e.g., ASCII strings).</p>
+<p>As described earlier, the IR server periodically polls the AWS REST endpoint until processing is complete, at which time the report is downloaded.</p>
+<h4>Find More Evil in Big Data</h4>
+<p>Our workflow for identifying malicious boot records is only effective when we know what malicious indicators to look for, or what execution hashes to blacklist. But what if a new malicious boot record (with a unique hash) evades our existing signatures?</p>
+<p>For this problem, we leverage our in-house big data platform engine that we integrated into <a href="https://www.fireeye.com/solutions/helix.html">FireEye Helix</a> following the acquisition of X15 Software. By loading the results of hundreds of thousands of emulations into the engine X15, our analysts can hunt through the results at scale and identify anomalous behaviors such as unique screen prints, unusual initial jump offsets, or patterns in disk reads or writes.</p>
+<p>This analysis at scale helps us identify new and interesting samples to reverse engineer, and ultimately helps us identify new detection signatures that feed back into our analytic engine.</p>
+<h4>Conclusion</h4>
+<p>Within weeks of going live we detected previously unknown compromised systems in multiple customer environments. We’ve identified everything from ROCKBOOT and <a href="https://securelist.com/i-am-hdroot-part-1/72275/">HDRoot!</a> bootkits to the admittedly humorous <a href="https://www.microsoft.com/en-us/wdsi/threats/malware-encyclopedia-description?Name=Virus:DOS/JackTheRipper">JackTheRipper</a>, a bootkit that spreads itself via floppy disk (no joke). Our system has collected and processed nearly 650,000 unique records to date and continues to find the evil needles (suspicious and malicious boot records) in very large haystacks.</p>
+<p>In summary, by combining advanced endpoint boot record extraction with scalable serverless computing and an automated emulation engine, we can rapidly analyze thousands of records in search of evil. FireEye is now using this solution in both our <a href="https://www.fireeye.com/solutions/managed-defense.html">Managed Defense</a> and <a href="https://www.fireeye.com/services/mandiant-incident-response.html">Incident Response</a> offerings.</p>
+<h4>Acknowledgements</h4>
+<p>Dimiter Andonov, Jamin Becker, Fred House, and Seth Summersett contributed to this blog post.</p>
+</div>
+<div class="clear-all"></div></div>
+</div>
+<div class="par prevnextbutton">
+<div class="prevnext">
+<div class="button">
+<a id="leftBtnId" class="btn btn-B2282D" href="#"><span>Previous</span> <span>Post</span></a>
+</div>
+<div class="button">
+<a id="rightBtnId" class="btn btn-B2282D" href="#"><span>Next</span> <span>Post</span></a>
+</div>
+</div>
+<input type="hidden" value="/content/fireeye-www/en_US/blog/threat-research" id="categoryPathVal" name="categoryPath" />
+<script>
+    $(document).ready(function(){
+
+         var prevenextHtml = $('.prevnext').html();	
+         var categoryPathVal = $("#categoryPathVal").val();
+            var blogsDetails;
+        
+            if(undefined == blogsDetails){
+                    blogsDetails = [];
+            }
+        
+        
+            if(undefined != prevenextHtml){
+                if(blogsDetails.length <= 0){
+                     $.ajax({
+                        type: "GET",
+                        url: "/bin/www-blogs/read-blogentries",
+                        dataType: "json",
+                        data: { categoryPath: categoryPathVal} ,
+                        async: false,
+                        success : function(data) {
+                            var totalFoundRes = data.blogs.length;
+                            blogsDetails = data.blogs;
+                            var currentPagePath = window.location.pathname;
+                            currentPagePath = currentPagePath.split(".")[0]
+                            console.log("currentPagePath :: "+currentPagePath);
+        
+                            for (var i = 0; i < blogsDetails.length; i++) {
+                                var currentItrPath = blogsDetails[i].path;
+        
+                                if (currentItrPath.indexOf(currentPagePath) > -1) {
+                                    console.log(blogsDetails[i-1]);
+                                    console.log(blogsDetails[i+1]);
+
+                                    if(undefined != blogsDetails[i-1] ){
+										var prevPagePath = blogsDetails[i-1].path;
+                                        $("#leftBtnId").attr("href",prevPagePath+".html");
+                                        $("#leftBtnId").show();
+                                    }else{
+										$("#leftBtnId").hide();
+                                    }
+                                    if(undefined != blogsDetails[i+1] ){
+										var nextPagePath = blogsDetails[i+1].path;  
+                                    	$("#rightBtnId").attr("href",nextPagePath+".html");
+                                        $("#rightBtnId").show();
+                                    }else{
+										$("#rightBtnId").hide();
+                                    }
+                                }
+                            }
+        
+                        },
+                        error : function(response){
+                            console.log("Error: while connecting to servlet.");
+                        }
+                    });
+                 }else{
+                     alert("Blogs from global object :: "+blogsDetails);
+                 }
+            }else{
+                alert("prevenextHtml :: "+prevenextHtml);
+            }
+    });
+</script></div>
+</div></div>
+</div>
+</div>
+<div id="sidebar" class="g-u-7-24 l_g-u-1 blog-sidebar">
+<div class="g-content">
+<div class="sidebar reuse-blog-resources">
+<div class="blog-resources">
+<div class="grid-33-left parsys"><div class="rightrail section">
+<div class="blog-right-rail">
+<div class="bottom-bar"><div class="tab">
+<span class="ficon ficon-star"></span>
+<p>Promotion</p></div><div class="tab">
+<span class="ficon ficon-checkbox-checked"></span>
+<p>Subscribe</p></div>
+<div class="tab">
+<span class="ficon ficon-share"></span>
+<p>Share</p></div>
+<div class="tab">
+<span class="ficon ficon-history2"></span>
+<p>Recent</p></div>
+<div class="tab">
+<span class="ficon ficon-feed"></span>
+<p>RSS</p></div>
+</div><div class="section cta">
+<div id="cq-image-jsp-/content/fireeye-www/site-content/en_US/blog-right-threat-research/jcr:content/grid-33-left/rightrail/image"><a href="/mandiant/advantage.html"><img src="/content/dam/fireeye-www/blog/images/blog-vision-edition7.gif" alt="blog-vision-edition7" title="blog-vision-edition7" class="cq-dd-image"></a></div></div><div class="section email">
+<script src="https://www2.fireeye.com/js/forms2/js/forms2.min.js"></script>
+<div id="mktoWrapper_3353" class="a08 bg-f2f2f2"><div class="c00 c00v0"><h3>Subscribe to Blogs</h3><p>Get email updates as new blog posts are added.</p></div><form id="mktoForm_3353"></form> <script type="text/javascript">
+		if(typeof digitalData=="undefined"){digitalData={}}
+        //alert(https://www2.fireeye.com+":"+848-DID-242)
+        //alert("false");
+		MktoForms2.loadForm("https://www2.fireeye.com", "848-DID-242", 3353,
+		function(form) {
+			
+            if(typeof fdc.blog.initCheckboxes === "function") {
+                fdc.blog.initCheckboxes(form);
+            } 
+			digitalData.form = {id: form.getId(),name: document.title,url: window.location.href};
+			//if(typeof marketoFormViewTealiumEvent !== "undefined" && typeof utag!=="undefined"){marketoFormViewTealiumEvent(form);}
+			if(typeof marketoFormViewGtmEvent !== "undefined") {
+				marketoFormViewGtmEvent(form);
+			}
+			form.onSubmit(function(values){
+                //Check if GA fields are present
+                if(($("input[name='GACLIENTID__c']").length>0)&&($("input[name='GAUSERID__c']").length>0)&&($("input[name='GATRACKID__c']").length>0)&&(typeof ga!=="undefined"))
+                {
+                      ga(function(){ 
+                          //Get tracking ID and Client ID
+                           var tracker = ga.getAll()[0];
+                           var trackingId = tracker.get('trackingId');
+                           var clientId = tracker.get('clientId');
+                           var userId = tracker.get('userId');
+                           $("input[name='GACLIENTID__c'").val(clientId);
+                           $("input[name='GATRACKID__c'").val(trackingId);
+                           $("input[name='GAUSERID__c'").val(userId);
+                       });
+                 }
+            
+        	});
+			form.onSuccess(function(values, followUpUrl) {
+				//if(typeof marketoFormSubmitTealiumEvent !== "undefined"){marketoFormSubmitTealiumEvent(values);}
+				if(typeof marketoFormSubmitGTMEvent !== "undefined") {
+					marketoFormSubmitGTMEvent(values);
+				}
+				
+				if(typeof fdc.blog.replaceFormWithThankYou === "function") {
+					var result = fdc.blog.replaceFormWithThankYou(form,values,followUpUrl);
+					if (result === false) {
+						return false;
+					}
+				} 
+				return true;
+			});
+			
+			var adrC = typeof addMissingUTMsFromCookies !== "undefined" ? addMissingUTMsFromCookies(document.URL) : document.URL;
+			form.addHiddenFields({ ADR__c: adrC,ADR_Credit__c_account: document.title,ADR_Credit__c: document.referrer });
+			if(($("input[name='GACLIENTID__c']").length==0)&&($("input[name='GAUSERID__c']").length==0)&&($("input[name='GATRACKID__c']").length==0)){
+				form.addHiddenFields({ GACLIENTID__c:"",GAUSERID__c:"",GATRACKID__c:""});				
+			}
+			
+		});
+	</script>
+</div></div>
+<div class="section share">
+<h6><small>Share</small></h6>
+
+<div class="addthis_inline_share_toolbox_7uq8"></div>
+</div>
+<div class="section recent">
+<h6>Recent Posts</h6>
+
+<div class="c05 c05v0"><ul>
+<li class="c05_item"><p class="c05_date">15 Sep 2021</p><a class="c05_link" href="/blog/threat-research/2021/09/elfant-in-the-room-capa-v3.html" title="ELFant in the Room – capa v3">ELFant in the Room – capa v3</a></li>
+
+<li class="c05_item"><p class="c05_date">12 Aug 2021</p><a class="c05_link" href="/blog/threat-research/2021/08/announcing-the-eighth-annual-flare-on-challenge.html" title="Announcing the Eighth Annual Flare-On Challenge">Announcing the Eighth Annual Flare-On Challenge</a></li>
+
+<li class="c05_item"><p class="c05_date">19 Jul 2021</p><a class="c05_link" href="/blog/threat-research/2021/07/capa-2-better-stronger-faster.html" title="capa 2.0: Better, Faster, Stronger">capa 2.0: Better, Faster, Stronger</a></li>
+</ul></div>
+</div>
+<a href="/content/fireeye-www/en_US/blog/threat-research/_jcr_content.feed" target="_blank">
+<div class="section rss">
+<h6><small>RSS Feed: </small><small>Stay Connected</small></h6>
+<span class="ficon ficon-feed"></span>
+</div>
+</a>
+</div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<div class="footer_f635 footer">
+
+<footer id="g03-footer" class="l_footer g03 g03v0 g03v2 g03-5col">
+<div class="main-footer-wrapper">
+
+<div class="g03_list g03_list_1">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>About</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company.html" class="Footer">Why FireEye?</a></li>
+<li class="g03_item"><a href="/customers.html" class="Footer">Customer Stories</a></li>
+<li class="g03_item"><a href="/company/jobs.html" class="Footer">Careers</a></li>
+<li class="g03_item"><a href="/company/compliance-certification.html" class="Footer">Certifications and Compliance</a></li>
+<li class="g03_item"><a href="/company/supplier.html" class="Footer">Supplier Documents</a></li>
+<li class="g03_item"><a href="/current-threats.html" class="Footer">Resources</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_2">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>News and Events</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/company/newsroom.html" class="Footer">Newsroom</a></li>
+<li class="g03_item"><a href="/company/press-releases.html" class="Footer">Press Releases</a></li>
+<li class="g03_item"><a href="/company/webinars.html" class="Footer">Webinars</a></li>
+<li class="g03_item"><a href="/company/events.html" class="Footer">Events</a></li>
+<li class="g03_item"><a href="/company/awards.html" class="Footer">Awards and Honors</a></li>
+<li class="g03_item"><a href="/company/contact-us/manage-your-communication-preference.html" class="Footer">Email Preferences</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_3">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Technical Support</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/support.html" class="Footer">Support</a></li>
+<li class="g03_item"><a href="/company/security.html" class="Footer">Report Security Issue</a></li>
+<li class="g03_item"><a href="/support/contacts.html" class="Footer">Contact Support</a></li>
+<li class="g03_item"><a href="https://csportal.fireeye.com/" target="_blank" class="Footer">Customer Portal</a></li>
+<li class="g03_item"><a href="https://community.fireeye.com/" target="_blank" class="Footer">Communities</a></li>
+<li class="g03_item"><a href="https://docs.fireeye.com" target="_blank" class="Footer">Documentation Portal</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_4">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>FireEye Blogs</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/blog/threat-research.html" class="Footer">Threat Research</a></li>
+<li class="g03_item"><a href="/blog/products-and-services.html" class="Footer">FireEye Stories</a></li>
+<li class="g03_item"><a href="/blog/executive-perspective.html" class="Footer">Industry Perspectives</a></li>
+</ul></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Threat Map</strong></p></div>
+<div class="footer-list section">
+<ul class="g03_block"><li class="g03_item"><a href="/cyber-map/threat-map.html" class="Footer">View the Latest Threats</a></li>
+</ul></div>
+</div>
+</div>
+<div class="g03_list g03_list_5">
+<div class="parsys"><div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Contact Us</strong><br>
+<div class="footer-list section">
+<ul class="g03_block">
+<li class="g03_item"><a href="tel:+1 877-347-3393" class="contactlinks">+1 877-347-3393</a><br>&nbsp;</li>
+</ul>
+</div></div>
+<div class="htmlpassthru section">
+<p style="margin-bottom:6px"><strong>Stay Connected</strong></p></div>
+<div class="followus-footer section"><h4 class="g03_title" id="g03-followus-title"> </h4><ul class="g03_block g03-s" id="g03-followus-list"><li class="g03_item g03_item-s">
+<a href="https://www.linkedin.com/company/trellixsecurity/" target="_blank">
+<span class="g03-s-i ficon g03-s-i-li ficon-linkedin"></span>
+<span class="g03-s_label">LinkedIn</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://twitter.com/Trellix" target="_blank">
+<span class="g03-s-i ficon g03-s-i-tw ficon-twitter2"></span>
+<span class="g03-s_label">Twitter</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.facebook.com/TeamTrellix" target="_blank">
+<span class="g03-s-i ficon g03-s-i-fb ficon-facebook2"></span>
+<span class="g03-s_label">Facebook</span>
+</a>
+</li><li class="g03_item g03_item-s">
+<a href="https://www.youtube.com/c/TrellixSecurity" target="_blank">
+<span class="g03-s-i ficon g03-s-i-yt ficon-youtube2"></span>
+<span class="g03-s_label">YouTube</span>
+</a>
+</li></ul>
+</div>
+<div class="htmlpassthru section">
+<div class="country-notification">
+<div id="c08_modal-lang" class="c08_modal lang">
+<div class="c08 c08v1">
+<div class="c08_header">
+<a href="#dismiss-lightbox" class="ficon ficon-close c08_dismiss" data-behavior="dismiss-c08"></a>
+</div>
+<div class="c08_content">
+<div class="c08_body">
+<div class="col FR">
+<p class="type-ML">Cette page est également disponible en français.</p>
+<div class="button section"><a class="btn" href="/index.html">Version française</a></div>
+</div>
+<div class="col DE">
+<p class="type-ML">Diese Seite ist auch auf Deutsch verfügbar</p>
+<div class="button section"><a class="btn" href="/index.html">Zur deutschen Seite wechseln</a></div>
+</div>
+<div class="col JP">
+<p class="type-ML">日本語ページを</p>
+<div class="button section"><a class="btn" href="/index.html">見る</a></div>
+</div>
+<div class="col KR">
+<p class="type-ML">해당 페이지는 한글 버전으로 보실 수 있습니다</p>
+ <div class="button section"><a class="btn" href="/index.html">바로 가기</a></div>
+</div>
+<hr>
+<div class="col">
+<p><a class="dismiss" href="#dismiss-lightbox" data-behavior="dismiss-c08">Continue viewing this page in English</a></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<style>
+.c08_modal.lang {
+    background: rgba(255,255,255,0.8);
+}
+.c08_modal.lang .c08_header {
+    background: transparent;
+    border-left: none;
+}
+.c08_modal.lang .c08 {
+    top: 20%;
+    width: 600px;
+    border-radius: 12px;
+    box-shadow: rgba(0, 0, 0, 0.37) 0 0 15px;
+    border: 1px solid #b4b5b8;
+    background-image: url("/content/dam/fireeye-www/fw/images/bg-language-select.jpg");
+    background-position: right bottom;
+    margin: 0 auto;
+    position: relative;
+    max-width: 90%;
+}
+.c08_modal.lang .c08_dismiss {
+    color: #222;
+}
+.c08_modal.lang .c08_body {
+    padding: 12px 50px 60px;
+}
+.c08_modal.lang .col {
+    display: none;
+}
+.c08_modal.lang .col:last-child {
+    display: block;
+}
+.c08_modal.lang .btn {
+    margin-bottom: 0;
+}
+.c08_modal.lang hr {
+    margin: 30px 80px;
+}
+.c08_modal.lang hr:before {
+    border-bottom: none;
+}
+</style>
+</div></div>
+</div>
+</div></div>
+<div class="legal-footer-wrapper">
+<div class="legal-footer">
+<div class="g03_copyright">
+<p class="g03_copyright_p">
+Copyright&nbsp;&copy;&nbsp;2022&nbsp;FireEye.&nbsp;All rights reserved.&nbsp;<span class="g03-legal"><a href="/company/privacy.html">Privacy &amp; Cookies Policy</a> | <a href="/company/legal.html">Legal Documentation</a></span>
+</p>
+</div><div class="g03_languages">
+<a class="g01_options-option" href="#footer-worldwide">
+<span>Site Language</span>
+<span>English<span class="ficon ficon-globe"></span></span>
+</a>
+<div class="option-menu" id="footer-worldwide">
+<p><strong>My preferred language:</strong></p>
+<ul class="g01_options_list"><li><a href="https://www.fireeye.com/blog/threat-research/2018/08/bios-boots-what-finding-evil-in-boot-code-at-scale.html" target="_blank">English (English)</a></li>
+<li><a href="https://www.fireeye.fr" target="_blank">French (Français)</a></li>
+<li><a href="https://www.fireeye.de" target="_blank">German (Deutsch)</a></li>
+<li><a href="https://www.fireeye.jp" target="_blank">Japanese (日本語)</a></li>
+<li><a href="https://www.fireeye.kr" target="_blank">Korean (한국어)</a></li>
+<li><a href="/products/international-literature.html">More languages</a></li>
+</ul>
+</div>
+</div> </div>
+</div>
+</footer>
+</div>
+<script type="text/javascript" src="/etc/designs/fireeye-www/clientlibs_fw.min.js"></script>
+
+
+<div class="htmlpassthru_c66c htmlpassthru">
+
+<script>
+function changeSlide(a) {
+    if(isNaN(a)){console.log("updating i");i=2;a=2;}
+	$('#uc-he01_carousel').removeClass('uc-he01_s-1 uc-he01_s-2 uc-he01_s-3 uc-he01_s-4 uc-he01_s-5');
+	$('.uc-he01_sc_s, .uc-he01_c_btn').removeClass('is-active');
+	$('#uc-he01_sc_s-'+(a)+', [data-target="'+(a)+'"]').addClass('is-active animate');
+	window.setTimeout(function() {$('.uc-he01_sc_s, .uc-he01_c_btn').not('#uc-he01_sc_s-'+(a)).removeClass('animate');}, 1000);
+	$('#uc-he01_carousel').addClass('uc-he01_s-'+(a));
+}
+</script></div>
+
+<script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=fewebadmin"></script>
+</body>
+</html>

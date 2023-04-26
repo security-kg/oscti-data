@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Inside Cloudflare: Preventing Account Takeovers</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=de8f341044" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=de8f341044"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Throughout the day, Cloudflare has published blog posts on products created to secure our customers from credential stuffing bots, detect users with compromised credentials, and block users from proxy services. But what do we do inside Cloudflare to prevent account takeovers on our own applications?" />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/account-compromise-security-overview/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Inside Cloudflare: Preventing Account Takeovers" />
+    <meta property="og:description" content="Throughout the day, Cloudflare has published blog posts on products created to secure our customers from credential stuffing bots, detect users with compromised credentials, and block users from proxy services. But what do we do inside Cloudflare to prevent account takeovers on our own applications?" />
+    <meta property="og:url" content="https://blog.cloudflare.com/account-compromise-security-overview/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/03/Inside-Cloudflare--Preventing-Account-Takeovers-OG-blue-1.png" />
+    <meta property="article:published_time" content="2021-03-30T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-03-30T13:00:00.000Z" />
+    <meta property="article:tag" content="Security Week" />
+    <meta property="article:tag" content="Account Takeover" />
+    <meta property="article:tag" content="Security Team" />
+    <meta property="article:tag" content="Cloudflare Gateway" />
+    <meta property="article:tag" content="Cloudflare Access" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Inside Cloudflare: Preventing Account Takeovers" />
+    <meta name="twitter:description" content="Throughout the day, Cloudflare has published blog posts on products created to secure our customers from credential stuffing bots, detect users with compromised credentials, and block users from proxy services. But what do we do inside Cloudflare to prevent account takeovers on our own applications?" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/account-compromise-security-overview/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/03/Inside-Cloudflare--Preventing-Account-Takeovers-OG-blue.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Julie A. Sparks" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Security Week, Account Takeover, Security Team, Cloudflare Gateway, Cloudflare Access" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Julie A. Sparks",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/08/IMG_1517.jpg",
+            "width": 640,
+            "height": 480
+        },
+        "url": "https://blog.cloudflare.com/author/julie/",
+        "sameAs": []
+    },
+    "headline": "Inside Cloudflare: Preventing Account Takeovers",
+    "url": "https://blog.cloudflare.com/account-compromise-security-overview/",
+    "datePublished": "2021-03-30T13:00:00.000Z",
+    "dateModified": "2021-03-30T13:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/03/image1-63.png",
+    "keywords": "Security Week, Account Takeover, Security Team, Cloudflare Gateway, Cloudflare Access",
+    "description": "Throughout the day, Cloudflare has published blog posts on products created to secure our customers from credential stuffing bots, detect users with compromised credentials, and block users from proxy services. But what do we do inside Cloudflare to prevent account takeovers on our own applications?",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-hash-blog-403 tag-security-week tag-account-takeover tag-security-team tag-gateway tag-access sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=de8f341044" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=de8f341044" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-hash-blog-403 tag-security-week tag-account-takeover tag-security-team tag-gateway tag-access ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Inside Cloudflare: Preventing Account Takeovers</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-03-30T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 30, 2021 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/julie/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/08/IMG_1517.jpg" alt="Julie A. Sparks" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/julie" class="fw5 f3 no-underline black mr3">Julie A. Sparks</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image1-62.png" class="kg-image" alt="Inside Cloudflare: Preventing Account Takeovers"></figure><p>Over the last week, Cloudflare has published blog posts on products created to secure our customers from <a href="https://blog.cloudflare.com/super-bot-fight-mode/">credential stuffing bots</a>, <a href="https://blog.cloudflare.com/account-takeover-protection">detect users with compromised credentials</a>, and <a href="https://blog.cloudflare.com/protecting-apis-from-abuse-and-data-exfiltration/">block users from proxy services</a>. But what do we do inside Cloudflare to prevent account takeovers on our own applications? The Security Team uses Cloudflare products to proactively prevent account compromises. In addition, we build detections and automations as a second layer to alert us if an employee account is compromised. This ensures we can catch suspicious behavior, investigate it, and quickly remediate.</p><p>Our goal is to prevent automated and targeted attackers regardless of the account takeover technique: brute force attack, credential stuffing, botnets, social engineering, or phishing.</p><h3 id="classic-account-takeover-lifecycle">Classic Account Takeover Lifecycle</h3><p>First, let's walk through a common lifecycle for a compromised account.</p><p>In a typical scenario, a set of passwords and email addresses have been breached. These credentials are reused through credential stuffing in an attempt to gain access to any account (on any platform) where the user may have reused that combination. Once the attacker has initial access, which means the combination worked, they can gain information on that system and pivot to other systems through methods. This is classified as lateral movement. With one password leaked, there is the potential for a completely unrelated company to incur in a breach where an unauthorized user signs in and exfiltrates data.</p><p>Another vector for account takeovers are phishing emails with links that are sent to employees with the aim to harvest credentials. A common tactic used by attackers is Evilginx, a man-in-the-middle attack framework used for phishing credentials and session cookies of any web service. By creating a page similar to the company’s login portal, the attacker can intercept traffic and harvest the credentials put into the page. Once the credentials are captured, they immediately login as the user, exfiltrate information, and attempt to compromise related systems/accounts. As phishing email filtering has improved, attackers attempt to vish, a method of social engineering over a phone call, employees to get them to visit a malicious website such as the one mentioned above.</p><p>The two most common ways to add additional verification are through using a Time-based One-Time Password (TOTP) or verification code via text message (SMS) as a multi-factor authentication option. TOTP generates a one-time password which uses the current time as a source of uniqueness. These are commonly obtained from a mobile application such as Google Authenticator. Neither of these methods of multi-factor authentication would protect from account takeovers as attackers are able to use social engineering tactics to convince an employee to provide the TOTP or SMS. Additionally, attackers can perform SIM-swapping, a tactic where a phone carrier is tricked into assigning another person’s phone number to a new device, in order to get the verification code sent to a device they have.</p><p>Account takeovers are a real threat to companies and their users. Let’s walk through some tangible examples of compromises and how they can be prevented on multiple levels using Cloudflare.</p><h2 id="account-takeover-in-action">Account Takeover in Action</h2><p>In 2020, an example of the impact of an account takeover was demonstrated when an attacker was able to <a href="https://www.wsj.com/articles/the-teenager-behind-the-twitter-hack-and-how-he-did-it-11596563449">hijack Twitter employee login credentials</a> and then access dozens of verified Twitter accounts. A Florida teenager spoofed an employee’s phone number by SIM-swapping, a tactic where a phone carrier is tricked into assigning another person’s phone number to a new device. Then he social engineered a Twitter employee by pretending to be a member of their IT department. Once the employee was convinced, he guided them to a phishing page that resembled Twitter’s Okta login portal. Once the employee put in their credentials to the seemingly legitimate page, the attacker was able to use them to gain access to Twitter’s systems. This attack was possible due to the use of SMS and/or TOTP for multi-factor authentication. If the Twitter employee had a U2F hardware security token, such as a YubiKey, the attacker would have entered the stolen credentials then been prompted to touch a physical key in order to gain access, which would have been impossible without the employee’s key.</p><p>In this scenario, a company could adopt <a href="https://www.cloudflare.com/en-gb/teams/access">Cloudflare Access</a> to lock down access to internal systems to company-issued devices and use granular access policies to limit which accounts can be accessed by each user group. The policies can be used to force employees to authenticate with a U2F hardware security token and block all events that use TOTP/SMS.</p><p>In 2018, a data breach compromised MyFitnessPal user data including passwords. Two years later, the breached data was used to coordinate credential stuffing attacks on two insurance companies: <a href="https://www.prnewswire.com/news-releases/independence-blue-cross-provides-notice-of-a-privacy-incident-301087638.html">Independence Blue Cross</a> and <a href="https://www.prnewswire.com/news-releases/amerihealth-hmo-inc-and-amerihealth-insurance-company-of-new-jersey-provides-notice-of-a-privacy-incident-301087643.html">AmeriHealth New Jersey</a>. The credential stuffing attacks resulted in unauthorized access to user insurance information including claims. This example illuminates how any company can be targeted for account takeover tactics.</p><p>Cloudflare’s bot solutions — including <a href="https://blog.cloudflare.com/super-bot-fight-mode/">Super Bot Fight Mode</a>, which launched today — could have been utilized by the insurance companies to block credential stuffing proactively. Internally the insurance companies mentioned could have enabled <a href="https://blog.cloudflare.com/account-takeover-protection/">Exposed Credential Checks in WAF</a> to check for breached user passwords and prompt them to change their password.</p><h3 id="using-cloudflare-to-secure-cloudflare">Using Cloudflare to Secure Cloudflare</h3><p>Through Cloudflare products, many of the typical account takeover vectors are blocked. This helps the Security Team focus our attention on building our internal defenses against Cloudflare-specific attacks.</p><p>For example, <a href="https://www.cloudflare.com/en-gb/teams/gateway/">Cloudflare Gateway</a> allows us to proactively block potentially malicious domains in a simple UI rule builder. By blocking these categories on corporate endpoints, we lower the risk that an employee will visit a known threat.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image2-50.png" class="kg-image" alt="img"></figure><p>When there is a new domain that the Security Team observes is attempting a credential harvesting attack, we can then proactively block it using a blocklist in Gateway. This prevents the endpoint from resolving the site even if the employee accidentally navigates to it. Many security tools provide the ability to block by IP address; however, in addition to IP blocking, we also block by domain name in order to respond quickly to attacks. By blocking the domain, if an attacker deploys the same site on new IP addresses, we have already mitigated the risk of someone visiting the site.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image3-45.png" class="kg-image"></figure><p>Internally, all Cloudflare employees are required to use a FIDO2 hardware security token to authenticate to any company resource. This protects internal systems from many of the pitfalls that make account takeover easier.</p><p>In addition to the hardware token requirement, the Security Team is using <a href="https://www.cloudflare.com/en-gb/teams/access">Cloudflare Access</a> to enforce only <a href="https://blog.cloudflare.com/zero-trust-with-managed-devices/">managed corporate devices</a> are able to connect to internal systems. The managed rules can be configured to allow or block based on a combination of factors such as the multifactor method and the geography of the IP address used. The Security Team is able to switch from a reactive to proactive approach by blocking authentication events from non-corporate devices, countries where we don’t have employees, or events that use SMS/TOTP instead of a U2F hardware security token.</p><h3 id="adding-an-internal-layer-of-protection">Adding an Internal Layer of Protection</h3><p>In addition to Gateway features, the Detection &amp; Response Team exports <a href="https://www.cloudflare.com/en-gb/teams/gateway/">Gateway</a> &amp; <a href="https://www.cloudflare.com/en-gb/teams/access">Access</a> logs to further enrich, correlate, and develop detections on the raw events alongside other internal system logs. By combining all of our logs into an internal pipeline we have the opportunity to build custom detections and incident response automation.</p><p>In relation to account takeovers, our team has focused on building detections focused on<a href="https://attack.mitre.org/tactics/TA0001/"> initial access techniques</a> as a second layer of protection on employee accounts.</p><p>Some examples of account compromise focused detections are:</p><ul><li>A login or other authentication event to an internal system from a VPN.</li><li>A change in employee's multi-factor authentication token and use of a new device.</li><li>A login or authentication event from an unfamiliar IP address.</li><li>A login or authentication event from an IP address in a located high-risk country.</li><li>An authentication event with a multi-factor authentication soft-token to an internal system.</li><li>Any event from an IP address associated with known threat actors.</li></ul><p>However, there are many variations of behavior patterns that could signal an account compromise. Instead of using static detection rules for all of them, the Detection &amp; Response Team has prioritized building machine learning models that aid in detecting anomalous authentication behavior for employee accounts.</p><p>Risk signals are patterns that <em>can</em> indicate malicious behavior and are used to determine how likely that behavior is truly malicious. Every company has some of the same security risk signals for detecting account compromises; however, it can differ greatly depending on their infrastructure. Combining Cloudflare's Security products with our own engineering allows us to have seamless protection for external and internal facing systems.</p><h3 id="influencing-the-product-roadmap">Influencing the Product Roadmap</h3><p>As Cloudflare expands their security suite of products, the Security Team as a whole works closely in influencing the product roadmap. We are able to provide actionable insights into all the controls and detections required to effectively mitigate and respond to current cyberattacks. Through a feedback loop of communication and collaboration, we share our internal strategies with product teams and then dogfood the products built at Cloudflare to ensure they are helpful in protecting our employee and customer data.</p><p>Cloudflare is a place where new ideas are welcomed and discussed in order to ensure our products are an asset to Security &amp; IT teams that are using them. It's empowering to be part of that journey!</p><h3 id="next-steps">Next Steps</h3><p>Account takeovers are one of the most commonplace cybersecurity attacks, but you can quickly improve the maturity of your security program by putting in place mitigations focused on initial access. These mitigations stop the attacker at the “reconnaissance” stage of the cyber kill chain, an attack phase-model created by Lockheed Martin and expanded on through the <a href="https://attack.mitre.org/tactics/enterprise/">MITRE ATT&amp;CK framework</a>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/03/image4-51.png" class="kg-image"></figure><p>So what's the best strategy you can take to protect your organization’s enterprise security?</p><p><em>Make the account takeover attack as difficult as possible to execute.</em></p><p>At Cloudflare, we enforce security policies focused on account security, these include hardware security token enforcement for multi-factor-authentication, strong password complexity, proactive blocking of known bad domains, and bot protection on external facing sites. Each of these mitigations are aimed to disrupt the beginning phases of the attacker's kill chain.</p>
+            </div>
+        </section>
+
+        <a href="/tag/security-week/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security Week</a>
+        <a href="/tag/account-takeover/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Account Takeover</a>
+        <a href="/tag/security-team/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security Team</a>
+        <a href="/tag/gateway/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Gateway</a>
+        <a href="/tag/access/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Access</a>
+    </article>
+</main>
+
+<div class="pv4 ph3 mw7 center" id="social-buttons">
+    <h2>Comments</h2>
+    <div class="mt5-l mt4 flex flex-row-ns flex-column flex-wrap">
+        <a id="social-button-twitter" title="Discuss on Twitter" href="https://twitter.com/Cloudflare" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Twitter</span>
+        </a>
+        <a id="social-button-hn" title="Discuss on Hacker News" href="https://hn.algolia.com/?dateRange=all&page=0&prefix=false&query=blog.cloudflare.com&sort=byDate&type=story" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Hacker News</span>
+        </a>
+        <a id="social-button-reddit" title="Discuss on Reddit" href="https://www.reddit.com/r/CloudFlare/" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Reddit</span>
+        </a>
+    </div>
+</div>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+
+</div>
+
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript">
+    (function () {
+        // Social media, make request to worker
+        var urlObj = new URL(window.location.href);
+        var currenturl = urlObj.origin + urlObj.pathname;
+        try {
+            $.get("https://api.blog.cloudflare.com/social?u=" + currenturl, function( res ) {
+                if (!res.data.twitter && !res.data.hn && !res.data.reddit) {
+                    $("#social-buttons").hide();
+                }
+
+                if (res.data.twitter) {
+                    var twitterurl = "https://twitter.com/intent/tweet?in_reply_to=" + res.data.twitter.id;
+                    $("#social-button-twitter").attr("href", twitterurl);
+                    $("#social-button-twitter").show()
+                }
+
+                if (!res.data.hn) {
+                    $("#social-button-hn").attr("href", "https://news.ycombinator.com/submitlink?u=" + currenturl);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.hn) {
+                    $("#social-button-hn").attr("href", res.data.hn.comments_link);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.reddit) {
+                    $("#social-button-reddit").attr("href", res.data.reddit.comments_link);
+                    $("#social-button-reddit").show();
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            $("#social-buttons").hide();
+        }
+    })();
+</script>
+
+<script type="text/javascript" src="/assets/built/prism.js?v=de8f341044"></script>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

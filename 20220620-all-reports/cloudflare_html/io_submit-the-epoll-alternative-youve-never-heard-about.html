@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>io_submit: The epoll alternative you&#x27;ve never heard about</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/io_submit-the-epoll-alternative-youve-never-heard-about/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="io_submit: The epoll alternative you&#x27;ve never heard about" />
+    <meta property="og:description" content="The Linux AIO is designed for, well, Asynchronous disk IO! Disk files are not the same thing as network sockets! Is it even possible to use the Linux AIO API with network sockets in the first place?
+
+The answer turns out to be a strong YES!" />
+    <meta property="og:url" content="https://blog.cloudflare.com/io_submit-the-epoll-alternative-youve-never-heard-about/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/01/6891085910_3390ebe29f_k-2.jpg" />
+    <meta property="article:published_time" content="2019-01-04T11:02:26.000Z" />
+    <meta property="article:modified_time" content="2019-01-04T18:48:44.000Z" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="API" />
+    <meta property="article:tag" content="Developers" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="io_submit: The epoll alternative you&#x27;ve never heard about" />
+    <meta name="twitter:description" content="The Linux AIO is designed for, well, Asynchronous disk IO! Disk files are not the same thing as network sockets! Is it even possible to use the Linux AIO API with network sockets in the first place?
+
+The answer turns out to be a strong YES!" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/io_submit-the-epoll-alternative-youve-never-heard-about/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/01/6891085910_3390ebe29f_k-2.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Linux, API, Developers" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "io_submit: The epoll alternative you&#x27;ve never heard about",
+    "url": "https://blog.cloudflare.com/io_submit-the-epoll-alternative-youve-never-heard-about/",
+    "datePublished": "2019-01-04T11:02:26.000Z",
+    "dateModified": "2019-01-04T18:48:44.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/01/6891085910_3390ebe29f_k-2.jpg",
+    "keywords": "Linux, API, Developers",
+    "description": "The Linux AIO is designed for, well, Asynchronous disk IO! Disk files are not the same thing as network sockets! Is it even possible to use the Linux AIO API with network sockets in the first place?\n\nThe answer turns out to be a strong YES!\n",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-linux tag-api tag-developers sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-linux tag-api tag-developers ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">io_submit: The epoll alternative you&#x27;ve never heard about</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-01-04T11:02:26Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">January 04, 2019 11:02AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>My curiosity was piqued by an LWN article about <a href="https://lwn.net/Articles/743714/">IOCB_CMD_POLL - A new kernel polling interface</a>. It discusses an addition of a new polling mechanism to Linux AIO API, which was merged in 4.18 kernel. The whole idea is rather intriguing. The author of the patch is proposing to use the Linux AIO API with things like network sockets.</p>
+<p>Hold on. The Linux AIO is designed for, well, <strong>A</strong>synchronous disk <strong>IO</strong>! Disk files are not the same thing as network sockets! Is it even possible to use the Linux AIO API with network sockets in the first place?</p>
+<p>The answer turns out to be a strong YES! In this article I'll explain how to use the strengths of Linux AIO API to write better and faster network servers.</p>
+<p>But before we start, what is Linux AIO anyway?</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/01/6891085910_3390ebe29f_k.jpg" class="kg-image"><figcaption><a href="https://www.flickr.com/photos/schill/6891085910/">Photo </a>by <a href="https://www.flickr.com/photos/schill">Scott Schiller </a>CC/BY/2.0</figcaption></figure><p></p><!--kg-card-begin: markdown--><h2 id="introductiontolinuxaio">Introduction to Linux AIO</h2>
+<p>Linux AIO exposes asynchronous disk IO to userspace software.</p>
+<p>Historically on Linux, all disk operations were blocking. Whether you did <code>open()</code>, <code>read()</code>, <code>write()</code> or <code>fsync()</code>, you could be sure your thread would stall if the needed data and meta-data was not ready in disk cache. This usually isn't a problem. If you do small amount of IO or have plenty of memory, the disk syscalls would gradually fill the cache and on average be rather fast.</p>
+<p>The IO operation performance drops for IO-heavy workloads, like databases or caching web proxies. In such applications it would be tragic if a whole server stalled, just because some odd <code>read()</code> syscall had to wait for disk.</p>
+<p>To work around this problem, applications use one of the three approaches:</p>
+<p>(1) Use thread pools and offload blocking syscalls to worker threads. This is what glibc POSIX AIO (not to be confused with Linux AIO) wrapper does. (See: <a href="https://www.ibm.com/developerworks/linux/library/l-async/">IBM's documentation</a>). This is also what we ended up doing in our application at Cloudflare - <a href="https://blog.cloudflare.com/how-we-scaled-nginx-and-saved-the-world-54-years-every-day/">we offloaded read() and open() calls to a thread pool</a>.</p>
+<p>(2) Pre-warm the disk cache with <code>posix_fadvise(2)</code> and hope for the best.</p>
+<p>(3) Use Linux AIO with XFS filesystem, <a href="https://lwn.net/Articles/671649/">file opened with O_DIRECT</a>, and <a href="https://www.scylladb.com/2016/02/09/qualifying-filesystems/">avoid the undocumented pitfalls</a>.</p>
+<p>None of these methods is perfect. Even the Linux AIO if used carelessly, could still block in the <code>io_submit()</code> call. This was recently mentioned <a href="https://lwn.net/Articles/724198/">in another LWN article</a>:</p>
+<blockquote>
+<p>The Linux asynchronous I/O (AIO) layer tends to have many critics and few defenders, but most people at least expect it to actually be asynchronous. In truth, an AIO operation can block in the kernel for a number of reasons, making AIO difficult to use in situations where the calling thread truly cannot afford to block.</p>
+</blockquote>
+<p>Now that we know what Linux AIO API doesn't do well, let's see where it shines.</p>
+<!--kg-card-end: markdown--><p></p><!--kg-card-begin: markdown--><h2 id="simplestlinuxaioprogram">Simplest Linux AIO program</h2>
+<p>To use Linux AIO you first need <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-01-io-submit/aio_passwd.c">to define the 5 needed syscalls</a> - glibc doesn't provide wrapper functions. To use Linux AIO we need:</p>
+<p>(1) First call <code>io_setup()</code> to setup the <code>aio_context</code> data structure. Kernel will hand us an opaque pointer.</p>
+<p>(2) Then we can call <code>io_submit()</code> to submit a vector of &quot;I/O control blocks&quot; <code>struct iocb</code> for processing.</p>
+<p>(3) Finally, we can call <code>io_getevents()</code> to block and wait for a vector of <code>struct io_event</code> -  completion notification of the iocb's.</p>
+<p>There are 8 commands that can be submitted in an iocb. Two read, two write, two fsync variants and a POLL command introduced in 4.18 Kernel:</p>
+<pre><code>IOCB_CMD_PREAD = 0,
+IOCB_CMD_PWRITE = 1,
+IOCB_CMD_FSYNC = 2,
+IOCB_CMD_FDSYNC = 3,
+IOCB_CMD_POLL = 5,   /* from 4.18 */
+IOCB_CMD_NOOP = 6,
+IOCB_CMD_PREADV = 7,
+IOCB_CMD_PWRITEV = 8,
+</code></pre>
+<p>The <a href="https://github.com/torvalds/linux/blob/f346b0becb1bc62e45495f9cdbae3eef35d0b635/include/uapi/linux/aio_abi.h#L73-L107"><code>struct iocb</code></a> passed to <code>io_submit</code> is large, and tuned for disk IO. Here's a simplified version:</p>
+<pre><code class="language-.c">struct iocb {
+  __u64 data;           /* user data */
+  ...
+  __u16 aio_lio_opcode; /* see IOCB_CMD_ above */
+  ...
+  __u32 aio_fildes;     /* file descriptor */
+  __u64 aio_buf;        /* pointer to buffer */
+  __u64 aio_nbytes;     /* buffer size */
+...
+}
+</code></pre>
+<p>The completion notification retrieved from <code>io_getevents</code>:</p>
+<pre><code class="language-.c">struct io_event {
+  __u64  data;  /* user data */
+  __u64  obj;   /* pointer to request iocb */
+  __s64  res;   /* result code for this event */
+  __s64  res2;  /* secondary result */
+};
+
+</code></pre>
+<p>Let's try an example. Here's the simplest program reading /etc/passwd file with Linux AIO API:</p>
+<pre><code class="language-.c">fd = open(&quot;/etc/passwd&quot;, O_RDONLY);
+
+aio_context_t ctx = 0;
+r = io_setup(128, &amp;ctx);
+
+char buf[4096];
+struct iocb cb = {.aio_fildes = fd,
+                  .aio_lio_opcode = IOCB_CMD_PREAD,
+                  .aio_buf = (uint64_t)buf,
+                  .aio_nbytes = sizeof(buf)};
+struct iocb *list_of_iocb[1] = {&amp;cb};
+
+r = io_submit(ctx, 1, list_of_iocb);
+
+struct io_event events[1] = {{0}};
+r = io_getevents(ctx, 1, 1, events, NULL);
+
+bytes_read = events[0].res;
+printf(&quot;read %lld bytes from /etc/passwd\n&quot;, bytes_read);
+</code></pre>
+<p>Full source is, <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-01-io-submit/aio_passwd.c">as usual, on github</a>. Here's an strace of this program:</p>
+<pre><code class="language-.txt">openat(AT_FDCWD, &quot;/etc/passwd&quot;, O_RDONLY)
+io_setup(128, [0x7f4fd60ea000])
+io_submit(0x7f4fd60ea000, 1, [{aio_lio_opcode=IOCB_CMD_PREAD, aio_fildes=3, aio_buf=0x7ffc5ff703d0, aio_nbytes=4096, aio_offset=0}])
+io_getevents(0x7f4fd60ea000, 1, 1, [{data=0, obj=0x7ffc5ff70390, res=2494, res2=0}], NULL)
+</code></pre>
+<p>This all worked fine! But the disk read was not asynchronous: the <code>io_submit</code> syscall blocked and did all the work! The <code>io_getevents</code> call finished instantly. We could try to make the disk read async, but this requires O_DIRECT flag which skips the caches.</p>
+<p>Lets try to better illustrate the blocking nature of <code>io_submit</code> on normal files. Here's similar example, showing strace when reading large 1GiB block from <code>/dev/zero</code>:</p>
+<pre><code>io_submit(0x7fe1e800a000, 1, [{aio_lio_opcode=IOCB_CMD_PREAD, aio_fildes=3, aio_buf=0x7fe1a79f4000, aio_nbytes=1073741824, aio_offset=0}]) \
+    = 1 &lt;0.738380&gt;
+io_getevents(0x7fe1e800a000, 1, 1, [{data=0, obj=0x7fffb9588910, res=1073741824, res2=0}], NULL) \
+    = 1 &lt;0.000015&gt;
+</code></pre>
+<p>The kernel spent 738ms in <code>io_submit</code> and only 15us in <code>io_getevents</code>. The kernel behaves the same way with network sockets - all the work is done in <code>io_submit</code>.</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/01/Network_card-2.jpg" class="kg-image"><figcaption><a href="https://commons.wikimedia.org/wiki/File:Network_card.jpg">Photo</a> by <a href="https://commons.wikimedia.org/wiki/User:Helix84">Helix84</a> CC/BY-SA/3.0</figcaption></figure><!--kg-card-begin: markdown--><h2 id="linuxaiowithsocketsbatching">Linux AIO with sockets - batching</h2>
+<p>The implementation of <code>io_submit</code> is rather conservative. Unless the passed descriptor is O_DIRECT file, it will just block and perform the requested action. In case of network sockets it means:</p>
+<ul>
+<li>For blocking sockets IOCB_CMD_PREAD will hang until a packet arrives.</li>
+<li>For non-blocking sockets IOCB_CMD_PREAD will -11 (EAGAIN) return code.</li>
+</ul>
+<p>These are exactly the same semantics as for vanilla <code>read()</code> syscall. It's fair to say that for network sockets <code>io_submit</code> is no smarter than good old read/write calls.</p>
+<p>It's important to note the <code>iocb</code> requests passed to kernel are evaluated in-order sequentially.</p>
+<p>While Linux AIO won't help with async operations, it can definitely be used for syscall batching!</p>
+<p>If you have a web server needing to send and receive data from hundreds of network sockets, using <code>io_submit</code> can be a great idea. This would avoid having to call <code>send</code> and <code>recv</code> hundreds of times. This will improve performance - jumping back and forth from userspace to kernel is not free, especially <a href="https://gist.github.com/antirez/9e716670f76133ec81cb24036f86ee95">since the meltdown and spectre mitigations</a>.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>One buffer</th>
+<th>Multiple buffers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One file descriptor</td>
+<td>read()</td>
+<td>readv()</td>
+</tr>
+<tr>
+<td>Many file descriptors</td>
+<td>io_submit + IOCB_CMD_PREAD</td>
+<td>io_submit + IOCB_CMD_PREADV</td>
+</tr>
+</tbody>
+</table>
+<p>To illustrate the batching aspect of <code>io_submit</code>, let's create a small program forwarding data from one TCP socket to another. In simplest form, without Linux AIO, the program would have a trivial flow like this:</p>
+<pre><code class="language-.py">while True:
+  d = sd1.read(4096)
+  sd2.write(d)
+</code></pre>
+<p>We can express the same logic with Linux AIO. The code will look like this:</p>
+<pre><code class="language-.c">struct iocb cb[2] = {{.aio_fildes = sd2,
+                      .aio_lio_opcode = IOCB_CMD_PWRITE,
+                      .aio_buf = (uint64_t)&amp;buf[0],
+                      .aio_nbytes = 0},
+                     {.aio_fildes = sd1,
+                     .aio_lio_opcode = IOCB_CMD_PREAD,
+                     .aio_buf = (uint64_t)&amp;buf[0],
+                     .aio_nbytes = BUF_SZ}};
+struct iocb *list_of_iocb[2] = {&amp;cb[0], &amp;cb[1]};
+while(1) {
+  r = io_submit(ctx, 2, list_of_iocb);
+
+  struct io_event events[2] = {};
+  r = io_getevents(ctx, 2, 2, events, NULL);
+  cb[0].aio_nbytes = events[1].res;
+}
+</code></pre>
+<p>This code submits two jobs to <code>io_submit</code>. First, request to write data to <code>sd2</code> then to read data from <code>sd1</code>. After the read is done, the code fixes up the write buffer size and loops again. The code does a cool trick - the first write is of size 0. We are doing so since we can fuse write+read in one io_submit (but not read+write). After a read is done we have to fix the write buffer size.</p>
+<p>Is this code faster than the simple read/write version? Not yet. Both versions  have two syscalls: read+write and io_submit+io_getevents. Fortunately, we can improve it.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="gettingridofio_getevents">Getting rid of io_getevents</h2>
+<p>When running <code>io_setup()</code>, the kernel allocates a couple of pages of memory for the process. This is how this memory block looks like in /proc/&lt;pid&gt;/maps:</p>
+<pre><code>marek:~$ cat /proc/`pidof -s aio_passwd`/maps
+...
+7f7db8f60000-7f7db8f63000 rw-s 00000000 00:12 2314562     /[aio] (deleted)
+...
+</code></pre>
+<p>The [aio] memory region (12KiB in my case) was allocated by the <code>io_setup</code>. This memory range is used a ring buffer storing the completion events. In most cases, there isn't any reason to call the real <code>io_getevents</code> syscall. The completion data can be easily retrieved from the ring buffer without the need of consulting the kernel. Here is a fixed version of the code:</p>
+<pre><code class="language-.c">int io_getevents(aio_context_t ctx, long min_nr, long max_nr,
+                 struct io_event *events, struct timespec *timeout)
+{
+    int i = 0;
+
+    struct aio_ring *ring = (struct aio_ring*)ctx;
+    if (ring == NULL || ring-&gt;magic != AIO_RING_MAGIC) {
+        goto do_syscall;
+    }
+
+    while (i &lt; max_nr) {
+        unsigned head = ring-&gt;head;
+        if (head == ring-&gt;tail) {
+            /* There are no more completions */
+            break;
+        } else {
+            /* There is another completion to reap */
+            events[i] = ring-&gt;events[head];
+            read_barrier();
+            ring-&gt;head = (head + 1) % ring-&gt;nr;
+            i++;
+        }
+    }
+
+    if (i == 0 &amp;&amp; timeout != NULL &amp;&amp; timeout-&gt;tv_sec == 0 &amp;&amp; timeout-&gt;tv_nsec == 0) {
+        /* Requested non blocking operation. */
+        return 0;
+    }
+
+    if (i &amp;&amp; i &gt;= min_nr) {
+        return i;
+    }
+
+do_syscall:
+    return syscall(__NR_io_getevents, ctx, min_nr-i, max_nr-i, &amp;events[i], timeout);
+}
+
+</code></pre>
+<p><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-01-io-submit/aio_poll.c#L63">Here's full code</a>. This ring buffer interface is poorly documented. I adapted this code from <a href="https://github.com/axboe/fio/blob/702906e9e3e03e9836421d5e5b5eaae3cd99d398/engines/libaio.c#L149-L172">the axboe/fio project</a>.</p>
+<p>With this code fixing the <code>io_getevents</code> function, our Linux AIO version of the TCP proxy needs only one syscall per loop, and indeed is a tiny bit faster than the read+write code.</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/01/16026681353_90b26e0731_z.jpg" class="kg-image"><figcaption><a href="https://www.flickr.com/photos/99279135@N05/16026681353/">Photo </a>by <a href="https://www.flickr.com/photos/99279135@N05/">Train Photos </a>CC/BY-SA/2.0</figcaption></figure><!--kg-card-begin: markdown--><h2 id="epollalternative">Epoll alternative</h2>
+<p>With the addition of IOCB_CMD_POLL in kernel 4.18, one could use <code>io_submit</code> also as select/poll/epoll equivalent. For example, here's some code waiting for data on a socket:</p>
+<pre><code class="language-.c">struct iocb cb = {.aio_fildes = sd,
+                  .aio_lio_opcode = IOCB_CMD_POLL,
+                  .aio_buf = POLLIN};
+struct iocb *list_of_iocb[1] = {&amp;cb};
+
+r = io_submit(ctx, 1, list_of_iocb);
+r = io_getevents(ctx, 1, 1, events, NULL);
+</code></pre>
+<p><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-01-io-submit/aio_poll.c">Full code</a>. Here's the strace view:</p>
+<pre><code>io_submit(0x7fe44bddd000, 1, [{aio_lio_opcode=IOCB_CMD_POLL, aio_fildes=3}]) \
+    = 1 &lt;0.000015&gt;
+io_getevents(0x7fe44bddd000, 1, 1, [{data=0, obj=0x7ffef65c11a8, res=1, res2=0}], NULL) \
+    = 1 &lt;1.000377&gt;
+</code></pre>
+<p>As you can see this time the &quot;async&quot; part worked fine, the <code>io_submit</code> finished instantly and the <code>io_getevents</code> successfully blocked for 1s while awaiting data. This is pretty powerful and can be used instead of the <code>epoll_wait()</code> syscall.</p>
+<p>Furthermore, normally dealing with <code>epoll</code> requires juggling <code>epoll_ctl</code> syscalls. Application developers go to great lengths to avoid calling this syscall too often. <a href="http://man7.org/linux/man-pages/man7/epoll.7.html">Just read the man page</a> on EPOLLONESHOT and EPOLLET flags. Using <code>io_submit</code> for polling works around this whole complexity, and doesn't require any spurious syscalls. Just push your sockets to the iocb request vector, call <code>io_submit</code> exactly once and wait for completions. The API can't be simpler than this.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="summary">Summary</h2>
+<p>In this blog post we reviewed the Linux AIO API. While initially conceived to be a disk-only API, it seems to be working in the same way as normal read/write syscalls on network sockets. But as opposed to read/write <code>io_submit</code> allows syscall batching, potentially improving performance.</p>
+<p>Since kernel 4.18 <code>io_submit</code> and <code>io_getevents</code> can be used to wait for events like POLLIN and POLLOUT on network sockets. This is great, and could be used as a replacement for <code>epoll()</code> in the event loop.</p>
+<p>I can imagine a network server that could just be doing <code>io_submit</code> and <code>io_getevents</code> syscalls, as opposed to the usual mix of <code>read</code>, <code>write</code>, <code>epoll_ctl</code> and <code>epoll_wait</code>. With such design the syscall batching aspect of <code>io_submit</code> could really shine. Such a server would be meaningfully faster.</p>
+<p>Sadly, even with recent Linux AIO API improvements, the larger discussion remains. Famously, <a href="https://lwn.net/Articles/671657/">Linus hates it</a>:</p>
+<blockquote>
+<p>AIO is a horrible ad-hoc design, with the main excuse being &quot;other, less gifted people, made that design, and we are implementing it for compatibility because database people - who seldom have any shred of taste - actually use it&quot;. But AIO was always really really ugly.</p>
+</blockquote>
+<p>Over the years there had been multiple attempts on creating a better batching and async interfaces, unfortunately, lacking coherent vision. For example, <a href="https://github.com/torvalds/linux/blob/6f0d349d922ba44e4348a17a78ea51b7135965b1/Documentation/networking/msg_zerocopy.rst">recent addition of <code>sendto(MSG_ZEROCOPY)</code></a> allows for truly async transmission operations, but no batching. <code>io_submit</code> allows batching but not async. It's even worse than that - Linux currently has three ways of delivering async notifications - signals, <code>io_getevents</code> and <code>MSG_ERRQUEUE</code>.</p>
+<p>Having said that I'm really excited to see the new developments which allow developing faster network servers. I'm jumping on the code to replace my rusty epoll event loops with io_submit!</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/api/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">API</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-02T12:00:00Z">March 02, 2021 12:00PM</p>
+        <a href="/how-to-execute-an-object-file-part-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How to execute an object file: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Ever wondered if it is possible to execute an object file without linking? Or use any object file as a library? Follow along to learn how to decompose an object file and import code from it along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/compiler/" class="no-underline f1 fw2 blue3 underline-hover">Compiler</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/software/" class="no-underline f1 fw2 blue3 underline-hover">Software</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-08T12:00:00+01:00">July 08, 2020 12:00PM</p>
+        <a href="/sandboxing-in-linux-with-zero-lines-of-code/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Sandboxing in Linux with zero lines of code</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In this post we will review Linux seccomp and learn how to sandbox any (even a proprietary) application without writing a single line of code....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-25T12:00:00Z">March 25, 2020 12:00PM</p>
+        <a href="/speeding-up-linux-disk-encryption/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Speeding up Linux disk encryption</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Encrypting data at rest is vital for Cloudflare with more than 200 data centres across the world. In this post, we will investigate the performance of disk encryption on Linux and explain how we made it at least two times faster for ourselves and our customers!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-07-10T14:07:21+01:00">July 10, 2019 2:07PM</p>
+        <a href="/a-gentle-introduction-to-linux-kernel-fuzzing/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A gentle introduction to Linux Kernel fuzzing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It's a good target: it's an obscure part of kernel, and it's relatively easy to automatically craft valid messages....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

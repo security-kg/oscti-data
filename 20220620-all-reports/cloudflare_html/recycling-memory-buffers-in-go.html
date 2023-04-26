@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Recycling memory buffers in Go</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/recycling-memory-buffers-in-go/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Recycling memory buffers in Go" />
+    <meta property="og:description" content="This blog post is very old now. You probably don&#x27;t want to use the techniques described here. GO&#x27;S sync.Pool is a better way to go." />
+    <meta property="og:url" content="https://blog.cloudflare.com/recycling-memory-buffers-in-go/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/garbage-recyler.png" />
+    <meta property="article:published_time" content="2013-08-24T01:46:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-17T21:57:02.000Z" />
+    <meta property="article:tag" content="Firewall" />
+    <meta property="article:tag" content="Go" />
+    <meta property="article:tag" content="Reliability" />
+    <meta property="article:tag" content="Railgun" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Recycling memory buffers in Go" />
+    <meta name="twitter:description" content="This blog post is very old now. You probably don&#x27;t want to use the techniques described here. GO&#x27;S sync.Pool is a better way to go." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/recycling-memory-buffers-in-go/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/garbage-recyler.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="John Graham-Cumming" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Firewall, Go, Reliability, Railgun" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@jgrahamc" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "John Graham-Cumming",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/url-2.jpg",
+        "url": "https://blog.cloudflare.com/author/john-graham-cumming/",
+        "sameAs": [
+            "https://twitter.com/jgrahamc"
+        ]
+    },
+    "headline": "Recycling memory buffers in Go",
+    "url": "https://blog.cloudflare.com/recycling-memory-buffers-in-go/",
+    "datePublished": "2013-08-24T01:46:00.000Z",
+    "dateModified": "2018-08-17T21:57:02.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/garbage-recyler.png",
+    "keywords": "Firewall, Go, Reliability, Railgun",
+    "description": "This blog post is very old now. You probably don&#x27;t want to use the techniques described here. GO&#x27;S sync.Pool is a better way to go.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-firewall tag-go tag-reliability tag-railgun sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-firewall tag-go tag-reliability tag-railgun ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Recycling memory buffers in Go</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2013-08-24T02:46:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">August 24, 2013 2:46AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/john-graham-cumming/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/url-2.jpg" alt="John Graham-Cumming" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/john-graham-cumming" class="fw5 f3 no-underline black mr3">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><strong>THIS BLOG POST IS VERY OLD NOW. YOU PROBABLY DON'T WANT TO USE THE TECHNIQUE DESCRIBED HERE. GO'S <a href="https://golang.org/pkg/sync/#Pool">sync.Pool</a> IS A BETTER WAY TO GO.</strong></p>
+<p>The other day I wrote about our use of Lua to <a href="http://blog.cloudflare.com/cloudflares-new-waf-compiling-to-lua">implement our new Web Application Firewall</a>. The other language that's become very popular at CloudFlare is <a href="http://golang.org/">Go</a>. In the past, I've written about <a href="http://blog.cloudflare.com/go-at-cloudflare">how we use Go</a> to write network services including <a href="http://blog.cloudflare.com/cacheing-the-uncacheable-cloudflares-railgun-73454">Railgun</a>.</p>
+<p>One of the operational challenges of using a garbage-collected language like Go for long-running network services is memory management.</p>
+<p>To understand Go's memory management it's necessary to dig a little into the Go run-time code. There are two separate processes that take care of identifying memory that is no longer used by the program (that's garbage collection) and returning memory to the operating system when it doesn't look like it will be used again (that's called scavenging in the Go code).</p>
+<p>Here's a small program that creates a lot of garbage. Once a second it asks for a byte array of between 5,000,000 and 10,000,000 bytes. It keeps a pool of 20 of these buffers around and discards others. This program is designed to simulate something that happens quite often in programs: memory is allocated by different parts of the program over time, some of it is retained, most of it is no longer needed. In a networked Go program this can easily happen with goroutines that handle network connections or requests. It's common to have goroutines that allocate blocks of memory (such as slices to store received data) and then no longer need them. Over time there will be some number of blocks of memory in use by network connections that are being handled and accumulated garbage from connections that have come and gone.</p>
+<pre>package main
+
+import (  
+    &quot;fmt&quot;  
+    &quot;math/rand&quot;  
+    &quot;runtime&quot;  
+    &quot;time&quot;
+)
+
+func makeBuffer() []byte {  
+    return make([]byte, rand.Intn(5000000)+5000000)  
+}
+
+func main() {  
+    pool := make([][]byte, 20)
+
+    var m runtime.MemStats  
+    makes := 0  
+    for {  
+        b := makeBuffer()  
+        makes += 1
+        i := rand.Intn(len(pool))
+        pool[i] = b
+
+        time.Sleep(time.Second)
+
+        bytes := 0
+
+        for i := 0; i &lt; len(pool); i++ {
+            if pool[i] != nil {
+                bytes += len(pool[i])
+            }
+        }
+
+        runtime.ReadMemStats(&amp;m)
+        fmt.Printf(&quot;%d,%d,%d,%d,%d,%d\n&quot;, m.HeapSys, bytes, m.HeapAlloc,
+            m.HeapIdle, m.HeapReleased, makes)
+    }
+}
+</pre>
+<p>The program uses the <a href="http://golang.org/pkg/runtime/#ReadMemStats">runtime.ReadMemStats</a> function to get information about the size of the heap. It prints out four values: <code>HeapSys</code> (the number of bytes the program has asked the operating system for), <code>HeapAlloc</code> (the number of bytes currently allocated in the heap), <code>HeapIdle</code> (the number of bytes in the heap that are unused) and <code>HeapReleased</code> (the number of bytes returned to the operating system).</p>
+<p>Garbage collection runs frequently in a Go program (see the <code>GOGC</code> environment variable to understand how to control the garbage collector's operation), so when running the size of the heap will change as memory is spotted as unused: this will causes <code>HeapAlloc</code> and <code>HeapIdle</code> to change over time. The scavenger will only release memory that has been unused for more than 5 minutes so <code>HeapReleased</code> does not change often.</p>
+<p>Here's a chart of the program above running for ten minutes.</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/garbage.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/garbage.png"></noscript></p>
+<p>(On this and subsequent charts the left axis in in bytes and the right axis is a count used for Make Count)</p>
+<p>The red line shows the number of bytes that are actually in byte buffers in the pool. Because it has a fixed size of 20 buffers it quickly plateaus at around 150,000,000 bytes. The top blue line shows the amount of memory request from the operating system; it plateaus at around 375,000,000 bytes. So the program is using about 2.5x the amount of memory it needs.</p>
+<p>As the program is churning through memory the allocated size of the heap and the amount of idle memory jumps around as garbage collection occurs. The orange line just counts the number of times <code>makeBuffer()</code> has been called to create a new buffer.</p>
+<p>This sort of over request of memory is common in garbage collected programs (see, for example, the paper <a href="http://cs.canisius.edu/~hertzm/gcmalloc-oopsla-2005.pdf">Quantifying the Performance of Garbage Collection vs. Explicit Memory Management</a>). As the program churns through memory the idle memory gets reused and rarely gets released to the operating system.</p>
+<p>One way to solve this problem is to perform some memory management manually in the program. For example, using a channel it's possible to keep a separate pool of buffers that are no longer used and use that pool to retrieve a buffer (or make a new one if the channel is empty).</p>
+<p>The program can then be rewritten as follows:</p>
+<pre>package main
+
+import (
+    &quot;fmt&quot;
+    &quot;math/rand&quot;
+    &quot;runtime&quot;
+    &quot;time&quot;
+)
+
+func makeBuffer() []byte {
+    return make([]byte, rand.Intn(5000000)+5000000)
+}
+
+func main() {
+    pool := make([][]byte, 20)
+
+    buffer := make(chan []byte, 5)
+
+    var m runtime.MemStats
+    makes := 0
+    for {
+        var b []byte
+        select {
+        case b = &lt;-buffer:
+        default:
+            makes += 1
+            b = makeBuffer()
+        }
+
+        i := rand.Intn(len(pool))
+        if pool[i] != nil {
+            select {
+            case buffer &lt;- pool[i]:
+                pool[i] = nil
+            default:
+            }
+        }
+
+        pool[i] = b
+
+        time.Sleep(time.Second)
+
+        bytes := 0
+        for i := 0; i &lt; len(pool); i++ {
+            if pool[i] != nil {
+                bytes += len(pool[i])
+            }
+        }
+
+        runtime.ReadMemStats(&amp;m)
+        fmt.Printf(&quot;%d,%d,%d,%d,%d,%d\n&quot;, m.HeapSys, bytes, m.HeapAlloc,
+            m.HeapIdle, m.HeapReleased, makes)
+    }
+}
+</pre>
+<p>And here's a graph of its operation for 10 minutes:</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/garbage-pool.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/garbage-pool.png"></noscript></p>
+<p>This tells a very different story from above. The memory actually in pool is very close to the memory requested from the operating system and the garbage collector has little to no work to do. The heap only has a very small amount of idle memory that eventually gets released to the operating system.</p>
+<p>The key to the operation of this memory recycling mechanism is a buffered channel called <code>buffer</code>. In the code above it can store 5 <code>[]byte</code> slices. When the program needs a buffer it first tries to read one from the channel using a <code>select</code> trick:</p>
+<pre>select {
+    case b = &lt;-buffer:
+    default:
+        b = makeBuffer()
+}
+</pre>
+<p>This will never block because if the channel called <code>buffer</code> has a slice in it then the first case works and the slice is placed in <code>b</code>. If the channel is empty (meaning a receive would block) the <code>default</code> case happens a new buffer is allocated.</p>
+<p>Putting slices back in the channel uses a similar non-blocking trick:</p></p>
+<pre>select {
+    case buffer &lt;- pool[i]:
+        pool[i] = nil
+    default:
+}
+</pre>
+<p>If the <code>buffer</code> channel is full then a send to it would block. In that case the empty <code>default</code> clause occurs. This simple mechanism can be used to safely make a shared pool. It can even be shared across goroutines since channel communication is perfectly safe from multiple goroutines.</p>
+<p>We actually use a similar technique to this in our Go programs. The actual recycler (in simplified form) is shown below. It works by having a goroutine that handles the creation of buffers and shares them across goroutines in our software. Two channels <code>get</code> (to get a new buffer) and <code>give</code> (to return a buffer to the pool) are used for all communication.</p>
+<p>The recycler keeps a linked list of returned buffers and periodically throws away those that are too old and are unlikely to be reused (in the example code that's buffers that are older than one minute). That allows the program to cope with bursts of demand for buffers dynamically.</p>
+<pre>package main
+
+import (
+    &quot;container/list&quot;
+    &quot;fmt&quot;
+    &quot;math/rand&quot;
+    &quot;runtime&quot;
+    &quot;time&quot;
+)
+
+var makes int
+var frees int
+
+func makeBuffer() []byte {
+    makes += 1
+    return make([]byte, rand.Intn(5000000)+5000000)
+}
+
+type queued struct {
+    when time.Time
+    slice []byte
+}
+
+func makeRecycler() (get, give chan []byte) {
+    get = make(chan []byte)
+    give = make(chan []byte)
+
+    go func() {
+        q := new(list.List)
+        for {
+            if q.Len() == 0 {
+                q.PushFront(queued{when: time.Now(), slice: makeBuffer()})
+            }
+
+            e := q.Front()
+
+            timeout := time.NewTimer(time.Minute)
+            select {
+            case b := &lt;-give:
+                timeout.Stop()
+                q.PushFront(queued{when: time.Now(), slice: b})
+
+           case get &lt;- e.Value.(queued).slice:
+               timeout.Stop()
+               q.Remove(e)
+
+           case &lt;-timeout.C:
+               e := q.Front()
+               for e != nil {
+                   n := e.Next()
+                   if time.Since(e.Value.(queued).when) &gt; time.Minute {
+                       q.Remove(e)
+                       e.Value = nil
+                   }
+                   e = n
+               }
+           }
+       }
+
+    }()
+
+    return
+}
+
+func main() {
+    pool := make([][]byte, 20)
+
+    get, give := makeRecycler()
+
+    var m runtime.MemStats
+    for {
+        b := &lt;-get
+        i := rand.Intn(len(pool))
+        if pool[i] != nil {
+            give &lt;- pool[i]
+        }
+
+        pool[i] = b
+
+        time.Sleep(time.Second)
+
+        bytes := 0
+        for i := 0; i &lt; len(pool); i++ {
+            if pool[i] != nil {
+                bytes += len(pool[i])
+            }
+        }
+
+        runtime.ReadMemStats(&amp;m)
+        fmt.Printf(&quot;%d,%d,%d,%d,%d,%d,%d\n&quot;, m.HeapSys, bytes, m.HeapAlloc
+             m.HeapIdle, m.HeapReleased, makes, frees)
+    }
+}
+</pre>
+<p>Running that program for ten minutes looks very similar to the second program above:</p>
+<p><img alt="" src="https://blog.cloudflare.com/content/images/garbage-recyler.png"><noscript><img alt="" src="https://blog.cloudflare.com/content/images/garbage-recyler.png"></noscript></p>
+<p>These techniques can be used to recycle memory that the programmer knows is likely to be reused without asking the garbage collector to do the work. They can significantly reduce the amount of memory a program needs. And they can be used for more than just byte slices. Any arbitrary Go type (user-defined or not) could be recycled in a similar manner.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/firewall/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Firewall</a>
+        <a href="/tag/go/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Go</a>
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+        <a href="/tag/railgun/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Railgun</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-24T12:00:00+01:00">September 24, 2020 12:00PM</p>
+        <a href="/building-even-faster-interpreters-in-rust/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Building even faster interpreters in Rust</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Firewall Rules lets customers filter the traffic hitting their site, powered by our Wirefilter engine. We’re excited to share some in-depth optimizations we have recently made to improve the performance of our edge....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/zak/" class="fw5 f2 black no-underline">Zak Cutner</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/simd/" class="no-underline f1 fw2 blue3 underline-hover">SIMD</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-04-24T12:00:00+01:00">April 24, 2020 12:00PM</p>
+        <a href="/stream-firewall-events-directly-to-your-siem/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Stream Firewall Events directly to your SIEM</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As of today, customers using Cloudflare Logs can create Logpush jobs that send only Firewall Events. These events arrive much faster than our existing HTTP requests logs: they are typically delivered to your logging platform within 60 seconds of sending the response to the client....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/patrick/" class="fw5 f2 black no-underline">Patrick R. Donahue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/firewall-events/" class="no-underline f1 fw2 blue3 underline-hover">Firewall Events</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/logs/" class="no-underline f1 fw2 blue3 underline-hover">Logs</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/log-push/" class="no-underline f1 fw2 blue3 underline-hover">Log Push</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/terraform/" class="no-underline f1 fw2 blue3 underline-hover">Terraform</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-03-04T13:00:00Z">March 04, 2019 1:00PM</p>
+        <a href="/how-we-made-firewall-rules/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How we made Firewall Rules</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Recently we launched Firewall Rules, a new feature that allows you to construct expressions that perform complex matching against HTTP requests and then choose how that traffic is handled....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/david-kitchen/" class="fw5 f2 black no-underline">David Kitchen</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/page-rules/" class="no-underline f1 fw2 blue3 underline-hover">Page Rules</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-12-21T13:11:00Z">December 21, 2018 1:11PM</p>
+        <a href="/firewall-rules-priority-and-ordering/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Firewall Rules - Priority and Ordering</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Firewall Rules are one of the best security features we released this year, and have been an overwhelming success. Customers have been using Firewall Rules to solve interesting security related use cases....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-cruz-farmer/" class="fw5 f2 black no-underline">Alex Cruz Farmer</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

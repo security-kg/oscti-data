@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Moving Quicksilver into production</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="We previously explained how and why we built Quicksilver. This second blog post is about the long journey to production which culminates with Kyoto Tycoon removal from Cloudflare infrastructure and points to the first signs of obsolescence." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/moving-quicksilver-into-production/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Moving Quicksilver into production" />
+    <meta property="og:description" content="We previously explained how and why we built Quicksilver. This second blog post is about the long journey to production which culminates with Kyoto Tycoon removal from Cloudflare infrastructure and points to the first signs of obsolescence." />
+    <meta property="og:url" content="https://blog.cloudflare.com/moving-quicksilver-into-production/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-3@2x-1.png" />
+    <meta property="article:published_time" content="2020-11-25T15:11:22.000Z" />
+    <meta property="article:modified_time" content="2020-11-26T09:31:31.000Z" />
+    <meta property="article:tag" content="LMDB" />
+    <meta property="article:tag" content="Quicksilver" />
+    <meta property="article:tag" content="Key-Value" />
+    <meta property="article:tag" content="Product News" />
+    <meta property="article:tag" content="Kyoto-Tycoon" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Moving Quicksilver into production" />
+    <meta name="twitter:description" content="We previously explained how and why we built Quicksilver. This second blog post is about the long journey to production which culminates with Kyoto Tycoon removal from Cloudflare infrastructure and points to the first signs of obsolescence." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/moving-quicksilver-into-production/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-3@2x.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Geoffrey Plouviez" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="LMDB, Quicksilver, Key-Value, Product News, Kyoto-Tycoon" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Geoffrey Plouviez",
+        "image": "https://blog.cloudflare.com/content/images/2020/11/_DSC5175.jpg",
+        "url": "https://blog.cloudflare.com/author/geoffrey-plouviez/",
+        "sameAs": []
+    },
+    "headline": "Moving Quicksilver into production",
+    "url": "https://blog.cloudflare.com/moving-quicksilver-into-production/",
+    "datePublished": "2020-11-25T15:11:22.000Z",
+    "dateModified": "2020-11-26T09:31:31.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/11/image3-17.png",
+    "keywords": "LMDB, Quicksilver, Key-Value, Product News, Kyoto-Tycoon",
+    "description": "We previously explained how and why we built Quicksilver. This second blog post is about the long journey to production which culminates with Kyoto Tycoon removal from Cloudflare infrastructure and points to the first signs of obsolescence.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-lmdb tag-quicksilver tag-key-value tag-product-news tag-kyoto-tycoon sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-lmdb tag-quicksilver tag-key-value tag-product-news tag-kyoto-tycoon ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Moving Quicksilver into production</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-11-25T15:11:22Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">November 25, 2020 3:11PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/geoffrey-plouviez/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2020/11/_DSC5175.jpg" alt="Geoffrey Plouviez" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/geoffrey-plouviez" class="fw5 f3 no-underline black mr3">Geoffrey Plouviez</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>One of the great arts of software engineering is making updates and improvements to working systems without taking them offline. For some systems this can be rather easy, spin up a new web server or load balancer, redirect traffic and you’re done. For other systems, such as the core distributed data store which keeps millions of websites online, it’s a bit more of a challenge.</p><p>Quicksilver is the data store responsible for storing and distributing the billions of KV pairs used to configure the millions of sites and Internet services which use Cloudflare. <a href="https://blog.cloudflare.com/introducing-quicksilver-configuration-distribution-at-internet-scale/">In a previous post</a>, we discussed why it was built and what it was replacing. Building it, however, was only a small part of the challenge. We needed to deploy it to production into a network which was designed to be fault tolerant and in which downtime was unacceptable.</p><p>We needed a way to deploy our new service seamlessly, and to roll back that deploy should something go wrong. Ultimately many, many, things did go wrong, and every bit of failure tolerance put into the system proved to be worth its weight in gold because none of this was visible to customers.</p><h2 id="the-bridge">The Bridge</h2><p>Our goal in deploying Quicksilver was to run it in parallel with our then existing KV distribution tool, Kyoto Tycoon. Once we had evaluated its performance and scalability, we would gradually phase out reads and writes to Kyoto Tycoon, until only Quicksilver was handling production traffic. To make this possible we decided to build a bridge - QSKTBridge.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/11/image3-16.png" class="kg-image"><figcaption><em>Image Credit: <a href="https://en.wikipedia.org/wiki/Bodie_Creek_Suspension_Bridge">https://en.wikipedia.org/wiki/Bodie_Creek_Suspension_Bridge</a></em></figcaption></figure><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/image1-18.png" class="kg-image"></figure><p>Our bridge replicated from Kyoto Tycoon, sending write and delete commands to our Quicksilver root node. This bridge service was deployed on Kubernetes within our infrastructure, consumed the Kyoto Tycoon update feed, and wrote the batched changes every 500ms.</p><p>In the event of node failure or misconfiguration it was possible for multiple bridge nodes to be live simultaneously. To prevent duplicate entries we included a timestamp with each change. When writing into Quicksilver we used the Compare And Swap command to ensure that only one batch with a given timestamp would ever be written.</p><h3 id="first-baby-steps-in-to-production">First Baby Steps In To Production</h3><p>Gradually we began to point reads over a loopback interface from the Kyoto Tycoon port to the Quicksilver port. Fortunately we implemented the memcached and the KT HTTP protocol to make it transparent to the many client instances that connect to Kyoto Tycoon and Quicksilver.</p><p>We began with DOG, DOG is a virtual data center which serves traffic for Cloudflare employees only. It’s called DOG because we use it for dog-fooding. Testing releases on the dog-fooding data center helps prevent serious issues from ever reaching the rest of the world. Our DOG testing went suspiciously well, so we began to move forward with more of our data centers around the world. Little did we know this rollout would take more than a year!</p><h3 id="replication-saturation">Replication Saturation</h3><p>To make life easier for SREs provisioning a new data center, we implemented a bootstrap mechanism that pulls an entire database from a remote server. This was an easy win because our datastore library - <a href="https://symas.com/lmdb/">LMDB</a> - provides the ability to copy an entire LMDB environment to a file descriptor. Quicksilver simply wrapped this code and sent a specific version of the DB to a network socket using its file descriptor.</p><p>When bootstrapping our Quicksilver DBs to more servers, Kyoto Tycoon was still serving production traffic in parallel. As we mentioned in the first blogpost, Kyoto Tycoon has an exclusive write lock that is sensitive to I/O. We were used to the problems this can cause such as write bursts slowing down reads. This time around we found the separate bootstrap process caused issues. It filled the page cache quickly, causing I/O saturation, which impacted all production services reading from Kyoto Tycoon.</p><p>There was no easy fix to that, to bootstrap Quicksilver DBs in a datacenter we'd have to wait until it was moved offline for maintenance, which pushed the schedule beyond our initial estimates. Once we had a data center deployment we could finally see metrics of Quicksilver running in the wild. It was important to validate that the performance was healthy before moving on to the next data center. This required coordination with the engineering teams that consume from Quicksilver.</p><h3 id="the-fl-front-line-test-candidate">The FL (front line) test candidate</h3><p>Many requests reaching Cloudflare’s edge are forwarded to a component called FL, which acts as the "brain". It uses multiple configuration values to decide what to do with the request. It might apply the WAF, pass the request to Workers and so on. FL requires a lot of QS access, so it was the perfect candidate to help validate Quicksilver performance in a real environment.</p><p>Here are some screenshots showing FL metrics. The vertical red line marks the switchover point, on the left of the line is Kyoto Tycoon, on the right is Quicksilver. The drop immediately before the line is due to the upgrade procedure itself. We saw an immediate and significant improvement in error rates and response time by migrating to Quicksilver.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/image6-6.png" class="kg-image"></figure><p>The middle graph shows the error count. Green dot errors are non-critical errors: the first request to Kyoto Tycoon/Quicksilver failed so FL will try again. The red dot errors are the critical ones, they mean the second request also failed. In that case FL will return an error code to an end user. Both counts decreased substantially.</p><p>The bottom graph shows the read latency average from Kyoto Tycoon/Quicksilver. The average drops a lot and is usually around 500 microseconds and no longer reaches 1ms which it used to do quite often with Kyoto Tycoon.</p><p>Some readers may notice a few things. First of all, it was said earlier that the consumers were reading through the loopback interface. How come we experience errors there? How come we need 500us to read from Quicksilver?</p><p>At that time Cloudflare had some old SSDs and these could sometimes take <em>hundreds of milliseconds</em> to respond and this was affecting the response time from Quicksilver hence triggering read timeout from FL.</p><p>That was also obviously increasing the average response time above.</p><p>From there, some readers would ask why using averages and not percentiles? This screenshot dates back to 2017 and at that time the tool used for gathering FL metrics did not offer percentiles, only min, max and average.</p><p>Also, back then, all consumers were reading through TCP over loopback. Later on we switched to Unix socket.</p><p>Finally, we enabled memcached and KT HTTP malformed request detection. It appears that some consumers were sending us bogus requests and not monitoring the value returned properly, so they could not detect any error. We are now alerting on all bogus requests as this should never happen.</p><h3 id="spotting-the-wood-for-the-trees">Spotting the wood for the trees</h3><p>Removing Kyoto Tycoon on the edge took around a year. We'd done a lot of work already but rolling Quicksilver out to production services meant the project was just getting started. Thanks to the new metrics we put in place, we learned a lot about how things actually happen in the wild. And this let us come up with some ideas for improvement.</p><p>Our biggest surprise was that most of our replication delays were caused by saturated I/O and not network issues. This is something we could not easily see with Kyoto Tycoon. A server experiencing I/O contention could take seconds to write a batch to disk. It slowly became out of sync and then failed to propagate updates fast enough to its own clients, causing them to fall out of sync. The workaround was quite simple, if the latest received transaction log is over 30 seconds old, Quicksilver would disconnect and try the next server in the list of sources.</p><p>This was again an issue caused by aging SSDs. When a disk reaches that state it is very likely to be queued for a hardware replacement.</p><p>We quickly had to address another weakness in our codebase. A Quicksilver instance which was not currently replicating from a remote server would stop its own replication server, forcing clients to disconnect and reconnect somewhere else. The problem is this behavior has a cascading effect, if an intermediate server disconnects from its server to move somewhere else, it will disconnect all its clients, etc. The problem was compounded by an exponential backoff approach. In some parts of the world our replication topology has six layers, triggering the backoff many times caused significant and unnecessary replication lag. Ultimately the feature was fully removed.</p><h3 id="reads-writes-and-sad-ssds">Reads, writes, and sad SSDs</h3><p>We discovered that we had been underestimating the frequency of I/O errors and their effect on performance. LMDB maps the database file into memory and when the kernel experiences an I/O error while accessing the SSD, it will terminate Quicksilver with a SIGBUS. We could see these in kernel logs. I/O errors are a sign of unhealthy disks and cause us to see spikes in Quicksilver's read and write latency metrics. They can also cause spikes in the system load average, which affects all running services. When I/O errors occur, a check usually finds such disks are close to their maximum allowed write cycles, and further writes will cause a permanent failure.</p><p>Something we didn't anticipate was LMDB's interaction with our filesystem, causing high write amplification that increased I/O load and accelerated the wear and tear of our SSDs. For example, when Quicksilver wrote 1 megabyte, 30 megabytes were flushed to disk. This amplification is due to LMDB copy-on-write, writing a 2 byte key-value (KV) pair ends up copying the whole page. That was the price to pay for crashproof storage. We've seen amplification factors between 1.5X and 80X. All of this happens before any internal amplification that might happen in an SSD.</p><p>We also spotted that some producers kept writing the same KV pair over and over. Although we saw low rates of 50 writes per second, considering the amplification problem above, repetition increased pressure on SSDs. To fix this we just drop identical KV writes on the root node.</p><h3 id="where-does-a-server-replicate-from">Where does a server replicate from?</h3><p>Each small data center replicates from multiple bigger sites and these replicate from our two core data centers. To decide which data centers to use, we talk to the Network team, get an answer and hardcode the topology in Salt, the same place we configure all our infrastructure.</p><p>Each replication node is identified using IP addresses in our Salt configuration. This is quite a rigid way of doing things, wouldn't DNS be easier? The interesting thing is that Quicksilver is a source of DNS for customers and Cloudflare infrastructure. We do not want Quicksilver to become dependent on itself, that could lead to problems.</p><p>While this somewhat rigid way of configuring topology works fine, as Cloudflare continues to scale there is room for improvement. Configuring Salt can be tricky and changes need to be thoroughly tested to avoid breaking things. It would be nicer for us to have a way to build the topology more dynamically, allowing us to more easily respond to any changes in network details and provision new data centers. That is something we are working on.</p><h3 id="removing-kyoto-tycoon-from-the-edge">Removing Kyoto Tycoon from the Edge</h3><p>Migrating services away from Kyoto Tycoon requires identifying them. There were some obvious candidates like FL and DNS which play a big part in day-to-day Cloudflare activity and do a lot of reads. But the tricky part to completely removing Kyoto Tycoon is in finding <strong>all</strong> the services that use it.</p><p>We informed engineering teams of our migration work but that was not enough. Some consumers get less attention because they were done during a research activity, or they run as part of a team's side project. We added some logging code into Kyoto Tycoon so we could see who exactly was connecting and reached out directly to them. That's a good way to catch the consumers that are permanently connected or connect often. However, some consumers only connect rarely and briefly, for example at startup time to load some configuration. So this takes time.</p><p>We also spotted some special cases that used exotic setups like using stunnel to read from the memcached interface remotely. That might have been a "quick-win" back in the day but its technical debt that has to be paid off; we now strictly enforce the methods that consumers use to access Quicksilver.</p><p>The migration activity was steady and methodical and it took a few months. We deployed Quicksilver per group of data centers and instance by instance, removing Kyoto Tycoon only when we deemed it ready. We needed to support two sets of configuration and alerting in parallel. That's not ideal but it gave us confidence and ensured that customers were not disrupted. The only thing they might have noticed is the performance improvement!</p><h3 id="quicksilver-core-side-welcome-to-the-mouth-of-technical-debt-madness">Quicksilver, Core side, welcome to the mouth of technical debt madness</h3><p>Once the edge migration was complete, it was time to take care of the core data centers. We just dealt with 200+ data centers so doing two should be easy right? Well no, the edge side of Quicksilver uses the reading interface, the core side is the writing interface so it is a totally different kind of job. Removing Kyoto Tycoon from the core was harder than the edge.</p><p>Many Kyoto Tycoon components were all running on a <em><strong>single</strong></em> physical server - the Kyoto Tycoon root node. This single point of failure had become a growing risk over the years. It had been responsible for incidents, for example it once completely disappeared due to faulty hardware. In that emergency we had to start all services on a backup server. The move to Quicksilver was a great opportunity to remove the Kyoto Tycoon root node server. This was a daunting task and almost all the engineering teams across the company got involved.</p><p><em>Note: Cloudflare’s migration from Marathon to Kubernetes was happening in parallel to this task so each time we refer to Kubernetes it is likely that the job was started on Marathon before being migrated later on.</em></p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-@2x--1-.png" class="kg-image"><figcaption>The diagram above shows how all components below interact with each other.</figcaption></figure><h3 id="from-ktrest-to-qsrest">From KTrest to QSrest</h3><p>KTrest is a stateless service providing a REST interface for writing and deleting KV pairs from Kyoto Tycoon. Its only purpose is to enforce access control (ACL) so engineering teams do not experience accidental keyspace overlap. Of course, sometimes keyspaces are shared on purpose but it is not the norm.</p><p>The Quicksilver team took ownership of KTrest and migrated it from the root server to Kubernetes. We asked all teams to move their KTrest producers to Kubernetes as well. This went smoothly and did not require code changes in the services.</p><p>Our goal was to move people to Quicksilver, so we built QSrest, a KTrest compatible service for Quicksilver. Remember the problem about disk load? The QSKTBridge was in charge of batching: aggregating 500ms of updates before flushing to Quicksilver, to help our SSDs cope with our sync frequency. If we moved people to QSrest, it needed to support batching too. So it does. We used QSrest as an opportunity to implement write quotas. Once a quota is reached, all further writes from the same producer would be slowed down until the quota goes back to normal.</p><p>We found that not all teams actually used KTrest. Many teams were still writing directly to Kyoto Tycoon. One reason for this is that they were sending large range read requests in order to read thousands of keys in one shot - a feature that KTrest did not provide. People might ask why we would allow reads on a write interface. This is an unfortunate historical artefact and we wanted to put things right. Large range requests would hurt Quicksilver (we learned this from our experience with the bootstrap mechanism) so we added a cluster of servers which would serve these range requests: the Quicksilver consumer nodes. We asked the teams to switch their writes to KTrest and their reads to Quicksilver consumers.</p><p>Once the migration of the producers out of the root node was complete, we asked teams to start switching from KTrest to QSrest. Once the move was started, moving back would be really hard: our Kyoto Tycoon and Quicksilver DB were now inconsistent. We had to move over 50 producers, owned by teams in different time zones. So we did it one after another while carefully babysitting our servers to spot any early warning which could end up in an incident.</p><p>Once we were all done, we then started to look at Kyoto Tycoon transaction logs: is there something still writing to it? We found an obsolete heartbeat mechanism which was shut down.</p><p>Finally, Kyoto Tycoon root processes were turned off to never be turned on again.</p><p><em>Removing Kyoto Tycoon from all over Cloudflare ended up taking four years.</em></p><h2 id="no-hardware-single-point-of-failure">No hardware single point of failure</h2><p>We have made great progress, Kyoto Tycoon is no longer among us, we smoothly moved all Cloudflare services to Quicksilver, our new KV store. And things now look more like this.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-2@2x.png" class="kg-image"></figure><p>The job is still far from done though. The Quicksilver root server was still a single point of failure, so we decided to build Quicksilver Raft - a <a href="https://en.wikipedia.org/wiki/Raft_(computer_science)">Raft</a>-enabled root cluster using the etcd Raft package. It was harder than I originally thought. Adding Raft into Quicksilver required proper synchronization between the Raft snapshot and the current Quicksilver DB. Sometimes there are situations where Quicksilver needs to fall back to asynchronous replication to catch up before doing proper Raft synchronous writes. Getting all of this to work required deep changes in our code base, which also proved to be hard to build proper unit and integration tests. But removing single points of failure is worth it.</p><h2 id="introducing-qsqsbridge">Introducing QSQSBridge</h2><p>We like to test our components in an environment very close to production before releasing it. How do we test the core side/writer interface of Quicksilver then? Well the days of Kyoto Tycoon, we used to have a second Quicksilver root node feeding from Kyoto Tycoon through the KTQSbridge. In turn, some very small data centers were being fed from that root node. When Kyoto Tycoon was removed we lost that capability, limiting our testing. So we built QSQSbridge, which replicates from a Quicksilver instance and writes to a Quicksilver root node.</p><h2 id="removing-the-quicksilver-legacy-top-main">Removing the Quicksilver legacy top-main</h2><p>With Quicksilver Raft and QSQSbridge in place, we tested three small data centers replicating from the test Raft cluster over the course of weeks. We then wanted to promote the high availability (HA) cluster and make the whole world replicate from it. In the same way we did for Kyoto Tycoon removal, we wanted to be able to roll back at any time if things go wrong.</p><p>Ultimately we reworked the QSQSbridge so that it builds compatible transaction logs with the feeding root node. That way, we started to move groups of data centers underneath the Raft cluster and we could, at any time, move them back to the legacy lop-main.<br><br>We started with this:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-3@2x--1-.png" class="kg-image"></figure><p>We moved our 10 QSrest instances one after another from the legacy root node to write against the HA cluster. We did this slowly without any significant issue and we were finally able to turn off the legacy top-main.This is what we ended up with:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-4@2x.png" class="kg-image"></figure><p>And that was it, <em>Quicksilver was running in the wild without a hardware single point of failure.</em></p><h2 id="first-signs-of-obsolescence">First signs of obsolescence</h2><p>The Quicksilver bootstrap mechanism we built to make SRE life better worked by pulling a full copy of a database but it had pains. When bootstrapping begins, a long lived read transaction is opened on the server, it must keep the DB version requested intact while also applying new log entries. This causes two problems. First, if the read is interrupted by something like a network glitch the read transaction is closed and the version of the DB is not available anymore. The entire process has to start from scratch. Secondly, it causes fragmentation in the source DB, which requires somebody to go and compact it.</p><p>For the first six months, the databases were fairly small and everything worked fine. However, as our databases continued to grow, these two problems came to fruition. Longer transfers are at risk of network glitches and the problem compounds, especially for more remote data centers. Longer transfers mean more fragmentation and more time compacting it. Bootstrapping was becoming a pain.</p><p>One day an SRE reported that manually bootstrapping instances one after another was much faster than bootstrapping all together in parallel. We investigated and saw that when all Quicksilver instances were bootstrapping at the same time the kernel and SSD were overwhelmed swapping pages. There was page cache contention caused by the ratio of the combined size of the DBs vs. available physical memory.</p><p>The workaround was to serialize bootstrapping across instances. We did this by implementing a lock between Quicksilver processes, a client grabs the lock to bootstrap and gives it back once done, ready for the next client. The lock moves around in round robin fashion forever.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/11/Quicksilver-blog-5@2x.png" class="kg-image"></figure><p>Unfortunately, we hit another page cache thrashing issue. We know that LMDB mostly does random I/O but we turned on readahead to load as much DB as possible into memory. But again as our DBs grew, the readahead started evicting useful pages. So we improved the performance by… disabling it.</p><p>Our biggest issue by far though is more fundamental: disk space and wear and tear! Each and every server in Cloudflare stores the same data. So a piece of data one megabyte in size consumes at least 10 gigabytes globally. To accommodate continued growth you can add more disks, replace dying disks, and use bigger disks. That's not a very sustainable solution. It became clear that the Quicksilver design we came up with five years ago was becoming obsolete and needed a rethink. We approach that problem both in the short term and long term.</p><h2 id="the-long-and-short-of-it">The long and short of it</h2><p>In the long term we are now working on a sharded version of Quicksilver. This will avoid storing all data on all machines but guarantee the entire dataset is in each data center.</p><p>In the shorter term we have addressed our storage size problems with a few approaches.</p><p>Many engineering teams did not even know how many bytes of Quicksilver they used. Some might have had an impression that storage is free. We built a service named “QSusage” which uses the QSrest ACL to match KV with their owner and computes the total disk space used per producer, including Quicksilver metadata. This service allows teams to better understand their usage and pace of growth.</p><p>We also built a service name "QSanalytics" to help answer the question “How do I know which of my KV pairs are never used?”. It gathers all keys being accessed all over Cloudflare, aggregates these and pushes these into a ClickHouse cluster and we store these information over a 30 days rolling window. There's no sampling here, we keep track of all read access. We can easily report back to engineering teams responsible for unused keys, they can consider if these can be deleted or must be kept.</p><p>Some of our issues are caused by the storage engine LMDB. So we started to look around and got quickly interested in RocksDB. It provides built in compression, online defragmentation and other features like prefix deduplication.</p><p>We ran some tests using representative Quicksilver data and they seemed to show that RocksDB could store the same data in 40% of the space compared to LMDB. Read latency was a little bit higher in some cases but nothing too serious. CPU usage was also higher, using around 150% of CPU time compared to LMDBs 70%. Write amplification appeared to be much lower, giving some relief to our SSD and the opportunity to ingest more data.</p><p>We decided to switch to RocksDB to help sustain our growing product and customer bases. In a follow-up blog we'll do a deeper dive into performance comparisons and explain how we managed to switch the entire business without impacting customers at all.</p><h2 id="conclusion">Conclusion</h2><p>Migrating from Kyoto Tycoon to Quicksilver was no mean feat. It required company-wide collaboration, time and patience to smoothly roll out a new system without impacting customers. We've removed single points of failure and improved the performance of database access, which helps to deliver a better experience.</p><p>In the process of moving to Quicksilver we learned a lot. Issues that were unknown at design time were surfaced by running software and services at scale. Furthermore, as the customer and product base grows and their requirements change, we've got new insight into what our KV store needs to do in the future. Quicksilver gives us a solid technical platform to do this.</p>
+            </div>
+        </section>
+
+        <a href="/tag/lmdb/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">LMDB</a>
+        <a href="/tag/quicksilver/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Quicksilver</a>
+        <a href="/tag/key-value/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Key-Value</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+        <a href="/tag/kyoto-tycoon/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Kyoto-Tycoon</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-30T12:02:00+01:00">March 30, 2020 12:02PM</p>
+        <a href="/introducing-quicksilver-configuration-distribution-at-internet-scale/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Quicksilver: Configuration Distribution at Internet Scale</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare’s network processes more than fourteen million HTTP requests per second at peak for Internet users around the world. We spend a lot of time thinking about the tools we use to make those requests faster and more secure....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/geoffrey-plouviez/" class="fw5 f2 black no-underline">Geoffrey Plouviez</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/lmdb/" class="no-underline f1 fw2 blue3 underline-hover">LMDB</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quicksilver/" class="no-underline f1 fw2 blue3 underline-hover">Quicksilver</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/key-value/" class="no-underline f1 fw2 blue3 underline-hover">Key-Value</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kyoto-tycoon/" class="no-underline f1 fw2 blue3 underline-hover">Kyoto-Tycoon</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

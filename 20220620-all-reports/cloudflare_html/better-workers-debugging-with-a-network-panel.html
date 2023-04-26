@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Improving request debugging in Cloudflare Workers</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/better-workers-debugging-with-a-network-panel/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Improving request debugging in Cloudflare Workers" />
+    <meta property="og:description" content="As some of you might have already noticed either from our public release notes, on cloudflareworkers.com or in your Cloudflare Workers dashboard, there was a small but important change in the look of the inspector." />
+    <meta property="og:url" content="https://blog.cloudflare.com/better-workers-debugging-with-a-network-panel/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/12/Workers-Illustration--WiP-as-of-2.21.18--copy@2x.png" />
+    <meta property="article:published_time" content="2018-12-28T14:18:11.000Z" />
+    <meta property="article:modified_time" content="2018-12-28T14:18:11.000Z" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="Dashboard" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Developers" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Improving request debugging in Cloudflare Workers" />
+    <meta name="twitter:description" content="As some of you might have already noticed either from our public release notes, on cloudflareworkers.com or in your Cloudflare Workers dashboard, there was a small but important change in the look of the inspector." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/better-workers-debugging-with-a-network-panel/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/12/Workers-Illustration--WiP-as-of-2.21.18--copy@2x.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ingvar Stepanyan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Cloudflare Workers, Serverless, Dashboard, Programming, Developers" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ingvar Stepanyan",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/rYPVgOqN.jpg",
+        "url": "https://blog.cloudflare.com/author/ingvar-stepanyan/",
+        "sameAs": []
+    },
+    "headline": "Improving request debugging in Cloudflare Workers",
+    "url": "https://blog.cloudflare.com/better-workers-debugging-with-a-network-panel/",
+    "datePublished": "2018-12-28T14:18:11.000Z",
+    "dateModified": "2018-12-28T14:18:11.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/12/Workers-Illustration--WiP-as-of-2.21.18--copy@2x.png",
+    "keywords": "Cloudflare Workers, Serverless, Dashboard, Programming, Developers",
+    "description": "As some of you might have already noticed either from our public release notes, on cloudflareworkers.com or in your Cloudflare Workers dashboard, there was a small but important change in the look of the inspector.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-workers tag-serverless tag-dashboard-tag tag-programming tag-developers sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-workers tag-serverless tag-dashboard-tag tag-programming tag-developers ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Improving request debugging in Cloudflare Workers</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-12-28T14:18:11Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 28, 2018 2:18PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ingvar-stepanyan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/rYPVgOqN.jpg" alt="Ingvar Stepanyan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ingvar-stepanyan" class="fw5 f3 no-underline black mr3">Ingvar Stepanyan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>At Cloudflare, we are constantly looking into ways to improve development experience for Workers and make it the most convenient platform for writing serverless code.</p><p>As some of you might have already noticed either from our public release notes, on <a href="https://cloudflareworkers.com/">cloudflareworkers.com</a> or in your Cloudflare Workers dashboard, there recently was a small but important change in the look of the inspector.</p><p>But before we go into figuring out what it is, let's take a look at our standard example on <a href="https://cloudflareworkers.com/">cloudflareworkers.com</a>:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/image-16.png" class="kg-image"></figure><p></p><p>The example worker code featured here acts as a transparent proxy, while printing requests / responses to the console.</p><p>Commonly, when debugging Workers, all you could see from the client-side devtools is the interaction between your browser and the Cloudflare Worker runtime. However, like in most other server-side runtimes, the interaction between your code and the actual origin has been hidden.</p><p>This is where <code>console.log</code> comes in. Although not the most convenient, printing random things out is a fairly popular debugging technique.</p><p>Unfortunately, its default output doesn't help much with debugging network interactions. If you try to expand either of request or response objects, all you can see is just a bunch of lazy accessors:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-storage.googleapis.com-2018.12.14-11-59-22.png" class="kg-image"></figure><p></p><p>You could expand them one-by-one, getting some properties back, but, when it comes to important parts like headers, that doesn't help much either:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-storage.googleapis.com-2018.12.14-12-00-37.png" class="kg-image"></figure><p></p><p>So, since the launch of Workers, what we have been able to suggest instead is certain JS tricks to convert headers to a more readable format:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-cloudflareworkers.com-2018.12.14-12-03-57.png" class="kg-image"></figure><p></p><p>This works somewhat better, but doesn't scale well, especially if you're trying to debug complex interactions between various requests on a page and subrequests coming from a worker. So we thought: how can we do better?</p><p>If you're familiar with Chrome DevTools, you might have noticed before that we were already offering its trimmed-down version in our UI with basic Console and Sources panels. The obvious solution is: why not expose the existing Network panel in addition to these? And we did just* that.</p><p>* Unfortunately, this is easier said than done. If you're already faimilar with the Network tab and are interested in the technical implementation details, feel free to <a href="#how-did-we-do-this">skip the next section</a>.</p><h3 id="what-can-you-do-with-the-new-panel">What can you do with the new panel?</h3><p>You should be able to use most of the things available in regular Chrome DevTools Network panel, but instead of inspecting the interaction between browser and Cloudflare (which is as much as browser devtools can give you), you are now able to peek into the interaction between your Worker and the origin as well.</p><p>This means you're able to view request and response headers, including both those internal to your worker and the ones provided by Cloudflare:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/image-22.png" class="kg-image"></figure><p></p><p>Check the original response to verify content modifications:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-cloudflareworkers.com-2018.12.14-17-37-19.png" class="kg-image"></figure><p></p><p>Same goes for raw responses:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-cloudflareworkers.com-2018.12.14-17-37-34.png" class="kg-image"></figure><p></p><p>You can also check the time it took worker to reach and get data from your website:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-cloudflareworkers.com-2018.12.14-17-41-03.png" class="kg-image"></figure><p>However, note that timings from a debugging service will be different than the ones in production in different locations, so it would make sense to compare these only with other requests on the same page or with the same request as you keep iterating on code of your Worker.</p><p>You can view the initiator of each request - this might come in handy if your worker contains complex routing handled by different paths, or if you want to simply check which requests on the page were intercepted and re-issued at all:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/image-25.png" class="kg-image"></figure><p></p><p>Basic features like filtering by type of content also work:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/screenshot-cloudflareworkers.com-2018.12.14-17-56-13-1.png" class="kg-image"></figure><p></p><p>And, finally, you can copy or even export subrequests as HAR for further inspection:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/12/image-24.png" class="kg-image"></figure><p></p><h3 id="how-did-we-do-this">How did we do this?</h3><p>So far we have been using a built-in mode of the inspector which was specifically designed with JavaScript-only targets in mind. This allows it to avoid loading most of the components that would require a real browser (Chromium-based) backend, and instead leaves just the core that can be integrated directly with V8 in any embedder, whether it's Node.js or, in our case, Cloudflare Workers.</p><p>Luckily, the DevTools Protocol itself is pretty well documented - <a href="https://chromedevtools.github.io/devtools-protocol/">chromedevtools.github.io/devtools-protocol/</a> - to facilitate third-party implementors.</p><p>While this is commonly used from client-side (for editor integration), there are some third-party implementors of the server-side too, even for non-JavaScript targets like Lua, Go, ClojureScript and even system-wide network debugging both on desktop and mobile: <a href="https://github.com/ChromeDevTools/awesome-chrome-devtools">github.com/ChromeDevTools/awesome-chrome-devtools</a>.</p><p>So there is nothing preventing us from providing our own implementation of <code>Network</code> domain that would give a native DevTools experience.</p><p>On the Workers backend side, we are already in charge of the network stack, which means we have access to all the necessary information to report and can wrap all the request/response handlers into own hooks to send it back to the inspector.</p><p>Communication between the inspector and the debugger backend is happening over WebSockets. So far we've been just receiving messages and passing them pretty much directly to V8 as-is. However, if we want to handle Network messages ourselves, that's not going to work anymore and we need to actually parse the messages.</p><p>To do that in a standard way, V8 provides some build scripts to generate protocol handlers for any given list of domains. While these are used by Chromium, they require quite a bit of configuration and custom glue for different levels of message serialisation, deserialisation and error handling.</p><p>On the other hand, the protocol used for communication is essentially just <a href="https://www.jsonrpc.org/">JSON-RPC</a>, and <a href="https://capnproto.org/">capnproto</a>, which we're already using in other places behind the scenes, provides JSON (de)serialisation support, so it's easier to reuse it rather than build a separate glue layer for V8.</p><p>For example, to provide bindings for <code><a href="https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#type-CallFrame">Runtime.callFrame</a></code> we need to just define a capnp structure like this:</p><!--kg-card-begin: markdown--><pre><code class="language-python">struct CallFrame {
+  # Stack entry for runtime errors and assertions.
+  functionName @0 :Text; # JavaScript function name.
+  scriptId @1 :ScriptId; # JavaScript script id.
+  url @2 :Text; # JavaScript script name or url.
+  lineNumber @3 :Int32; # JavaScript script line number (0-based).
+  columnNumber @4 :Int32; # JavaScript script column number (0-based).
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Okay, so by combining these two we can now parse and handle supported Network inspector messages ourselves and pass the rest through to V8 as usual.</p><p>Now, we needed to make some changes to the frontend. Wait, you might ask, wasn't the entire point of these changes to speak the same protocol as frontend already does? That's true, but there are other challenges.</p><p>First of all, because Network tab was designed to be used in a browser, it relies on various components that are actually irrelevant to us and, if pulled in as-is, would not only make frontend code larger, but also require extra backend support too. Some of them are used for cross-tab integration (e.g. with Profiler), but some are part of the Network tab itself - for example, it doesn't make much sense to use request blocking or mobile throttling when debugging server-side code. So we had some manual untangling to do here.</p><p>Another interesting challenge was in handling response bodies. Normally, when you click on a request in Network tab in the browser, and then ask to see its response body, devtools frontend sends a <code><a href="https://chromedevtools.github.io/devtools-protocol/tot/Fetch/#method-getResponseBody">Network.getResponseBody</a></code> message to the browser backend and then the browser sends it back.</p><p>What this means is that, as long as the Network tab is active, browser has to store all of the responses for all of the requests from the page in memory, not knowing which of them are actually going to be requested in the future or not. Such lazy handling makes perfect sense for local or even remote Chrome debugging, where you are commonly fully in charge of both sides.</p><p>However, for us it wouldn't be ideal to have to store all of these responses from all of the users in memory on the debugging backend. After some forth and back on different solutions, we decided to deviate from the protocol and instead send original response bodies to the inspector frontend as they come through, and let frontend store them instead. This might seem not ideal either due to sending unnecessary data over the network during debugging sessions, but these tradeoffs make more sense for a shared debugging backend.</p><p>There were various smaller challenges and bug fixes to be made and upstreamed, but let them stay behind the scenes.</p><p>Is this feature useful to you? What other features would help you to debug and develop workers more efficiently? Or maybe you would like to work on Workers and tooling yourself?</p><p>Let us know!</p><p><strong>P.S.</strong>: If you’re looking for a fun personal project for the holidays, this could be your chance to try out Workers, and play around with our new tools.</p>
+            </div>
+        </section>
+
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+        <a href="/tag/dashboard-tag/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Dashboard</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-20T12:00:00Z">March 20, 2021 12:00PM</p>
+        <a href="/random-employee-chats-cloudflare/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Random Employee Chats at Cloudflare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We developed the Random Employee Chats application internally, with the goal of recreating the pre-pandemic informal interactions. Here's how we moved from a shared spreadsheet to Cloudflare Workers to automate the entire process....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/sven/" class="fw5 f2 black no-underline">Sven Sauleau</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/david-wragg/" class="fw5 f2 black no-underline">David Wragg</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-kv/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers KV</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cron/" class="no-underline f1 fw2 blue3 underline-hover">Cron</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wrangler/" class="no-underline f1 fw2 blue3 underline-hover">Wrangler</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-25T14:00:00Z">December 25, 2020 2:00PM</p>
+        <a href="/using-one-cron-parser-everywhere-with-rust-and-saffron/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Using One Cron Parser Everywhere With Rust and Saffron</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cron parsers are everywhere, each supporting their own extensions on the cron string format, which made consistency between parts of Cron Triggers difficult to achieve. Today we’re showing how we easily solved this problem with Rust without needing to write the same code twice....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/aaron-loyd/" class="fw5 f2 black no-underline">Aaron Loyd</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-09T12:00:00+01:00">October 09, 2020 12:00PM</p>
+        <a href="/exploring-webassembly-ai-services-on-cloudflare-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Exploring WebAssembly AI Services on Cloudflare Workers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Edge networks present a significant opportunity for Artificial Intelligence (AI) performance and applicability. AI technologies already make it possible to run compelling applications like object and voice recognition, navigation, and recommendations....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/guest-author/" class="fw5 f2 black no-underline">Guest Author</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-10-06T12:00:00+01:00">October 06, 2020 12:00PM</p>
+        <a href="/cloudflare-worker-with-webassembly-and-haskell/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Let&#x27;s build a Cloudflare Worker with WebAssembly and Haskell</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Let's combine the power of Haskell and WebAssembly in a Cloudflare Worker!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/cristhian-motoche/" class="fw5 f2 black no-underline">Cristhian Motoche</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/webassembly/" class="no-underline f1 fw2 blue3 underline-hover">WebAssembly</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wasm/" class="no-underline f1 fw2 blue3 underline-hover">WASM</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

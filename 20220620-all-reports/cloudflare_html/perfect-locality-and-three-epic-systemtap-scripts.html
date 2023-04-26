@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Perfect locality and three epic SystemTap scripts</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/perfect-locality-and-three-epic-systemtap-scripts/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Perfect locality and three epic SystemTap scripts" />
+    <meta property="og:description" content="In a recent blog post we discussed epoll behavior causing uneven load among NGINX worker processes. We suggested a work around - the REUSEPORT socket option." />
+    <meta property="og:url" content="https://blog.cloudflare.com/perfect-locality-and-three-epic-systemtap-scripts/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/mms-1.jpg" />
+    <meta property="article:published_time" content="2017-11-07T10:15:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T06:12:16.000Z" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="NGINX" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Perfect locality and three epic SystemTap scripts" />
+    <meta name="twitter:description" content="In a recent blog post we discussed epoll behavior causing uneven load among NGINX worker processes. We suggested a work around - the REUSEPORT socket option." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/perfect-locality-and-three-epic-systemtap-scripts/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/mms-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TCP, Programming, NGINX" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "Perfect locality and three epic SystemTap scripts",
+    "url": "https://blog.cloudflare.com/perfect-locality-and-three-epic-systemtap-scripts/",
+    "datePublished": "2017-11-07T10:15:00.000Z",
+    "dateModified": "2018-08-29T06:12:16.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/mms-1.jpg",
+    "keywords": "TCP, Programming, NGINX",
+    "description": "In a recent blog post we discussed epoll behavior causing uneven load among NGINX worker processes. We suggested a work around - the REUSEPORT socket option.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tcp tag-programming tag-nginx sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tcp tag-programming tag-nginx ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Perfect locality and three epic SystemTap scripts</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-11-07T10:15:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">November 07, 2017 10:15AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>In a recent blog post we discussed <a href="https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/">epoll behavior causing uneven load</a> among NGINX worker processes. We suggested a work around - the REUSEPORT socket option. It changes the queuing from &quot;combined queue model&quot; aka Waitrose (formally: <a href="http://people.revoledu.com/kardi/tutorial/Queuing/MMs-Queuing-System.html">M/M/s</a>), to a dedicated accept queue per worker aka &quot;the Tesco superstore model&quot; (formally: <a href="http://people.revoledu.com/kardi/tutorial/Queuing/MMs-Queuing-System.html">M/M/1</a>). With this setup the load is spread more evenly, but in certain conditions the latency distribution might suffer.</p>
+<p>After reading that piece, a colleague of mine, John, said: <em>&quot;Hey Marek, don't forget that REUSEPORT has an additional advantage: it can improve packet locality! Packets can avoid being passed around CPUs!&quot;</em></p>
+<p>John had a point. Let's dig into this step by step.</p>
+<p>In this blog post we'll explain the REUSEPORT socket option, how it can help with packet locality and its performance implications. We'll show three advanced SystemTap scripts which we used to help us understand and measure the packet locality.</p>
+<h3 id="asharedqueue">A shared queue</h3>
+<p>The standard BSD socket API model is rather simple. In order to receive new TCP connections a program calls bind() and then listen() on a fresh socket. This will create a single accept queue. Programs can share the file descriptor - pointing to one kernel data structure - among multiple processes to spread the load. As we've <a href="https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/">seen in a previous blog post</a> connections might not be distributed perfectly. Still, this allows programs to scale up processing power from a limited single-process, single-CPU design.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/mms-1.jpeg" alt=""></p>
+<p>Modern network cards split the inbound packets across multiple RX queues, allowing multiple CPUs to share interrupt and packet processing load. Unfortunately in the standard BSD API the new connections will all be funneled back to single accept queue, causing a potential bottleneck.</p>
+<h3 id="introducingreuseport">Introducing REUSEPORT</h3>
+<p>This bottleneck was identified at Google, where a reported application was dealing with 40,000 connections per second. Google kernel hackers fixed it by <a href="https://lwn.net/Articles/542629/">adding a TCP support for SO_REUSEPORT socket option</a> in Linux kernel 3.9.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/mm1-1.jpeg" alt=""></p>
+<p>REUSEPORT allows the application to set multiple accept queues on a single TCP listen port. This removes the central bottleneck and enables the CPUs to do more work in parallel.</p>
+<h3 id="reuseportlocality">REUSEPORT locality</h3>
+<p>Initially there was no way to influence the load balancing algorithm. While REUSEPORT allowed setting up a dedicated accept queue per each worker process, it wasn't possible to influence what packets would go into them.  New connections flowing into the network stack would be distributed using only the usual 5-tuple hash. Packets from any of the RX queues, hitting any CPU, might flow into any of the accept queues.</p>
+<p>This changed in Linux kernel 4.4 with the introduction of the <a href="https://patchwork.ozlabs.org/patch/528071/">SO_INCOMING_CPU settable socket option</a>. Now a userspace program could add a hint to make the packets received on a specific CPU go to a specific accept queue. With this improvement the accept queue won't need to be shared across multiple cores, improving CPU cache locality and fixing lock contention issues.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/11/mm1-local-1.jpeg" alt=""></p>
+<p>There are other benefits - with proper tuning it is possible to keep the processing of packets belonging to entire connections local. Think about it like that: if a SYN packet was received on some CPU it is likely that further packets for this connection will also be delivered to the same CPU<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup>. Therefore, making sure the worker on the same CPU called the accept() has strong advantages. With the right tuning all processing of the connection might be performed on a single CPU. This can help keep the CPU cache warm, reduce cross-CPU interrupts and boost the performance of memory allocation algorithms.</p>
+<p>SO_INCOMING_CPU interface is pretty rudimentary and was deemed unsuitable for more complex usage. It was superseded by the more powerful <a href="https://lwn.net/Articles/675043/">SO_ATTACH_REUSEPORT_CBPF option</a> (and it's extended variant: SO_ATTACH_REUSEPORT_EBPF) in kernel 4.6. These flags allow a program to specify a fully functional BPF program as a load balancing algorithm.</p>
+<p>Beware that the introduction of SO_ATTACH_REUSEPORT_[CE]BPF broke SO_INCOMING_CPU. Nowadays there isn't a choice - you have to use the BPF variants to get the intended behavior.</p>
+<h3 id="settingcbpfonnginx">Setting CBPF on NGINX</h3>
+<p>NGINX in &quot;reuseport&quot; mode doesn't set the advanced socket options increasing packet locality. John suggested that improving packet locality is beneficial for performance. We must verify such a bold claim!</p>
+<p>We wanted to play with setting couple of SO_ATTACH_REUSEPORT_CBPF BPF scripts. We didn't want to hack the NGINX sources though. After some tinkering we decided it would be easier to write a SystemTap script to set the option from <em>outside</em> the server process. This turned out to be a big mistake!</p>
+<p>After plenty of work, numerous kernel panics caused by our buggy scripts (running in &quot;guru&quot; mode), we finally managed to get it into working order. The SystemTap script that calls &quot;setsockopt&quot; with right parameters. It's one of the most complex scripts we've written so far. Here it is:</p>
+<ul>
+<li><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2017-11-perfect-locality/setcbpf.stp">setcbpf.stp</a></li>
+</ul>
+<p>We tested it on kernel 4.9. It sets the following CBPF (classical BPF) load balancing program on the REUSEPORT socket group. Sockets received on Nth CPU will be passed to Nth member of the REUSEPORT group:</p>
+<pre><code class="language-.text">A = #cpu
+A = A % &lt;reuseport group size&gt;
+return A
+</code></pre>
+<p>The SystemTap script takes three parameters: pid, file descriptor and REUSEPORT group size. To figure out the pid of a process and a file descriptor number use the &quot;ss&quot; tool:</p>
+<pre><code class="language-.text">$ ss -4nlp -t 'sport = :8181' | sort
+LISTEN  0   511    *:8181  *:*   users:((&quot;nginx&quot;,pid=29333,fd=3),...
+LISTEN  0   511    *:8181  *:*   ...
+...
+</code></pre>
+<p>In this listing we see that pid=29333 fd=3 points to REUSEPORT descriptor bound to port tcp/8181. On our test machine we have 24 logical CPUs (including HT) and we run 12 NGINX workers - the group size is 12. Example invocation of the script:</p>
+<pre><code class="language-.text">$ sudo stap -g setcbpf.stp 29333 3 12
+</code></pre>
+<h3 id="measuringperformance">Measuring performance</h3>
+<p>Unfortunately on Linux it's pretty hard to verify if setting CBPF actually does anything. To understand what's going on we wrote another SystemTap script. It hooks into a process and prints all successful invocations of the accept() function, including the CPU on which the connection was delivered to kernel, and current CPU - on which the application is running. The idea is simple - if they match, we'll have good locality!</p>
+<p>The script:</p>
+<ul>
+<li><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2017-11-perfect-locality/accept.stp">accept.stp</a></li>
+</ul>
+<p>Before setting the CBPF socket option on the server, we saw this output:</p>
+<pre><code class="language-.text">$ sudo stap -g accept.stp nginx|grep &quot;cpu=#12&quot;
+cpu=#12 pid=29333 accept(3) -&gt; fd=30 rxcpu=#19
+cpu=#12 pid=29333 accept(3) -&gt; fd=31 rxcpu=#21
+cpu=#12 pid=29333 accept(3) -&gt; fd=32 rxcpu=#16
+cpu=#12 pid=29333 accept(3) -&gt; fd=33 rxcpu=#22
+cpu=#12 pid=29333 accept(3) -&gt; fd=34 rxcpu=#19
+cpu=#12 pid=29333 accept(3) -&gt; fd=35 rxcpu=#21
+cpu=#12 pid=29333 accept(3) -&gt; fd=37 rxcpu=#16
+</code></pre>
+<p>We can see accept()s done from a worker on CPU #12 returning client sockets received on some other CPUs like: #19, #21, #16 and so on.</p>
+<p>Now, let's run CBPF and see the results:</p>
+<pre><code class="language-.text">$ sudo stap -g setcbpf.stp `pidof nginx -s` 3 12
+[+] Pid=29333 fd=3 group_size=12 setsockopt(SO_ATTACH_REUSEPORT_CBPF)=0
+
+$ sudo stap -g accept.stp nginx|grep &quot;cpu=#12&quot;
+cpu=#12 pid=29333 accept(3) -&gt; fd=30 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=31 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=32 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=33 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=34 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=35 rxcpu=#12
+cpu=#12 pid=29333 accept(3) -&gt; fd=36 rxcpu=#12
+</code></pre>
+<p>Now the situation is perfect. All accept()s called from the NGINX worker pinned to CPU #12 got client sockets received on the same CPU.</p>
+<p>But does it actually help with the performance?</p>
+<p>Sadly: no. We've run a number of tests (using the setup introduced in previous blog post) but we weren't able to record any significant performance difference. Compared to other costs incurred by running a high level HTTP server, a couple of microseconds shaved by keeping connections local to a CPU doesn't seem to make a measurable difference.</p>
+<h3 id="measuringpacketlocality">Measuring packet locality</h3>
+<p>But no, we didn't give up!</p>
+<p>Not being able to measure an end to end performance gain, we decided to try another approach. Why not try to measure packet locality itself!</p>
+<p>Measuring locality is tricky. In certain circumstances a packet can cross multiple CPUs on its way down the networking stack. Fortunately we can simplify the problem. Let's define &quot;packet locality&quot; as the probability of a packet (to be specific: the Linux sock_buff data structure, skb) being allocated and freed on the same CPU.</p>
+<p>For this, we wrote yet another SystemTap script:</p>
+<ul>
+<li><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2017-11-perfect-locality/locality.stp">locality.stp</a></li>
+</ul>
+<p>When run without the CBPF option the script gave us this results:</p>
+<pre><code class="language-.text">$ sudo stap -g locality.stp 12
+rx= 21%   29kpps tx=  9%  24kpps
+rx=  8%  130kpps tx=  8% 131kpps
+rx= 11%  132kpps tx=  9% 126kpps
+rx= 10%  128kpps tx=  8% 127kpps
+rx= 10%  129kpps tx=  8% 126kpps
+rx= 11%  132kpps tx=  9% 127kpps
+rx= 11%  129kpps tx= 10% 128kpps
+rx= 10%  130kpps tx=  9% 127kpps
+rx= 12%   94kpps tx=  8%  90kpps
+</code></pre>
+<p>During our test the HTTP server received about 130,000 packets per second and transmitted about as much. 10-11% of the received and 8-10% of the transmitted packets had good locality - were allocated and freed on the same CPU.</p>
+<p>Achieving good locality is not that easy. On the RX side, this means the packet must be received on the same CPU as the application that will read() it. On the transmission side it's even trickier. In case of TCP, a piece of data must all: be sent() by application, get transmitted, and receive back an ACK from the other party, all on the same CPU.</p>
+<p>We performed a bit of tuning, which included inspecting:</p>
+<ul>
+<li>number of RSS queues and their interrupts being pinned to right CPUs</li>
+<li>the indirection table</li>
+<li>correct XPS settings on the TX path</li>
+<li>NGINX workers being pinned to right CPUs</li>
+<li>NGINX using the REUSEPORT bind option</li>
+<li>and finally setting CBPF on the REUSEPORT sockets</li>
+</ul>
+<p>We were able to achieve almost perfect locality! With all tweaks done the script output looked better:</p>
+<pre><code class="language-.text">$ sudo stap -g locality.stp 12
+rx= 99%   18kpps tx=100%  12kpps
+rx= 99%  118kpps tx= 99% 115kpps
+rx= 99%  132kpps tx= 99% 129kpps
+rx= 99%  138kpps tx= 99% 136kpps
+rx= 99%  140kpps tx=100% 134kpps
+rx= 99%  138kpps tx= 99% 135kpps
+rx= 99%  139kpps tx=100% 137kpps
+rx= 99%  139kpps tx=100% 135kpps
+rx= 99%   77kpps tx= 99%  74kpps
+</code></pre>
+<p>Now the test runs at 138,000 packets per second received and transmitted. The packets have a whopping 99% packet locality.</p>
+<p>As for performance difference in practice - it's too small to measure. Even though we received about 7% more packets, the end-to-end tests didn't show a meaningful speed boost.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>We weren't able to prove definitely if improving packet locality actually improves performance for a high-level TCP application like an HTTP server.  In hindsight it makes sense - the added benefit is minuscule compared to the overhead of running an HTTP server, especially with logic in a high level language like Lua.</p>
+<p>This hasn't stopped us from having fun! We (myself, Gilberto Bertin and David Wragg) wrote three pretty cool SystemTap scripts, which are super useful when debugging Linux packet locality. They may come handy for demanding users, for example running high performance UDP servers or doing high frequency trading.</p>
+<p>Most importantly - in the process we learned a lot about the Linux networking stack. We got to practice writing CBPF scripts, and learned how to measure locality with hackish SystemTap scripts. We got reminded of the obvious - out of the box Linux is remarkably well tuned.</p>
+<hr>
+<p><em>Dealing with the internals of Linux and NGINX sound interesting? Join our <a href="https://boards.greenhouse.io/cloudflare/jobs/589572">world famous team</a> in London, Austin, San Francisco and our elite office in Warsaw, Poland</em>.</p>
+<hr>
+<hr class="footnotes-sep">
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p>We are not taking into account aRFS - accelerated RFS. <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/nginx/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">NGINX</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-02-18T13:13:02Z">February 18, 2019 1:13PM</p>
+        <a href="/sockmap-tcp-splicing-of-the-future/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SOCKMAP - TCP splicing of the future</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Proper TCP socket splicing reduces the load on userspace processes and enables more efficient data forwarding. We realized that Linux Kernel's SOCKMAP infrastructure can be reused for this purpose....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-08-02T15:01:15+01:00">August 02, 2016 3:01PM</p>
+        <a href="/introducing-the-p0f-bpf-compiler/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing the p0f BPF compiler</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Two years ago we blogged about our love of BPF (BSD packet filter) bytecode. Today we are very happy to open source another component of the bpftools: our p0f BPF compiler!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/gilberto-bertin/" class="fw5 f2 black no-underline">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tips/" class="no-underline f1 fw2 blue3 underline-hover">Tips</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-07-07T12:50:34+01:00">July 07, 2016 12:50PM</p>
+        <a href="/why-we-use-the-linux-kernels-tcp-stack/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Why we use the Linux kernel&#x27;s TCP stack</h2>
+        </a>
+
+        <p class="gray1 lh-copy">A recent blog post posed the question Why do we use the Linux kernel's TCP stack?. It triggered a very interesting discussion on Hacker News....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-06-21T07:29:00+01:00">June 21, 2012 7:29AM</p>
+        <a href="/the-bandwidth-of-a-boeing-747-and-its-impact/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The bandwidth of a Boeing 747 and its impact on web browsing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Suppose you needed to transfer 1TB of data (perhaps your home movie collection) from San Francisco to London. What would be the fastest route? Put the disk on British Airways flight 286 at SFO, or transfer it across the Internet using a 100 Mbps connection?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/bandwidth/" class="no-underline f1 fw2 blue3 underline-hover">Bandwidth</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

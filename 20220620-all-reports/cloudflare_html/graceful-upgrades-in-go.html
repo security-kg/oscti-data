@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Graceful upgrades in Go</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/graceful-upgrades-in-go/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Graceful upgrades in Go" />
+    <meta property="og:description" content="The idea behind graceful upgrades is to swap out the configuration and code of a process while it is running, without anyone noticing it. If this sounds error prone, dangerous, undesirable and in general a bad idea – I’m with you." />
+    <meta property="og:url" content="https://blog.cloudflare.com/graceful-upgrades-in-go/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/10/thing-1.jpg" />
+    <meta property="article:published_time" content="2018-10-11T14:30:20.000Z" />
+    <meta property="article:modified_time" content="2020-08-20T17:46:22.000Z" />
+    <meta property="article:tag" content="Go" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Graceful upgrades in Go" />
+    <meta name="twitter:description" content="The idea behind graceful upgrades is to swap out the configuration and code of a process while it is running, without anyone noticing it. If this sounds error prone, dangerous, undesirable and in general a bad idea – I’m with you." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/graceful-upgrades-in-go/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/10/thing-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Lorenz Bauer" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Go, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Lorenz Bauer",
+        "image": "https://blog.cloudflare.com/content/images/2018/10/DLHhBC1xSXCeWnvbGAnC_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpeg",
+        "url": "https://blog.cloudflare.com/author/lorenz-bauer/",
+        "sameAs": []
+    },
+    "headline": "Graceful upgrades in Go",
+    "url": "https://blog.cloudflare.com/graceful-upgrades-in-go/",
+    "datePublished": "2018-10-11T14:30:20.000Z",
+    "dateModified": "2020-08-20T17:46:22.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/10/thing-1.jpg",
+    "keywords": "Go, Programming",
+    "description": "The idea behind graceful upgrades is to swap out the configuration and code of a process while it is running, without anyone noticing it. If this sounds error prone, dangerous, undesirable and in general a bad idea – I’m with you.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-go tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-go tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Graceful upgrades in Go</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-10-11T15:30:20+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">October 11, 2018 3:30PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/lorenz-bauer/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/10/DLHhBC1xSXCeWnvbGAnC_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpeg" alt="Lorenz Bauer" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/lorenz-bauer" class="fw5 f3 no-underline black mr3">Lorenz Bauer</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>The idea behind graceful upgrades is to swap out the configuration and code of a process while it is running, without anyone noticing it. If this sounds error prone, dangerous, undesirable and in general a bad idea – I’m with you. However, sometimes you really need them. Usually this happens in an environment where there is no load balancing layer. We have these at Cloudflare, which led to us investigating and implementing various solutions to this problem.</p><p></p><figure class="kg-card kg-image-card kg-width-wide"><img src="https://blog.cloudflare.com/content/images/2018/10/thing.jpg" class="kg-image"></figure><!--kg-card-begin: markdown--><p><small><em>Dingle Dangle! by <a href="https://www.flickr.com/photos/grant_subaru/14175646490">Grant C.</a> (CC-BY 2.0)</em></small></p>
+<!--kg-card-end: markdown--><p>Coincidentally, implementing graceful upgrades involves some fun low-level systems programming, which is probably why there are already a bajillion options out there. Read on to learn what trade-offs there are, and why you should really really use the Go library we are about to open source. For the impatient, the code is on <a href="https://github.com/cloudflare/tableflip">github</a>  and you can read the <a href="https://godoc.org/github.com/cloudflare/tableflip">documentation on godoc</a>.</p><h3 id="the-basics">The basics</h3><p>So what does it mean for a process to perform a graceful upgrade? Let’s use a web server as an example: we want to be able to fire HTTP requests at it, and never see an error because a graceful upgrade is happening.</p><p>We know that HTTP uses TCP under the hood, and that we interface with TCP using the BSD socket API. We have told the OS that we’d like to receive connections on port 80, and the OS has given us a listening socket, on which we call <code>Accept()</code> to wait for new clients.</p><p>A new client will be refused if the OS doesn’t know of a listening socket for port 80, or nothing is calling <code>Accept()</code> on it. The trick of a graceful upgrade is to make sure that neither of these two things occur while we somehow restart our service. Let’s look at the all the ways we could achieve this, from simple to complex.</p><h3 id="just-exec-">Just <code>Exec()</code></h3><p>Ok, how hard can it be. Let’s just <code>Exec()</code> the new binary (without doing a fork first). This does exactly what we want, by replacing the currently running code with the new code from disk.</p><p></p><!--kg-card-begin: markdown--><pre><code class="language-Go">// The following is pseudo-Go.
+
+func main() {
+	var ln net.Listener
+	if isUpgrade {
+		ln = net.FileListener(os.NewFile(uintptr(fdNumber), &quot;listener&quot;))
+	} else {
+		ln = net.Listen(network, address)
+	}
+	
+	go handleRequests(ln)
+
+	&lt;-waitForUpgradeRequest
+
+	syscall.Exec(os.Argv[0], os.Argv[1:], os.Environ())
+}
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Unfortunately this has a fatal flaw since we can’t “undo” the exec. Imagine a configuration file with too much white space in it or an extra semicolon. The new process would try to read that file, get an error and exit.</p><p>Even if the exec call works, this solution assumes that initialisation of the new process is practically instantaneous. We can get into a situation where the kernel refuses new connections because the <a href="https://veithen.github.io/2014/01/01/how-tcp-backlog-works-in-linux.html">listen queue is overflowing</a>.</p><p></p><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/10/Example1-1.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p><small><em>New connections may be dropped if <code>Accept()</code> is not called regularly enough</em></small></p>
+<!--kg-card-end: markdown--><p>Specifically, the new binary is going to spend some time after <code>Exec()</code> to initialise, which delays calls to  <code>Accept()</code>. This means the backlog of new connections grows until some are dropped. Plain exec is out of the game.</p><h3 id="listen-all-the-things"><code>Listen()</code> all the things</h3><p>Since just using exec is out of the question, we can try the next best thing. Lets fork and exec a new process which then goes through its usual start up routine. At some point it will create a few sockets by listening on some addresses, except that won’t work out of the box due to errno 48, otherwise known as Address Already In Use. The kernel is preventing us from listening on the address and port combination used by the old process.</p><p>Of course, there is a flag to fix that: <code>SO_REUSEPORT</code>. This tells the kernel to ignore the fact that there is already a listening socket for a given address and port, and just allocate a new one.</p><p></p><!--kg-card-begin: markdown--><pre><code class="language-Go">func main() {
+	ln := net.ListenWithReusePort(network, address)
+
+	go handleRequests(ln)
+
+	&lt;-waitForUpgradeRequest
+
+	cmd := exec.Command(os.Argv[0], os.Argv[1:])
+	cmd.Start()
+
+	&lt;-waitForNewProcess
+}
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Now both processes have working listening sockets and the upgrade works. Right?</p><p><code>SO_REUSEPORT</code> is a little bit peculiar in what it does inside the kernel. As systems programmers, we tend to think of a socket as the file descriptor that is returned by the socket call. The kernel however makes a distinction between the data structure of a socket, and one or more file descriptors pointing at it. It creates a separate socket structure if you bind using <code>SO_REUSEPORT</code>, not just another file descriptor. The old and the new process are thus referring to two separate sockets, which happen to share the same address. This leads to an unavoidable race condition: new-but-not-yet-accepted connections on the socket used by the old process will be orphaned and terminated by the kernel. GitHub wrote <a href="https://githubengineering.com/glb-part-2-haproxy-zero-downtime-zero-delay-reloads-with-multibinder/#haproxy-almost-safe-reloads">an excellent blog post about this problem</a>.</p><p>The engineers at GitHub solved the problems with <code>SO_REUSEPORT</code> by using an obscure feature of the sendmsg syscall <a href="http://man7.org/linux/man-pages/man0/sys_socket.h.0p.html">called ancilliary data</a>. It turns out that ancillary data can include file descriptors. Using this API made sense for GitHub, since it allowed them to integrate elegantly with HAProxy. Since we have the luxury of changing the program we can use simpler alternatives.</p><h3 id="nginx-share-sockets-via-fork-and-exec">NGINX: share sockets via fork and exec</h3><p>NGINX is the tried and trusted workhorse of the Internet, and happens to support graceful upgrades. As a bonus we also use it at Cloudflare, so we were confident in its implementation.</p><p>It is written in a process-per-core model, which means that instead of spawning a bunch of threads NGINX runs a process per logical CPU core. Additionally, there is a primary process which orchestrates graceful upgrades.</p><p>The primary is responsible for creating all listen sockets used by NGINX and sharing them with the workers. This is fairly straightforward: first, the <code>FD_CLOEXEC</code> bit is cleared on all listen sockets. This means that they are not closed when the <code>exec()</code> syscall is made. The primary then does the customary <code>fork()</code> / <code>exec()</code> dance to spawn the workers, passing the file descriptor numbers as an environment variable.</p><p>Graceful upgrades make use of the same mechanism. We can spawn a new primary process (PID 1176) by <a href="http://nginx.org/en/docs/control.html#upgrade">following the NGINX documentation</a>. This inherits the existing listeners from the old primary process (PID 1017) just like workers do. The new primary then spawns its own workers:</p><!--kg-card-begin: markdown--><pre><code> CGroup: /system.slice/nginx.service
+       	├─1017 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+       	├─1019 nginx: worker process
+       	├─1021 nginx: worker process
+       	├─1024 nginx: worker process
+       	├─1026 nginx: worker process
+       	├─1027 nginx: worker process
+       	├─1028 nginx: worker process
+       	├─1029 nginx: worker process
+       	├─1030 nginx: worker process
+       	├─1176 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+       	├─1187 nginx: worker process
+       	├─1188 nginx: worker process
+       	├─1190 nginx: worker process
+       	├─1191 nginx: worker process
+       	├─1192 nginx: worker process
+       	├─1193 nginx: worker process
+       	├─1194 nginx: worker process
+       	└─1195 nginx: worker process
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>At this point there are two completely independent NGINX processes running. PID 1176 might be a new version of NGINX, or could use an updated config file. When a new connection arrives for port 80, one of the 16 worker processes is chosen by the kernel.</p><p>After executing the remaining steps, we end up with a fully replaced NGINX:</p><p></p><!--kg-card-begin: markdown--><pre><code>   CGroup: /system.slice/nginx.service
+       	├─1176 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+       	├─1187 nginx: worker process
+       	├─1188 nginx: worker process
+       	├─1190 nginx: worker process
+       	├─1191 nginx: worker process
+       	├─1192 nginx: worker process
+       	├─1193 nginx: worker process
+       	├─1194 nginx: worker process
+       	└─1195 nginx: worker process
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Now, when a request arrives the kernel chooses between one of the eight remaining processes.</p><p>This process is rather fickle, so NGINX has a safeguard in place. Try requesting a second upgrade while the first hasn’t finished, and you’ll find the following message in the error log:</p><p></p><!--kg-card-begin: markdown--><pre><code>[crit] 1176#1176: the changing binary signal is ignored: you should shutdown or terminate before either old or new binary's process
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>This is very sensible, there is no good reason why there should be more than two processes at any given point in time. In the best case, we also want this behaviour from our Go solution.</p><h3 id="graceful-upgrade-wishlist">Graceful upgrade wishlist</h3><p>The way NGINX has implemented graceful upgrades is very nice. There is a clear life cycle which determines valid actions at any point in time:</p><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2018/10/upgrade-lifecycle.svg" class="kg-image"></figure><p></p><p>It also solves the problems we’ve identified with the other approaches. Really, we’d like NGINX-style graceful upgrades as a Go library.</p><ul><li>No old code keeps running after a successful upgrade</li><li>The new process can crash during initialisation, without bad effects</li><li>Only a single upgrade is active at any point in time</li></ul><p>Of course, the Go community has produced some fine libraries just for this occasion. We looked at</p><ul><li><a href="https://github.com/alext/tablecloth">github.com/alext/tablecloth</a> (hat tip for the great name)</li><li><a href="https://godoc.org/github.com/astaxie/beego/grace">github.com/astaxie/beego/grace</a></li><li><a href="https://github.com/facebookgo/grace">github.com/facebookgo/grace</a></li><li><a href="https://github.com/crawshaw/littleboss">github.com/crawshaw/littleboss</a></li></ul><p>just to name a few. Each of them is different in its implementation and trade offs, but none of them ticked all of our boxes. The most common problem is that they are designed to gracefully upgrade an http.Server. This makes their API much nicer, but removes flexibility that we need to support other socket based protocols. So really, there was absolutely no choice but to write our own library, called tableflip. Having fun was not part of the equation.</p><h3 id="tableflip">tableflip</h3><p>tableflip is a Go library for NGINX-style graceful upgrades. Here is what using it looks like:</p><p></p><!--kg-card-begin: markdown--><pre><code class="language-Go">upg, _ := tableflip.New(tableflip.Options{})
+defer upg.Stop()
+
+// Do an upgrade on SIGHUP
+go func() {
+    sig := make(chan os.Signal, 1)
+    signal.Notify(sig, syscall.SIGHUP)
+    for range sig {
+   	    _ = upg.Upgrade()
+    }
+}()
+
+// Start a HTTP server
+ln, _ := upg.Fds.Listen(&quot;tcp&quot;, &quot;localhost:8080&quot;)
+server := http.Server{}
+go server.Serve(ln)
+
+// Tell the parent we are ready
+_ = upg.Ready()
+
+// Wait to be replaced with a new process
+&lt;-upg.Exit()
+
+// Wait for connections to drain.
+server.Shutdown(context.TODO())
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Calling <code>Upgrader.Upgrade</code> spawns a new process with the necessary net.Listeners, and waits for the new process to signal that it has finished initialisation, to die or to time out. Calling it when an upgrade is ongoing returns an error.</p><p><code>Upgrader.Fds.Listen</code> is inspired by <code>facebookgo/grace</code> and allows inheriting net.Listener easily. Behind the scenes, <code>Fds</code> makes sure that unused inherited sockets are cleaned up. This includes UNIX sockets, which are tricky due to <a href="https://golang.org/pkg/net/#UnixListener.SetUnlinkOnClose">UnlinkOnClose</a>. You can also pass straight up <code>*os.File</code> to the new process if you desire.</p><p>Finally, <code>Upgrader.Ready</code> cleans up unused fds and signals the parent process that initialization is done. The parent can then exit, which completes the graceful upgrade cycle.</p>
+            </div>
+        </section>
+
+        <a href="/tag/go/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Go</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-11-13T10:31:09Z">November 13, 2017 10:31AM</p>
+        <a href="/go-dont-collect-my-garbage/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Go, don&#x27;t collect my garbage</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Not long ago I needed to benchmark the performance of Golang on a many-core machine. I took several of the benchmarks that are bundled with the Go source code, copied them, and modified them to run on all available threads....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vlad-krasnov/" class="fw5 f2 black no-underline">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-12-21T14:30:48Z">December 21, 2015 2:30PM</p>
+        <a href="/whats-inside-net-http-socket-late-binding-in-the-go-standard-library/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">What&#x27;s inside net/http? Late binding in the Go standard library</h2>
+        </a>
+
+        <p class="gray1 lh-copy">It's well known that we're heavy users of the Go programming language at CloudFlare. Our work often involves delving into the standard library source code to understand internal code paths, error handling and performance characteristics....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matthew-c/" class="fw5 f2 black no-underline">Matthew C</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/railgun/" class="no-underline f1 fw2 blue3 underline-hover">Railgun</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-03-25T16:23:01Z">March 25, 2015 4:23PM</p>
+        <a href="/a-go-gotcha-when-closures-and-goroutines-collide/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A Go Gotcha: When Closures and Goroutines Collide</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Here's a small Go gotcha that it's easy to fall into when using goroutines and closures. Here's a simple program that prints out the numbers 0 to 9....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tips/" class="no-underline f1 fw2 blue3 underline-hover">Tips</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-07-03T16:21:00+01:00">July 03, 2012 4:21PM</p>
+        <a href="/go-at-cloudflare/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Go at CloudFlare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The other day I blogged here about our new Railgun software that speeds up the back haul between CloudFlare data centers and our clients' servers. At CloudFlare we're using a number of different languages depending on the task....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/railgun/" class="no-underline f1 fw2 blue3 underline-hover">Railgun</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Eating Dogfood at Scale: How We Build Serverless Apps with Workers</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/building-serverless-apps-with-workers/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Eating Dogfood at Scale: How We Build Serverless Apps with Workers" />
+    <meta property="og:description" content="You’ve had a chance to build a Cloudflare Worker. You’ve tried KV Storage and have a great use case for your Worker. You’ve even demonstrated the usefulness to your product or organization." />
+    <meta property="og:url" content="https://blog.cloudflare.com/building-serverless-apps-with-workers/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/04/ZG9nZm9vZEAyeC5wbmc--1.png" />
+    <meta property="article:published_time" content="2019-04-19T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-04-19T12:59:59.000Z" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="API" />
+    <meta property="article:tag" content="CLI" />
+    <meta property="article:tag" content="GitHub" />
+    <meta property="article:tag" content="YAML" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Eating Dogfood at Scale: How We Build Serverless Apps with Workers" />
+    <meta name="twitter:description" content="You’ve had a chance to build a Cloudflare Worker. You’ve tried KV Storage and have a great use case for your Worker. You’ve even demonstrated the usefulness to your product or organization." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/building-serverless-apps-with-workers/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/04/ZG9nZm9vZEAyeC5wbmc--1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Jonathan Spies" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Serverless, Cloudflare Workers, Programming, API, CLI, GitHub, YAML" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Jonathan Spies",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/19532e3ffeb770f1fcf6a94c8fd5449e?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/jonathan-spies/",
+        "sameAs": []
+    },
+    "headline": "Eating Dogfood at Scale: How We Build Serverless Apps with Workers",
+    "url": "https://blog.cloudflare.com/building-serverless-apps-with-workers/",
+    "datePublished": "2019-04-19T13:00:00.000Z",
+    "dateModified": "2019-04-19T12:59:59.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/04/ZG9nZm9vZEAyeC5wbmc--1.png",
+    "keywords": "Serverless, Cloudflare Workers, Programming, API, CLI, GitHub, YAML",
+    "description": "You’ve had a chance to build a Cloudflare Worker. You’ve tried KV Storage and have a great use case for your Worker. You’ve even demonstrated the usefulness to your product or organization. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-serverless tag-workers tag-programming tag-api tag-cli tag-github tag-yaml sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-serverless tag-workers tag-programming tag-api tag-cli tag-github tag-yaml ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Eating Dogfood at Scale: How We Build Serverless Apps with Workers</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-04-19T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">April 19, 2019 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/jonathan-spies/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/19532e3ffeb770f1fcf6a94c8fd5449e?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Jonathan Spies" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/jonathan-spies" class="fw5 f3 no-underline black mr3">Jonathan Spies</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/ZG9nZm9vZEAyeC5wbmc-.png" class="kg-image"></figure><p></p><p>You’ve had a chance to build a <a href="https://developers.cloudflare.com/workers/about/">Cloudflare Worker</a>. You’ve tried <a href="https://developers.cloudflare.com/workers/kv/">KV Storage</a> and have a great use case for your Worker. You’ve even demonstrated the usefulness to your product or organization. Now you need to go from writing a single file in the Cloudflare Dashboard UI Editor to source controlled code with multiple environments deployed using your favorite CI tool.</p><p>Fortunately, we have a powerful and flexible <a href="https://developers.cloudflare.com/workers/api/">API</a> for managing your workers. You can customize your deployment to your heart’s content. Our blog has already featured many things made possible by that API:</p><ul><li><a href="https://blog.cloudflare.com/introducing-wrangler-cli/">The Wrangler CLI</a></li><li><a href="https://blog.cloudflare.com/a-ci/">CI/CD Pipeline</a></li><li><a href="https://blog.cloudflare.com/deploying-workers-with-github-actions-serverless/">Github Actions</a></li><li><a href="https://blog.cloudflare.com/create-cloudflare-worker-bootstrap-your-cloudflare-worker/">Worker bootstrap template</a></li></ul><p>These tools make deployments easier to configure, but it still takes time to manage. The <a href="https://serverless.com/">Serverless Framework</a> <a href="https://serverless.com/plugins/serverless-cloudflare-workers/">Cloudflare Workers plugin</a> removes that deployment overhead so you can spend more time working on your application and less on your deployment.</p><h3 id="focus-on-your-application">Focus on your application</h3><p>Here at Cloudflare, we’ve been working to rebuild our Access product to run entirely on Workers. The move will allow Access to take advantage of the resiliency, performance, and flexibility of Workers. We’ll publish a more detailed post about that migration once complete, but the experience required that we retool some of our process to match or existing development experience as much as possible.</p><p>To us this meant:</p><ul><li>Git</li><li>Easily deploy</li><li>Different environments</li><li>Unit Testing</li><li>CI Integration</li><li>Typescript/Multiple Files</li><li>Everything Must Be Automated</li></ul><p>The Cloudflare Access team looked at three options for automating all of these tools in our pipeline. All of the options will work and could be right for you, but custom scripting can be a chore to maintain and Terraform lacked some extensibility.</p><ol><li>Custom Scripting</li><li><a href="https://www.terraform.io/docs/providers/cloudflare/index.html">Terraform</a></li><li>Serverless Framework</li></ol><p>We decided on the Serverless Framework. Serverless Framework provided a tool to mirror our existing process as closely as possible without too much DevOps overhead. Serverless is extremely simple and doesn’t interfere with the application code. You can get a project set up and deployed in seconds. It’s obviously less work than writing your own custom management scripts. But it also requires less boiler plate than Terraform because the Serverless Framework is designed for the “serverless” niche. However, if you are already using Terraform to manage other Cloudflare products, Terraform might be the best fit.</p><h3 id="walkthrough">Walkthrough</h3><p>Everything for the project happens in a YAML file called serverless.yml. Let’s go through the features of the configuration file.</p><p>To get started, we need to install serverless from npm and generate a new project.</p><p></p><!--kg-card-begin: markdown--><pre><code>npm install serverless -g
+serverless create --template cloudflare-workers --path myproject
+cd myproject
+npm install
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>If you are an enterprise client, you want to use the cloudflare-workers-enterprise template as it will set up more than one worker (but don’t worry, you can add more to any template). Also, I’ll touch on this later, but if you want to write your workers in Rust, use the cloudflare-workers-rust template.</p><p>You should now have a project that feels familiar, ready to be added to your favorite source control. In the project should be a serverless.yml file like the following.</p><p></p><!--kg-card-begin: markdown--><pre><code class="language-YAML">service:
+    name: hello-world
+
+provider:
+  name: cloudflare
+  config:
+    accountId: CLOUDFLARE_ACCOUNT_ID
+    zoneId: CLOUDFLARE_ZONE_ID
+
+plugins:
+  - serverless-cloudflare-workers
+
+functions:
+  hello:
+    name: hello
+    script: helloWorld  # there must be a file called helloWorld.js
+    events:
+      - http:
+          url: example.com/hello/*
+          method: GET
+          headers:
+            foo: bar
+            x-client-data: value
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>The service block simply contains the name of your service. This will be used in your Worker script names if you do not overwrite them.</p><p>Under provider, name must be ‘cloudflare’  and you need to add your account and zone IDs. You can find them in the Cloudflare Dashboard.</p><p>The plugins section adds the Cloudflare specific code.</p><p>Now for the good part: functions. Each block under functions is a Worker script. </p><p><strong>name</strong>: (optional) If left blank it will be STAGE-service.name-script.identifier. If I removed name from this file and deployed in production stage, the script would be named production-hello-world-hello.</p><p><strong>script</strong>: the relative path to the javascript file with the worker script. I like to organize mine in a folder called handlers.</p><p><strong>events</strong>: Currently Workers only support http events. We call these routes. The example provided says that GET https://example.com/hello/&lt;anything here&gt; will  cause this worker to execute. The headers block is for testing invocations.</p><p>At this point you can deploy your worker!<br></p><!--kg-card-begin: markdown--><pre><code class="language-YAML"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="783b34372d3c3e34392a3d27392d2c30273d353931344501170d3801170d0a1c1715191116561b1715">[email&#160;protected]</a> CLOUDFLARE_AUTH_KEY=XXXXXXXX serverless deploy
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>This is very easy to deploy, but it doesn’t address our requirements. Luckily, there’s just a few simple modifications to make.</p><h3 id="maturing-our-yaml-file">Maturing our YAML File</h3><p>Here’s a more complex YAML file.</p><p></p><!--kg-card-begin: markdown--><pre><code class="language-YAML">service:
+  name: hello-world
+
+package:
+  exclude:
+    - node_modules/**
+  excludeDevDependencies: false
+
+custom:
+  defaultStage: development
+  deployVars: ${file(./config/deploy.${self:provider.stage}.yml)}
+
+kv: &amp;kv
+  - variable: MYUSERS
+    namespace: users
+
+provider:
+  name: cloudflare
+  stage: ${opt:stage, self:custom.defaultStage}
+  config:
+    accountId: ${env:CLOUDFLARE_ACCOUNT_ID}
+    zoneId: ${env:CLOUDFLARE_ZONE_ID}
+
+plugins:
+  - serverless-cloudflare-workers
+
+functions:
+  hello:
+    name: ${self:provider.stage}-hello
+    script: handlers/hello
+    webpack: true
+    environment:
+      MY_ENV_VAR: ${self:custom.deployVars.env_var_value}
+      SENTRY_KEY: ${self:custom.deployVars.sentry_key}
+    resources: 
+      kv: *kv
+    events:
+      - http:
+          url: &quot;${self:custom.deployVars.SUBDOMAIN}.mydomain.com/hello&quot;
+          method: GET
+      - http:
+          url: &quot;${self:custom.deployVars.SUBDOMAIN}.mydomain.com/alsohello*&quot;
+          method: GET
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>We can add a custom section where we can put custom variables to use later in the file.</p><p><strong>defaultStage</strong>: We set this to development so that forgetting to pass a stage doesn’t trigger a production deploy. Combined with the <strong>stage</strong> option under provider we can set the stage for deployment.</p><p><strong>deployVars</strong>: We use this custom variable to load another YAML file dependent on the stage. This lets us have different values for different stages. In development, this line loads the file <code>./config/deploy.development.yml</code>. Here’s an example file:</p><!--kg-card-begin: markdown--><pre><code class="language-YAML">env_var_value: true
+sentry_key: XXXXX
+SUBDOMAIN: dev
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p><strong>kv</strong>:<strong> </strong>Here we are showing off a feature of YAML. If you assign a name to a block using the ‘&amp;’, you can use it later as a YAML variable. This is very handy in a multi script account. We could have named this variable anything, but we are naming it kv since it holds our Workers Key Value storage settings to be used in our function below.</p><p>Inside of the <strong>kv</strong> block we're creating a namespace and binding it to a variable available in your Worker. It will ensure that the namespace “users” exists and is bound to MYUSERS.</p><!--kg-card-begin: markdown--><pre><code class="language-YAML">kv: &amp;kv
+  - variable: MYUSERS
+    namespace: users
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p><strong>provider</strong>: The only new part of the provider block is <strong>stage</strong>. </p><!--kg-card-begin: markdown--><pre><code class="language-YAML">stage: ${opt:stage, self:custom.defaultStage}
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>This line sets stage to either the command line option or custom.defaultStage if opt:stage is blank. When we deploy, we pass —stage=production to serverless deploy.</p><p>Now under our function we have added webpack, resources, and environment. </p><p><strong>webpack</strong>: If set to true, will simply bundle each handler into a single file for deployment. It will also take a string representing a path to a webpack config file so you can customize it. This is how we add Typescript support to our projects.</p><p><strong>resources</strong>: This block is used to automate resource creation. In resources we're linking back to the kv block we created earlier.<br><br><em>Side note: If you would like to include WASM bindings in your project, it can be done in a very similar way to how we included Workers KV. For more information on WASM, see the <a href="https://serverless.com/plugins/serverless-cloudflare-workers/">documentation</a>.</em></p><p><strong>environment</strong>: This is the butter for the bread that is managing configuration for different stages. Here we can specify values to bind to variables to use in worker scripts. Combined with YAML magic, we can store our values in the aforementioned config files so that we deploy different values in different stages. With environments, we can easily tie into our CI tool. The CI tool has our deploy.production.yml. We simply run the following command from within our CI.<br></p><!--kg-card-begin: markdown--><pre><code>sls deploy --stage=production
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Finally, I added a route to demonstrate that a script can be executed on multiple routes.</p><p>At this point I’ve covered (or hinted) at everything on our original list except Unit Testing. There are a few ways to do this.</p><p>We have a previous blog post about <a href="https://blog.cloudflare.com/unit-testing-worker-functions/">Unit Testing</a> that covers using <a href="https://github.com/dollarshaveclub/cloudworker">cloud worker</a>, a great tool built by <a href="https://www.dollarshaveclub.com/">Dollar Shave Club</a>.</p><p>My team opted to use the classic node frameworks mocha and sinon. Because we are using Typescript, we can build for node or build for v8. You can also make mocha work for non-typescript projects if you use an <a href="https://nodejs.org/api/esm.html">experimental feature that adds import/export support to node</a>.</p><!--kg-card-begin: markdown--><pre><code>--experimental-modules
+</code></pre>
+<!--kg-card-end: markdown--><p>We’re excited about moving more and more of our services to Cloudflare Workers, and the Serverless Framework makes that easier to do. If you’d like to learn even more or get involved with the project, see us on <a href="https://github.com/cloudflare/serverless-cloudflare-workers">github.com</a>. For additional information on using Serverless Framework with Cloudflare Workers, check out our <a href="https://developers.cloudflare.com/workers/deploying-workers/serverless/">documentation on the Serverless Framework</a>.</p>
+            </div>
+        </section>
+
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/api/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">API</a>
+        <a href="/tag/cli/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">CLI</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-22T13:00:00Z">December 22, 2020 1:00PM</p>
+        <a href="/cloudflare-acquires-linc/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare Acquires Linc</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today, we’re excited to announce the acquisition of Linc, an automation platform to help front-end developers collaborate and build powerful applications....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alyson/" class="fw5 f2 black no-underline">Aly Cabral</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/glen/" class="fw5 f2 black no-underline">Glen Maddern</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-pages/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Pages</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/jamstack/" class="no-underline f1 fw2 blue3 underline-hover">JAMstack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-12-17T14:00:00Z">December 17, 2020 2:00PM</p>
+        <a href="/cloudflare-pages/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Cloudflare Pages: the best way to build JAMstack websites</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Across multiple cultures around the world, this time of year is a time of celebration and sharing of gifts with the people we care the most about....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rita/" class="fw5 f2 black no-underline">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-pages/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Pages</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/jamstack/" class="no-underline f1 fw2 blue3 underline-hover">JAMstack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-28T14:03:00+01:00">September 28, 2020 2:03PM</p>
+        <a href="/introducing-cron-triggers-for-cloudflare-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Cron Triggers for Cloudflare Workers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today the Cloudflare Workers team is thrilled to announce the launch of Cron Triggers. Before now, Workers were triggered purely by incoming HTTP requests but starting today you’ll be able to set a scheduler to run your Worker on a timed interval....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nancy-gao/" class="fw5 f2 black no-underline">Nancy Gao</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-28T14:02:00+01:00">September 28, 2020 2:02PM</p>
+        <a href="/cron-triggers-for-scheduled-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Making Time for Cron Triggers: A Look Inside</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today, we are excited to launch Cron Triggers to the Cloudflare Workers serverless compute platform. We’ve heard the developer feedback, and we want to give our users the ability to run a given Worker on a scheduled basis....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/aaron-lisman/" class="fw5 f2 black no-underline">Aaron Lisman</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/birthday-week/" class="no-underline f1 fw2 blue3 underline-hover">Birthday Week</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

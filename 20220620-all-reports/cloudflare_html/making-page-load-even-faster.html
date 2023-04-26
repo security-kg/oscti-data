@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>How we made our page-load optimisations even faster</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="This year we made two of our web optimisation products-Mirage &amp; Rocket Loader-even faster! These products are inserted into pages around 1.2b times a week." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/making-page-load-even-faster/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="How we made our page-load optimisations even faster" />
+    <meta property="og:description" content="We improved the Lighthouse and time-to-first-meaningful-paint scores of two of our web optimisation products: Mirage and Rocket Loader! Combined, these products speed up around 1.2 billion web-pages a week." />
+    <meta property="og:url" content="https://blog.cloudflare.com/making-page-load-even-faster/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/02/dimon-blr-309444-1.jpg" />
+    <meta property="article:published_time" content="2018-02-02T16:41:00.000Z" />
+    <meta property="article:modified_time" content="2019-06-29T21:07:05.000Z" />
+    <meta property="article:tag" content="Mirage" />
+    <meta property="article:tag" content="Rocket Loader" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Product News" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How we made our page-load optimisations even faster" />
+    <meta name="twitter:description" content="We improved the Lighthouse and time-to-first-meaningful-paint scores of two of our web optimisation products: Mirage and Rocket Loader! Combined, these products speed up around 1.2 billion web-pages a week." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/making-page-load-even-faster/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/02/dimon-blr-309444-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Tim Ruffles" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Mirage, Rocket Loader, Speed &amp; Reliability, Product News" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@timruffles" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Tim Ruffles",
+        "image": "https://blog.cloudflare.com/content/images/2017/12/6NcBjzHh.jpeg",
+        "url": "https://blog.cloudflare.com/author/tim/",
+        "sameAs": [
+            "http://truffles.me.uk",
+            "https://twitter.com/timruffles"
+        ]
+    },
+    "headline": "How we made our page-load optimisations even faster",
+    "url": "https://blog.cloudflare.com/making-page-load-even-faster/",
+    "datePublished": "2018-02-02T16:41:00.000Z",
+    "dateModified": "2019-06-29T21:07:05.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/02/dimon-blr-309444-1.jpg",
+    "keywords": "Mirage, Rocket Loader, Speed & Reliability, Product News",
+    "description": "We improved the Lighthouse and time-to-first-meaningful-paint scores of two of our web optimisation products: Mirage and Rocket Loader! Combined, these products speed up around 1.2 billion web-pages a week.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-mirage tag-rocketloader tag-speed-and-reliability tag-product-news sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-mirage tag-rocketloader tag-speed-and-reliability tag-product-news ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">How we made our page-load optimisations even faster</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-02-02T16:41:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 02, 2018 4:41PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/tim/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/12/6NcBjzHh.jpeg" alt="Tim Ruffles" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/tim" class="fw5 f3 no-underline black mr3">Tim Ruffles</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>In 2017 we made two of our web optimisation products - <a href="https://www.cloudflare.com/website-optimization/mirage/">Mirage</a> and <a href="https://vimeo.com/24900882">Rocket Loader</a> - even faster! Combined, these products speed up around 1.2 billion web-pages a week. The products are both around 5 years old, so there was a big opportunity to update them for the brave new world of highly-tuned browsers, HTTP2 and modern Javascript tooling. We measured a performance boost that, <a href="#savings">very roughly</a>, will save visitors to sites on our network between 50-700ms. Visitors that see content faster have much higher engagement and lower bounce rates, as shown by studies like <a href="https://www.doubleclickbygoogle.com/articles/mobile-speed-matters/">Google’s</a>. This really adds up, representing a further saving of 380 years of loading time each year and a staggering 1.03 petabytes of data transfer!</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/02/dimon-blr-309444.jpg" alt="dimon-blr-309444"><br>
+<small>Cycling image Photo by <a href="https://unsplash.com/photos/mdgMbYfFlSA">Dimon Blr on Unsplash</a>.</small></p>
+<h3 id="whatmirageandrocketloaderdo">What Mirage and Rocket Loader do</h3>
+<p>Mirage and Rocket Loader both optimise the loading of a web page by reducing and deferring the number of assets the browser needs to request for it to complete HTML parsing and rendering on screen.</p>
+<h4 id="mirage">Mirage</h4>
+<style>
+.has_images {
+    overflow: auto;
+}
+
+@media (min-width: 600px) {
+    .has_images p {
+        float: left; width: 50%;
+    }
+    .has_images img {
+        float: right; margin: 1em; width: 40%
+    }
+}
+</style>
+<div class=has_images>
+<p>With Mirage, users on slow mobile connections will be quickly shown a full page of content, using placeholder images with a low file-size which will load much faster. Without Mirage visitors on a slow mobile connection will have to wait a long time to download high-quality images. Since it’ll take a long time, they will perceive your website as slow:</p>
+<img alt="Mirage---before" src="https://blog.cloudflare.com/content/images/2018/02/Mirage---before-1.svg" />
+</div>
+<p><br><br></p>
+<div class=has_images>
+<p>With Mirage visitors will see content much faster, will thus perceive that the content is loading quickly, and will be less likely to give up:</p></p>
+<img alt="mirage-after" src="https://blog.cloudflare.com/content/images/2018/02/mirage-after-1.svg"  />
+</div>
+<h4 id="rocketloader">Rocket Loader</h4>
+<div class=has_images>
+<p>Browsers will not show content that until all the Javascript that might affect it has been loaded and run. This can mean users wait a significant time before seeing any content at all, even if that content is the only reason they’re on visiting the page!</p>
+<img alt="Rocket-before" src="https://blog.cloudflare.com/content/images/2018/02/Rocket-before.svg"  />
+</div>
+<div class=has_images>
+<p>Rocket Loader transparently defers all Javascript execution until the rest of the page has loaded. This allows the browser to display the content the visitors are interested in as soon as possible.</p>
+<img alt="Rocket-after" src="https://blog.cloudflare.com/content/images/2018/02/Rocket-after.svg"  />
+</div>
+<h3 id="howtheywork">How they work</h3>
+<p>Both of these products  involve a two step process: first our optimizing proxy-server will rewrite customers’ HTML as it’s delivered, and then our on-page Javascript will attempt to optimise aspects of the page load. For instance, Mirage's server-side rewrites image tags as follows:</p>
+<pre><code>&lt;!-- before --&gt;
+&lt;img src=&quot;/some-image.png&quot;&gt;
+
+&lt;!-- after --&gt;
+&lt;img data-cfsrc=&quot;/some-image.png&quot; style=&quot;display:none;visibility:hidden;&quot;&gt;
+</code></pre>
+<p>Since browsers don't recognise <code>data-cfsrc</code>, the Mirage Javascript can control the whole process of loading these images. It uses this opportunity to intelligently load placeholder images on slow connections.</p>
+<p>Rocket Loader uses a similar approach to de-prioritise Javascript during page load, allowing the browser to show visitors the content of the page sooner.</p>
+<h3 id="theproblems">The problems</h3>
+<p>The Javascript for both products was written years ago, when <a href="https://github.com/rollup/rollup">‘rollup’</a> brought to mind a poor lifestyle choice rather than an excellent build-tool. With the big changes we’ve seen in browsers, protocols, and JS, there were many opportunities to optimise.</p>
+<h4 id="dynamicallyslowingthingsdown">Dynamically... slowing things down</h4>
+<p>Designed for the ecosystem of the time, both products were loaded by Cloudflare’s <a href="https://github.com/amdjs/amdjs-api/wiki/AMD">asynchronous-module-definition</a> (AMD) loader, called CloudflareJS, which also bundled some shared libraries.</p>
+<p>This meant the process of loading Mirage or Rocket Loader looked like:</p>
+<ol>
+<li>CFJS inserted in blocking script tag by server-side rewriter</li>
+<li>CFJS runs, and looks at some on-page config to decide at runtime whether to load Rocket/Mirage via AMD, inserting new script tags</li>
+<li>Rocket/Mirage are loaded and run</li>
+</ol>
+<h4 id="fightingbrowsers">Fighting browsers</h4>
+<p>Dynamic loading meant the products could not benefit from optimisations present in modern browsers. Browsers now scan HTML as they receive it instead of waiting for it all to arrive, identifying and loading external resources like script tags as quickly as possible. This process is called <a href="https://andydavies.me/blog/2013/10/22/how-the-browser-pre-loader-makes-pages-load-faster/">preload scanning</a>, and is one of the most important optimisations performed by the brower. Since we used dynamic code inside CFJS to load Mirage and Rocket Loader, we were preventing them from benefitting from the preload scanner.</p>
+<p>To make matters worse, Rocket Loader was being dynamically inserted using that villain of the DOM API, <code>document.write</code> - a technique that creates huge performance problems. Understanding exactly why is involved, so I’ve created a diagram. Skim it, and refer back to it as you read the next paragraph:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/02/Old-version.svg" alt="Old-version"></p>
+<p>As said, using <code>document.write</code> to insert scripts is be particularly damaging to page load performance. Since the <code>document.write</code> that inserts the script is invisible to the preload scanner (even if the script is inline, which ours isn’t, preload scanning <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=575850">doesn’t</a> even attempt to scan JS), at the instant it is inserted the browser will already be busy requesting resources the scanner found elsewhere in the page (other script tags, images etc). This matters because a browser encountering a non-deferred or asynchronous Javascript, like Rocket Loader, must block all further building of the DOM tree until that script is loaded and executed, to give the script a chance to modify the DOM. So Rocket Loader was being inserted at an instant in which it was going to be very slow to load, due to the backlog of requests from the preload scan, and therefore causes a very long delay until the DOM parser can resume!</p>
+<p>Aside from this grave performance issue, it became more urgent to remove <code>document.write</code> when <a href="https://www.chromestatus.com/feature/5718547946799104">Chrome began to intervene against it in version 55</a> triggering a <a href="https://github.com/WICG/interventions/issues/17">very interesting discussion</a>. This intervention would sometimes prevent Rocket Loader from being inserted on slow 2G connections, stopping any other Javascript from loading at all!</p>
+<p>Clearly, <code>document.write</code> needed to be extirpated!</p>
+<h4 id="unusedandovergeneralcode">Unused and over-general code</h4>
+<p>CFJS was authored as a shared library for Cloudflare client-side code, including the original Cloudflare app store. This meant it had quite a large set of APIs. Although both Mirage and Rocket Loader depended on some of them, the overlap was actually small. Since we've launched the new, shiny <a href="https://blog.cloudflare.com/cloudflare-apps-2/">Cloudflare Apps</a>, CFJS had no other important products dependant upon it.</p>
+<h3 id="aplanofaction">A plan of action</h3>
+<p>Before joining Cloudflare in July this year, I had been working in TypeScript, a language with all the lovely new syntax of modern Javascript. Taking over multiple AMD, ES5-based projects using Gulp and Grunt was a bit of a shock. I really thought I'd written my last <code>define(['writing', 'very-bug'], function(twice, prone) {})</code>, but here I was in 2017 seeing it again!</p>
+<p>So it was very tempting to do a big-bang rewrite and get back to playing with the new ECMAScript 2018 toys. However, I’ve been involved in enough rewrites to know they’re <a href="https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/">very rarely justified</a>, and instead identified the highest priority changes we’d need to improve performance (though I admit I wrote a few <code>git checkout -b typescript-version</code> branches to vent).</p>
+<p>So, the plan was:</p>
+<ol>
+<li>identify and inline the parts of CFJS used by Mirage and Rocket Loader</li>
+<li>produce a new version of the other dependencies of CFJS (our <a href="https://www.cloudflare.com/logo">logo badge widget</a> is actually hardcoded to point at CloudflareJS)</li>
+<li>switch from AMD to Rollup (and thus ECMAScript import syntax)</li>
+</ol>
+<p>The decision to avoid making a new shared library may be surprising, especially as tree-shaking avoids some of the code-size overhead from unused parts of our dependencies. However, a little duplication seemed the lesser evil compared to cross-project dependencies given that:</p>
+<ul>
+<li>the overlap in code used was small</li>
+<li>over-general, library-style functions were part of why CFJS became too big in the first place</li>
+<li>Rocket Loader has some exciting things in its future...</li>
+</ul>
+<p>Sweating kilobytes out of the minified + Gzipped Javascript files is be a waste of time for most applications. However, in the context of code that'll be run literally millions of times in the time you read this article, it really pays off. This is a process we’ll be continuing in 2018.</p>
+<h4 id="switchingoutamd">Switching out AMD</h4>
+<p>Switching out Gulp, Grunt and AMD was a fairly mechanical process of replacing syntax like this:</p>
+<pre><code>define(['cloudflare/iterator', 'cloudflare/dom'], function(iterator, dom) {
+    // ...
+    return {
+        Mirage: Mirage,
+    };
+})
+</code></pre>
+<p>with ECMAScript modules, ready for Rollup, like:</p>
+<pre><code>import * as iterator from './iterator';
+import { isHighLatency } from './connection';
+
+// ...
+
+export { Mirage }
+</code></pre>
+<h4 id="postrefactorweighin">Post refactor weigh-in</h4>
+<p>Once the parts of CFJS used by the projects were inlined into the projects, we ended up with both Rocket and Mirage being slightly <a href="#badge">larger</a> (all numbers minified + GZipped):</p>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<div id=sizeChart></div>
+<script>
+(function() {
+var x = ['Mirage old', 'Mirage new', 'Rocket Loader old', 'Rocket Loader new'];
+var trace1 = {
+  x: x,
+  y: [8019,13029,25151,31621],
+  name: 'Main file',
+  type: 'bar'
+};
+var trace2 = {
+  x: x,
+  y: [21572,0,21572,0],
+  name: 'Additional dependencies',
+  type: 'bar'
+};
+var data = [trace1, trace2];
+var layout = {barmode: 'stack',plot_bgcolor: 'transparent', paper_bgcolor: 'transparent'}; 
+Plotly.newPlot('sizeChart', data, layout); 
+})();
+</script>
+<p>So we made a significant file-size saving (about <a href="https://mathiasbynens.be/demo/jquery-size">half a jQuery’s worth</a>) vs the original file-size required to completely load either product.</p>
+<h4 id="newinsertionflow">New insertion flow</h4>
+<p>Before, our original insertion flow looked something like this:</p>
+<pre><code>// on page embed, injected into customers' pages
+&lt;script&gt;
+  var cloudflare = { rocket: true, mirage: true };
+&lt;/script&gt;
+&lt;script src=&quot;/cloudflare.min.js&quot;&gt;&lt;/script&gt;
+</code></pre>
+<p>Inside cloudflare.min.js we found the dynamic code that, once run, would kick off the requests for Mirage and Rocket Loader:</p>
+<pre><code>// cloudflare.min.js
+if(cloudflare.rocket) {
+    require(“cloudflare/rocket”);
+}
+</code></pre>
+<p>Our approach is now far more browser friendly, roughly:</p>
+<pre><code>// on page embed
+&lt;script&gt;
+  var cloudflare = { /* some config */ }
+&lt;/script&gt;
+&lt;script src=&quot;/mirage.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;/rocket.min.js&quot;&gt;&lt;/script&gt;
+</code></pre>
+<p>If you compare the new insertion sequence diagram, you can see why this is so much better:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/02/New-Version.svg" alt="New-Version"></p>
+<h3 id="measurement">Measurement</h3>
+<p>Theory implied our smaller, browser-friendly strategy should be faster, but only by doing some good old empirical research would we know <a href="#hume">for sure</a>.</p>
+<p>To measure the results, I set up a representative test page (including Bootstrap, custom fonts, some images, text) and calculated the change in the average <a href="https://developers.google.com/web/tools/lighthouse">Lighthouse</a> performance scores out of 100 over a number of runs. The metrics I focussed on were:</p>
+<ol>
+<li>Time till first meaningful paint (TTFMP) - FMP is when we first see some useful content, e.g. images and text</li>
+<li>Overall - this is Lighthouse's aggregate score for a page - the closer to 100, the better</li>
+</ol>
+<div id=lighthouse></div>
+<script>
+(function() {
+var x = ['Mirage','Rocket Loader'];
+var trace1 = {
+  x: x,
+  y: [93.4,86.6],
+  marker: {color: '#F8B168'},
+  name: 'Lighthouse score, old',
+  type: 'bar'
+};
+var trace2 = {
+  x: x,
+  y: [93.4,92.9],
+    marker: {color: '#FF7900'},
+  name: 'Lighthouse score, new',
+  type: 'bar'
+};
+var trace3 = {
+  x: x,
+  y: [88,72.2],
+      marker: {color: '#2F7BBF'},
+  name: 'Lightscore FMP score, old',
+  type: 'bar'
+};
+var trace4 = {
+  x: x,
+  y: [89,86.8],
+        marker: {color: '#63A1D7'},
+  name: 'Lightscore FMP score, new',
+  type: 'bar'
+};
+var data = [trace1, trace2, trace3, trace4];
+var layout = {barmode: 'group',plot_bgcolor: 'transparent', paper_bgcolor: 'transparent',title:'Observed average Lighthouse scores (max 100) for FMP, and overall performance'}; 
+Plotly.newPlot('lighthouse', data, layout);
+})();
+</script>
+<div id=ttfmp_chart></div>
+<script>
+(function() {  
+var x = ['Mirage','Rocket Loader'];
+var trace1 = {
+  x: x,
+  y: [2195.3,2959.5],
+  name: 'Old version, TTFMP ms',
+  type: 'bar'
+};
+var trace2 = {
+  x: x,
+  y: [2146.3,2265.5],
+  name: 'New version, TTFMP ms',
+  type: 'bar'
+};
+var data = [trace1, trace2];
+var layout = {barmode: 'group',plot_bgcolor: 'transparent', paper_bgcolor: 'transparent',title:'Observed average TTFMP in ms'}; 
+Plotly.newPlot('ttfmp_chart', data, layout);
+})();
+</script>
+<h4 id="assessment">Assessment</h4>
+<p>So, improved metrics across the board! We can see the changes have resulted in solid improvements, e.g a reduction in our average time till first meaningful paint of 694ms for Rocket, and 49ms for Mirage.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>The optimisations to Mirage and Rocket Loader have resulted in less bandwidth use, and measurably better performance for visitors to Cloudflare optimised sites.</p>
+<br />
+<br />
+<br />
+<h4 id="footnotes">Footnotes</h4>
+<style>
+    a:not([href]) {
+      text-decoration: inherit !important;
+      color: inherit !important;
+    }
+</style>
+<ol>
+<li><a id=savings>The</a> following are back-of-the-envelope calculations. Mirage gets 980 million requests a week, TTFMP reduction of 50ms. There are 1000 ms in a second * 60 seconds * 60 minutes * 24 hours * 365 days = 31.5 billion milliseconds in a year. So (980e6 * 50 * 52) / 31.5e9  = in aggregate, 81 years less waiting for first-paint. Rocket gets 270 million requests a week, average TTFMP reduction of 694ms, (270e6 * 694 * 52) / 31.5e9 = in aggregate, 301 years less waiting for first-meaningful-paint. Similarly 980 million savings of 16kb per week for Mirage = 817.60 terabytes per year and 270 million savings of 15.2kb per week for Rocket Loader = 213.79 terabytes per year for a combined total of 1031 terabytes or 1.031 petabytes.</li>
+<li><a id=badge>and</a> a tiny 1.5KB file for our <a href="https://www.cloudflare.com/logo">web badge</a> - written in TypeScript 👍 - which previously was loaded on top of the 21.6KB CFJS</li>
+<li><a id=hume></a><a href="https://plato.stanford.edu/entries/induction-problem/">shut it Hume</a></li>
+<li>Thanks to Peter Belesis for doing the initial work of identifying which products depended upon CloudflareJS, and Peter, Matthew Cottingham, Andrew Galloni, Henry Heinemann, Simon Moore and Ivan Nikulin for their wise counsel on this blog post.</li>
+</ol>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/mirage/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Mirage</a>
+        <a href="/tag/rocketloader/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Rocket Loader</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/product-news/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Product News</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2013-06-13T03:00:00+01:00">June 13, 2013 3:00AM</p>
+        <a href="/mirage2-solving-mobile-speed/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Mirage 2.0: Solving the Mobile Browsing Speed Challenge</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Almost exactly a year ago, CloudFlare announced a feature called Mirage. Mirage was designed to make the loading of images faster in two primary ways....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matthew-prince/" class="fw5 f2 black no-underline">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/mirage/" class="no-underline f1 fw2 blue3 underline-hover">Mirage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/mobile/" class="no-underline f1 fw2 blue3 underline-hover">Mobile</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed/" class="no-underline f1 fw2 blue3 underline-hover">Speed</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-06-06T03:08:00+01:00">June 06, 2012 3:08AM</p>
+        <a href="/introducing-mirage-intelligent-image-loading/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing Mirage: Automatic Responsive Web Design via Intelligent Image Loading</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Yesterday, we announced Polish, which helps to automatically optimize the images on your site and increase performance. Today we're releasing something more ambitious: a system to automatically manage the loading of images in order to maximize your site's performance which we call Mirage....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matthew-prince/" class="fw5 f2 black no-underline">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/mirage/" class="no-underline f1 fw2 blue3 underline-hover">Mirage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/mobile/" class="no-underline f1 fw2 blue3 underline-hover">Mobile</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/polish/" class="no-underline f1 fw2 blue3 underline-hover">Polish</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"version":"2021.2.0","rayId":"633cc7b5afc12598","si":10}'></script>
+</body>
+
+</html>

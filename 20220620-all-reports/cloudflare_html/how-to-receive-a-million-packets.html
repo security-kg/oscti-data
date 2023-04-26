@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>How to receive a million packets per second</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/how-to-receive-a-million-packets/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="How to receive a million packets per second" />
+    <meta property="og:description" content="Last week during a casual conversation I overheard a colleague saying: &quot;The Linux network stack is slow! You can&#x27;t expect it to do more than 50 thousand packets per second per core!&quot;" />
+    <meta property="og:url" content="https://blog.cloudflare.com/how-to-receive-a-million-packets/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/03/3208129302_7e14f00492_z.jpg" />
+    <meta property="article:published_time" content="2015-06-16T13:47:27.000Z" />
+    <meta property="article:modified_time" content="2019-06-29T21:18:56.000Z" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Tech Talks" />
+    <meta property="article:tag" content="Deep Dive" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How to receive a million packets per second" />
+    <meta name="twitter:description" content="Last week during a casual conversation I overheard a colleague saying: &quot;The Linux network stack is slow! You can&#x27;t expect it to do more than 50 thousand packets per second per core!&quot;" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/how-to-receive-a-million-packets/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/03/3208129302_7e14f00492_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Linux, Tech Talks, Deep Dive" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "How to receive a million packets per second",
+    "url": "https://blog.cloudflare.com/how-to-receive-a-million-packets/",
+    "datePublished": "2015-06-16T13:47:27.000Z",
+    "dateModified": "2019-06-29T21:18:56.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/03/3208129302_7e14f00492_z.jpg",
+    "keywords": "Linux, Tech Talks, Deep Dive",
+    "description": "Last week during a casual conversation I overheard a colleague saying: &quot;The Linux network stack is slow! You can&#x27;t expect it to do more than 50 thousand packets per second per core!&quot;",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-linux tag-tech-talks tag-deep-dive sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-linux tag-tech-talks tag-deep-dive ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">How to receive a million packets per second</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2015-06-16T14:47:27+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 16, 2015 2:47PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Last week during a casual conversation I overheard a colleague saying: &quot;The Linux network stack is slow! You can't expect it to do more than 50 thousand packets per second per core!&quot;</p>
+<p>That got me thinking. While I agree that 50kpps per core is probably the limit for any practical application, what <em>is</em> the Linux networking stack capable of? Let's rephrase that to make it more fun:</p>
+<p><em>On Linux, how hard is it to write a program that receives 1 million UDP packets per second?</em></p>
+<p>Hopefully, answering this question will be a good lesson about the design of a modern networking stack.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/06/3208129302_7e14f00492_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a> <a href="https://www.flickr.com/photos/mccaffrey_uk/3208129302">image</a> by <a href="https://www.flickr.com/photos/mccaffrey_uk">Bob McCaffrey</a></small></p>
+<p>First, let us assume:</p>
+<ul>
+<li>
+<p>Measuring packets per second (pps) is much more interesting than measuring bytes per second (Bps). You can achieve high Bps by better pipelining and sending longer packets. Improving pps is much harder.</p>
+</li>
+<li>
+<p>Since we're interested in pps, our experiments will use short UDP<br>
+messages. To be precise: 32 bytes of UDP payload. That means 74<br>
+bytes on the Ethernet layer.</p>
+</li>
+<li>
+<p>For the experiments we will use two physical servers: &quot;receiver&quot; and<br>
+&quot;sender&quot;.</p>
+</li>
+<li>
+<p>They both have two six core 2GHz Xeon processors. With hyperthreading (HT) enabled that counts to 24 processors on each box. The boxes have a multi-queue 10G network card by Solarflare, with 11 receive queues configured. More on that later.</p>
+</li>
+<li>
+<p>The source code of the test programs is available here: <a href="https://github.com/majek/dump/blob/master/how-to-receive-a-million-packets/udpsender.c"><code>udpsender</code></a>, <a href="https://github.com/majek/dump/blob/master/how-to-receive-a-million-packets/udpreceiver1.c"><code>udpreceiver</code></a>.</p>
+</li>
+</ul>
+<h3 id="prerequisites">Prerequisites</h3>
+<p>Let's use port 4321 for our UDP packets. Before we start we must ensure the traffic won't be interfered with by the <code>iptables</code>:</p>
+<pre><code class="language-.bash">receiver$ iptables -I INPUT 1 -p udp --dport 4321 -j ACCEPT
+receiver$ iptables -t raw -I PREROUTING 1 -p udp --dport 4321 -j NOTRACK
+</code></pre>
+<p>A couple of explicitly defined IP addresses will later become handy:</p>
+<pre><code class="language-.bash">receiver$ for i in `seq 1 20`; do \
+              ip addr add 192.168.254.$i/24 dev eth2; \
+          done
+sender$ ip addr add 192.168.254.30/24 dev eth3
+</code></pre>
+<ol>
+<li>The naive approach</li>
+</ol>
+<hr>
+<p>To start let's do the simplest experiment. How many packets will be delivered for a naive send and receive?</p>
+<p>The sender pseudo code:</p>
+<pre><code class="language-.python">fd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+fd.bind((&quot;0.0.0.0&quot;, 65400)) # select source port to reduce nondeterminism
+fd.connect((&quot;192.168.254.1&quot;, 4321))
+while True:
+    fd.sendmmsg([&quot;\x00&quot; * 32] * 1024)
+</code></pre>
+<p>While we could have used the usual <code>send</code> syscall, it wouldn't be efficient. Context switches to the kernel have a cost and it is be better to avoid it. Fortunately a handy syscall was recently added to Linux: <a href="http://man7.org/linux/man-pages/man2/sendmmsg.2.html"><code>sendmmsg</code></a>. It allows us to send many packets in one go. Let's do 1,024 packets at once.</p>
+<p>The receiver pseudo code:</p>
+<pre><code class="language-.python">fd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+fd.bind((&quot;0.0.0.0&quot;, 4321))
+while True:
+    packets = [None] * 1024
+    fd.recvmmsg(packets, MSG_WAITFORONE)
+</code></pre>
+<p>Similarly, <a href="http://man7.org/linux/man-pages/man2/recvmmsg.2.html"><code>recvmmsg</code></a> is a more efficient version of the common <code>recv</code> syscall.</p>
+<p>Let's try it out:</p>
+<pre><code class="language-.bash">sender$ ./udpsender 192.168.254.1:4321
+receiver$ ./udpreceiver1 0.0.0.0:4321
+  0.352M pps  10.730MiB /  90.010Mb
+  0.284M pps   8.655MiB /  72.603Mb
+  0.262M pps   7.991MiB /  67.033Mb
+  0.199M pps   6.081MiB /  51.013Mb
+  0.195M pps   5.956MiB /  49.966Mb
+  0.199M pps   6.060MiB /  50.836Mb
+  0.200M pps   6.097MiB /  51.147Mb
+  0.197M pps   6.021MiB /  50.509Mb
+</code></pre>
+<p>With the naive approach we can do between 197k and 350k pps. Not too bad. Unfortunately there is quite a bit of variability. It is caused by the kernel shuffling our programs between cores. Pinning the processes to CPUs will help:</p>
+<pre><code class="language-.bash">sender$ taskset -c 1 ./udpsender 192.168.254.1:4321
+receiver$ taskset -c 1 ./udpreceiver1 0.0.0.0:4321
+  0.362M pps  11.058MiB /  92.760Mb
+  0.374M pps  11.411MiB /  95.723Mb
+  0.369M pps  11.252MiB /  94.389Mb
+  0.370M pps  11.289MiB /  94.696Mb
+  0.365M pps  11.152MiB /  93.552Mb
+  0.360M pps  10.971MiB /  92.033Mb
+</code></pre>
+<p>Now, the kernel scheduler keeps the processes on the defined CPUs. This improves processor cache locality and makes the numbers more consistent, just what we wanted.</p>
+<ol start="2">
+<li>Send more packets</li>
+</ol>
+<hr>
+<p>While 370k pps is not bad for a naive program, it's still quite far from the goal of 1Mpps. To receive more, first we must send more packets. How about sending independently from two threads:</p>
+<pre><code class="language-.bash">sender$ taskset -c 1,2 ./udpsender \
+            192.168.254.1:4321 192.168.254.1:4321
+receiver$ taskset -c 1 ./udpreceiver1 0.0.0.0:4321
+  0.349M pps  10.651MiB /  89.343Mb
+  0.354M pps  10.815MiB /  90.724Mb
+  0.354M pps  10.806MiB /  90.646Mb
+  0.354M pps  10.811MiB /  90.690Mb
+</code></pre>
+<p>The numbers on the receiving side didn't increase. <code>ethtool -S</code> will reveal where the packets actually went:</p>
+<pre><code class="language-.bash">receiver$ watch 'sudo ethtool -S eth2 |grep rx'
+     rx_nodesc_drop_cnt:    451.3k/s
+     rx-0.rx_packets:     8.0/s
+     rx-1.rx_packets:     0.0/s
+     rx-2.rx_packets:     0.0/s
+     rx-3.rx_packets:     0.5/s
+     rx-4.rx_packets:  355.2k/s
+     rx-5.rx_packets:     0.0/s
+     rx-6.rx_packets:     0.0/s
+     rx-7.rx_packets:     0.5/s
+     rx-8.rx_packets:     0.0/s
+     rx-9.rx_packets:     0.0/s
+     rx-10.rx_packets:    0.0/s
+</code></pre>
+<p>Through these stats, the NIC reports that it had successfully delivered around 350kpps to RX queue number #4. The <code>rx_nodesc_drop_cnt</code> is a Solarflare specific counter saying the NIC failed to deliver 450kpps to the kernel.</p>
+<p>Sometimes it's not obvious why the packets weren't delivered. In our case though, it's very clear: the RX queue #4 delivers packets to CPU #4. And CPU #4 can't do any more work - it's totally busy just reading the 350kpps. Here's how that looks in <code>htop</code>:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/06/htop-onecpu.png" alt="htop one cpu"></p>
+<h3 id="crashcoursetomultiqueuenics">Crash course to multi-queue NICs</h3>
+<p>Historically, network cards had a single RX queue that was used to pass packets between hardware and kernel. This design had an obvious limitation - it was impossible to deliver more packets than a single CPU could handle.</p>
+<p>To utilize multicore systems, NICs began to support multiple RX queues. The design is simple: each RX queue is pinned to a separate CPU, therefore, by delivering packets to all the RX queues a NIC can utilize all CPUs. But it raises a question: given a packet, how does the NIC decide to which RX queue to push it?</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/06/multiqueue.png" alt="multiqueue nic"></p>
+<p>Round-robin balancing is not acceptable, as it might introduce reordering of packets within a single connection. An alternative is to use a hash from packet to decide the RX queue number. The hash is usually counted from a tuple (src IP, dst IP, src port, dst port). This guarantees that packets for a single flow will always end up on exactly the same RX queue, and reordering of packets within a single flow can't happen.</p>
+<p>In our case, the hash could have been used like this:</p>
+<pre><code class="language-.bash">RX_queue_number = hash('192.168.254.30', '192.168.254.1', 65400, 4321) % number_of_queues
+</code></pre>
+<h3 id="multiqueuehashingalgorithms">Multi-queue hashing algorithms</h3>
+<p>The hash algorithm is configurable with <code>ethtool</code>. On our setup it is:</p>
+<pre><code class="language-.bash">receiver$ ethtool -n eth2 rx-flow-hash udp4
+UDP over IPV4 flows use these fields for computing Hash flow key:
+IP SA
+IP DA
+</code></pre>
+<p>This reads as: for IPv4 UDP packets, the NIC will hash (src IP, dst IP) addresses. i.e.:</p>
+<pre><code class="language-.bash">RX_queue_number = hash('192.168.254.30', '192.168.254.1') % number_of_queues
+</code></pre>
+<p>This is pretty limited, as it ignores the port numbers. Many NICs allow customization of the hash. Again, using <code>ethtool</code> we can select the tuple (src IP, dst IP, src port, dst port) for hashing:</p>
+<pre><code class="language-.bash">receiver$ ethtool -N eth2 rx-flow-hash udp4 sdfn
+Cannot change RX network flow hashing options: Operation not supported
+</code></pre>
+<p>Unfortunately our NIC doesn't support it - we are constrained to (src IP, dst IP) hashing.</p>
+<h3 id="anoteonnumaperformance">A note on NUMA performance</h3>
+<p>So far all our packets flow to only one RX queue and hit only one CPU. Let's use this as an opportunity to benchmark the performance of different CPUs. In our setup the receiver host has two separate processor banks, each is a different <a href="https://en.wikipedia.org/wiki/Non-uniform_memory_access">NUMA node</a>.</p>
+<p>We can pin the single-threaded receiver to one of four interesting CPUs in our setup. The four options are:</p>
+<ol>
+<li>
+<p>Run receiver on another CPU, but on the same NUMA node as the RX queue. The performance as we saw above is around 360kpps.</p>
+</li>
+<li>
+<p>With receiver on exactly same CPU as the RX queue we can get up to ~430kpps. But it creates high variability. The performance drops down to zero if the NIC is overwhelmed with packets.</p>
+</li>
+<li>
+<p>When the receiver runs on the HT counterpart of the CPU handling RX queue, the performance is half the usual number at around 200kpps.</p>
+</li>
+<li>
+<p>With receiver on a CPU on a different NUMA node than the RX queue we get ~330k pps. The numbers aren't too consistent though.</p>
+</li>
+</ol>
+<p>While a 10% penalty for running on a different NUMA node may not sound too bad, the problem only gets worse with scale. On some tests I was able to squeeze out only 250kpps per core. On all the cross-NUMA tests the variability was bad. The performance penalty across NUMA nodes is even more visible at higher throughput. In one of the tests I got a 4x penalty when running the receiver on a bad NUMA node.</p>
+<ol start="3">
+<li>Multiple receive IPs</li>
+</ol>
+<hr>
+<p>Since the hashing algorithm on our NIC is pretty limited, the only way to distribute the packets across RX queues is to use many IP addresses. Here's how to send packets to different destination IPs:</p>
+<pre><code class="language-.bash">sender$ taskset -c 1,2 ./udpsender 192.168.254.1:4321 192.168.254.2:4321
+</code></pre>
+<p><code>ethtool</code> confirms the packets go to distinct RX queues:</p>
+<pre><code class="language-.bash">receiver$ watch 'sudo ethtool -S eth2 |grep rx'
+     rx-0.rx_packets:     8.0/s
+     rx-1.rx_packets:     0.0/s
+     rx-2.rx_packets:     0.0/s
+     rx-3.rx_packets:  355.2k/s
+     rx-4.rx_packets:     0.5/s
+     rx-5.rx_packets:  297.0k/s
+     rx-6.rx_packets:     0.0/s
+     rx-7.rx_packets:     0.5/s
+     rx-8.rx_packets:     0.0/s
+     rx-9.rx_packets:     0.0/s
+     rx-10.rx_packets:    0.0/s
+</code></pre>
+<p>The receiving part:</p>
+<pre><code class="language-.bash">receiver$ taskset -c 1 ./udpreceiver1 0.0.0.0:4321
+  0.609M pps  18.599MiB / 156.019Mb
+  0.657M pps  20.039MiB / 168.102Mb
+  0.649M pps  19.803MiB / 166.120Mb
+</code></pre>
+<p>Hurray! With two cores busy with handling RX queues, and third running the application, it's possible to get ~650k pps!</p>
+<p>We can increase this number further by sending traffic to three or four RX queues, but soon the application will hit another limit. This time the <code>rx_nodesc_drop_cnt</code> is not growing, but the <code>netstat</code> &quot;receiver errors&quot; are:</p>
+<pre><code class="language-.bash">receiver$ watch 'netstat -s --udp'
+Udp:
+      437.0k/s packets received
+        0.0/s packets to unknown port received.
+      386.9k/s packet receive errors
+        0.0/s packets sent
+    RcvbufErrors:  123.8k/s
+    SndbufErrors: 0
+    InCsumErrors: 0
+</code></pre>
+<p>This means that while the NIC is able to deliver the packets to the kernel, the kernel is not able to deliver the packets to the application. In our case it is able to deliver only 440kpps, the remaining 390kpps + 123kpps are dropped due to the application not receiving them fast enough.</p>
+<ol start="4">
+<li>Receive from many threads</li>
+</ol>
+<hr>
+<p>We need to scale out the receiver application. The naive approach, to receive from many threads, won't work well:</p>
+<pre><code class="language-.bash">sender$ taskset -c 1,2 ./udpsender 192.168.254.1:4321 192.168.254.2:4321
+receiver$ taskset -c 1,2 ./udpreceiver1 0.0.0.0:4321 2
+  0.495M pps  15.108MiB / 126.733Mb
+  0.480M pps  14.636MiB / 122.775Mb
+  0.461M pps  14.071MiB / 118.038Mb
+  0.486M pps  14.820MiB / 124.322Mb
+</code></pre>
+<p>The receiving performance is down compared to a single threaded program. That's caused by a lock contention on the UDP receive buffer side. Since both threads are using the same socket descriptor, they spend a disproportionate amount of time fighting for a lock around the UDP receive buffer. <a href="http://www.jcc2014.ucm.cl/jornadas/WORKSHOP/WSDP%202014/WSDP-4.pdf">This paper</a> describes the problem in more detail.</p>
+<p>Using many threads to receive from a single descriptor is not optimal.</p>
+<ol start="5">
+<li>SO_REUSEPORT</li>
+</ol>
+<hr>
+<p>Fortunately, there is a workaround recently added to Linux: <a href="https://lwn.net/Articles/542629/">the SO_REUSEPORT flag</a>. When this flag is set on a socket descriptor, Linux will allow many processes to bind to the same port. In fact, any number of processes will be allowed to bind and the load will be spread across them.</p>
+<p>With <code>SO_REUSEPORT</code> each of the processes will have a separate socket descriptor. Therefore each will own a dedicated UDP receive buffer. This avoids the contention issues previously encountered:</p>
+<pre><code class="language-.bash">receiver$ taskset -c 1,2,3,4 ./udpreceiver1 0.0.0.0:4321 4 1
+  1.114M pps  34.007MiB / 285.271Mb
+  1.147M pps  34.990MiB / 293.518Mb
+  1.126M pps  34.374MiB / 288.354Mb
+</code></pre>
+<p>This is more like it! The throughput is decent now!</p>
+<p>More investigation will reveal further room for improvement. Even though we started four receiving threads, the load is not being spread evenly across them:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/06/port-uneven.png" alt="port uneven"></p>
+<p>Two threads received all the work and the other two got no packets at all. This is caused by a hashing collision, but this time it is at the <code>SO_REUSEPORT</code> layer.</p>
+<h3 id="finalwords">Final words</h3>
+<p>I've done some further tests, and with perfectly aligned RX queues and receiver threads on a single NUMA node it was possible to get 1.4Mpps. Running receiver on a different NUMA node caused the numbers to drop achieving at best 1Mpps.</p>
+<p>To sum up, if you want a perfect performance you need to:</p>
+<ul>
+<li>
+<p>Ensure traffic is distributed evenly across many RX queues and<br>
+<code>SO_REUSEPORT</code> processes. In practice, the load usually is well distributed as long as there are a large number of connections (or flows).</p>
+</li>
+<li>
+<p>You need to have enough spare CPU capacity to actually pick up the packets from the kernel.</p>
+</li>
+<li>
+<p>To make the things harder, both RX queues and receiver processes should be on a single NUMA node.</p>
+</li>
+</ul>
+<p>While we had shown that it is technically possible to receive 1Mpps on a Linux machine, the application was not doing any actual processing of received packets - it didn't even look at the content of the traffic. Don't expect performance like that for any practical application without a lot more work.</p>
+<p><em>Interested in this sort of low-level, high-performance packet wrangling? CloudFlare is <a href="https://www.cloudflare.com/join-our-team">hiring</a> in London, San Francisco and Singapore</em>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/tech-talks/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Tech Talks</a>
+        <a href="/tag/deep-dive/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Deep Dive</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-02T12:00:00Z">March 02, 2021 12:00PM</p>
+        <a href="/how-to-execute-an-object-file-part-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How to execute an object file: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Ever wondered if it is possible to execute an object file without linking? Or use any object file as a library? Follow along to learn how to decompose an object file and import code from it along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/compiler/" class="no-underline f1 fw2 blue3 underline-hover">Compiler</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/software/" class="no-underline f1 fw2 blue3 underline-hover">Software</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-08T12:00:00+01:00">July 08, 2020 12:00PM</p>
+        <a href="/sandboxing-in-linux-with-zero-lines-of-code/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Sandboxing in Linux with zero lines of code</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In this post we will review Linux seccomp and learn how to sandbox any (even a proprietary) application without writing a single line of code....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-25T12:00:00Z">March 25, 2020 12:00PM</p>
+        <a href="/speeding-up-linux-disk-encryption/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Speeding up Linux disk encryption</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Encrypting data at rest is vital for Cloudflare with more than 200 data centres across the world. In this post, we will investigate the performance of disk encryption on Linux and explain how we made it at least two times faster for ourselves and our customers!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ignat/" class="fw5 f2 black no-underline">Ignat Korchagin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-07-10T14:07:21+01:00">July 10, 2019 2:07PM</p>
+        <a href="/a-gentle-introduction-to-linux-kernel-fuzzing/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A gentle introduction to Linux Kernel fuzzing</h2>
+        </a>
+
+        <p class="gray1 lh-copy">For some time I’ve wanted to play with coverage-guided fuzzing. I decided to have a go at the Linux Kernel netlink machinery.  It's a good target: it's an obscure part of kernel, and it's relatively easy to automatically craft valid messages....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

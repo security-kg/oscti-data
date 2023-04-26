@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>How Cloudflare analyzes 1M DNS queries per second</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/how-cloudflare-analyzes-1m-dns-queries-per-second/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="How Cloudflare analyzes 1M DNS queries per second" />
+    <meta property="og:description" content="On Friday, we announced DNS analytics for all Cloudflare customers. Because of our scale –– by the time you’ve finished reading this, Cloudflare DNS will have handled millions of DNS queries –– we had to be creative in our implementation." />
+    <meta property="og:url" content="https://blog.cloudflare.com/how-cloudflare-analyzes-1m-dns-queries-per-second/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/Screen-Shot-2017-05-10-at-2.35.39-PM.png" />
+    <meta property="article:published_time" content="2017-05-10T21:50:20.000Z" />
+    <meta property="article:modified_time" content="2018-08-28T22:25:04.000Z" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="Analytics" />
+    <meta property="article:tag" content="Cap&amp;#x27;n Proto" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How Cloudflare analyzes 1M DNS queries per second" />
+    <meta name="twitter:description" content="On Friday, we announced DNS analytics for all Cloudflare customers. Because of our scale –– by the time you’ve finished reading this, Cloudflare DNS will have handled millions of DNS queries –– we had to be creative in our implementation." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/how-cloudflare-analyzes-1m-dns-queries-per-second/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/Screen-Shot-2017-05-10-at-2.35.39-PM.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Vavruša" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="DNS, Analytics, Cap&#x27;n Proto, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Vavruša",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/f949112c52dca922df70459ea0c4e400?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/marek/",
+        "sameAs": []
+    },
+    "headline": "How Cloudflare analyzes 1M DNS queries per second",
+    "url": "https://blog.cloudflare.com/how-cloudflare-analyzes-1m-dns-queries-per-second/",
+    "datePublished": "2017-05-10T21:50:20.000Z",
+    "dateModified": "2018-08-28T22:25:04.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/Screen-Shot-2017-05-10-at-2.35.39-PM.png",
+    "keywords": "DNS, Analytics, Cap'n Proto, Speed & Reliability",
+    "description": "On Friday, we announced DNS analytics for all Cloudflare customers. Because of our scale –– by the time you’ve finished reading this, Cloudflare DNS will have handled millions of DNS queries –– we had to be creative in our implementation. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-dns tag-analytics tag-capn-proto tag-speed-and-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-dns tag-analytics tag-capn-proto tag-speed-and-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">How Cloudflare analyzes 1M DNS queries per second</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-05-10T22:50:20+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">May 10, 2017 10:50PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/f949112c52dca922df70459ea0c4e400?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Marek Vavruša" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek" class="fw5 f3 no-underline black mr3">Marek Vavruša</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>On Friday, we <a href="https://blog.cloudflare.com/dns-analytics/">announced DNS analytics</a> for all Cloudflare customers. Because of our scale –– by the time you’ve finished reading this, Cloudflare DNS will have handled millions of DNS queries –– we had to be creative in our implementation. In this post, we’ll describe the systems that make up DNS Analytics which help us comb through trillions of these logs each month.</p>
+<h3 id="howlogscomeinfromtheedge">How logs come in from the edge</h3>
+<p><img src="https://blog.cloudflare.com/content/images/2017/05/Screen-Shot-2017-05-10-at-2.35.39-PM.png" alt=""></p>
+<p>Cloudflare already has a <a href="https://blog.cloudflare.com/scaling-out-postgresql-for-cloudflare-analytics-using-citusdb">data pipeline for HTTP logs</a>. We wanted to utilize what we could of that system for the new DNS analytics. Every time one of our edge services gets an HTTP request, it generates a structured log message in the <a href="https://capnproto.org">Cap’n Proto</a> format and sends it to a local multiplexer service. Given the volume of the data, we chose not to record the full DNS message payload, only telemetry data we are interested in such as response code, size, or query name, which has allowed us to keep only ~150 bytes on average per message. It is then fused with processing metadata such as timing information and exceptions triggered during query processing. The benefit of fusing data and metadata at the edge is that we can spread the computational cost across our thousands of edge servers, and log only what we absolutely need.</p>
+<p>The multiplexer service (known as “log forwarder”) is running on each edge node, assembling log messages from multiple services and transporting them to our warehouse for processing over a TLS secured channel. A counterpart service running in the warehouse receives and demultiplexes the logs into several Apache Kafka clusters. Over the years, Apache Kafka has proven to be an invaluable service for buffering between producers and downstream consumers, preventing data loss when consumers fail over or require maintenance. Since version 0.10, Kafka allows <a href="https://issues.apache.org/jira/browse/KAFKA-1215">rack-aware allocation of replicas</a>, which improves resilience against rack or site failure, giving us fault tolerant storage of unprocessed messages.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/05/data-pipeline-lg.png" alt=""></p>
+<p>Having a queue with structured logs has allowed us to investigate issues retrospectively without requiring access to production nodes, but it has proven to be quite laborious at times. In the early days of the project we would skim the queue to find offsets for the rough timespan we needed, and then extract the data into HDFS in <a href="https://parquet.apache.org">Parquet</a> format for offline analysis.</p>
+<h3 id="aboutaggregations">About aggregations</h3>
+<p>The HTTP analytics service was built around stream processors generating aggregations, so we planned to leverage Apache Spark to stream the logs to HDFS automatically. As Parquet doesn’t natively support indexes or arranging the data in a way that avoids full table scans, it’s impractical for on-line analysis or serving reports over an API. There are extensions like <a href="https://github.com/lightcopy/parquet-index">parquet-index</a> that create indexes over the data, but not on-the-fly. Given this, the initial plan was to only show aggregated reports to customers, and keep the raw data for internal troubleshooting.</p>
+<p>The problem with aggregated summaries is that they only work on columns with low cardinality (a number of unique values). With aggregation, each column in a given time frame explodes to the number of rows equal to the number of unique entries, so it’s viable to aggregate on something like response code which only has 12 possible values, but not a query name for example. Domain names are subject to popularity, so if, for example, a popular domain name gets asked 1,000 times a minute, one could expect to achieve 1000x row reduction for per-minute aggregation, however in practice it is not so.</p>
+<p>Due to how DNS caching works, resolvers will answer identical queries from cache without going to the authoritative server for the duration of the TTL. The TTL tends to be longer than a minute. So, while authoritative servers see the same request many times, our data is skewed towards non-cacheable queries such as typos or random prefix subdomain attacks. In practice, we see anywhere between 0 - 60x row reduction when aggregating by query names, so storing aggregations in multiple resolutions almost negates the row reduction. Aggregations are also done with multiple resolution and key combinations, so aggregating on a high cardinality column can even result in more rows than original.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/05/data-agg-lg-1.png" alt=""></p>
+<p>For these reasons we started by only aggregating logs at the zone level, which was useful enough for trends, but too coarse for root cause analysis. For example, in one case we were investigating short bursts of unavailability in one of our data centers. Having unaggregated data allowed us to narrow the issue down to the specific DNS queries experiencing latency spikes, and then correlated the queries with a misconfigured firewall rule. Cases like these would be much harder to investigate with only aggregated data as it only affected a tiny percentage of requests that would be lost in the aggregations.</p>
+<p>So we started looking into several OLAP (Online Analytical Processing) systems. The first system we looked into was <a href="http://druid.io">Druid</a>. We were really impressed with the capabilities and how the front-end (Pivot and formerly Caravel) is able to slice and dice the data, allowing us to generate reports with arbitrary dimensions. Druid has already been deployed in similar environments with over 100B events/day, so we were confident it could work, but after testing on sampled data we couldn’t justify the hardware costs of hundreds of nodes. Around the same time Yandex open-sourced their OLAP system, <a href="https://clickhouse.yandex/">ClickHouse</a>.</p>
+<h3 id="andthenitclicked">And then it Clicked</h3>
+<p>ClickHouse has a much simpler system design - all the nodes in a cluster have equal functionality and use only <a href="https://zookeeper.apache.org/">ZooKeeper</a> for coordination. We built a small cluster of several nodes to start kicking the tires, and found the performance to be quite impressive and true to the results advertised in the <a href="https://clickhouse.yandex/benchmark.html">performance comparisons of analytical DBMS</a>, so we proceeded with building a proof of concept. The first obstacle was a lack of tooling and the small size of the community, so we delved into the ClickHouse design to understand how it works.</p>
+<p>ClickHouse doesn’t support ingestion from Kafka directly, as it’s only a database, so we wrote an adapter service in Go. It read Cap’n Proto encoded messages from Kafka, converted them into TSV, and inserted into ClickHouse over the HTTP interface in batches. Later, we rewrote the service to use a <a href="https://github.com/kshvakov/clickhouse">Go library</a> using the native ClickHouse interface to boost performance. Since then, we’ve contributed some performance improvements back to the project. One thing we learned during the ingestion performance evaluation is that ClickHouse ingestion performance highly depends on batch size - the number of rows you insert at once. To understand why, we looked further into how ClickHouse stores data.</p>
+<p>The most common table engine ClickHouse uses for storage is the MergeTree family. It is conceptually similar to <a href="https://en.wikipedia.org/wiki/Log-structured_merge-tree">LSM algorithm</a> used in <a href="https://www.igvita.com/2012/02/06/sstable-and-log-structured-storage-leveldb">Google’s BigTable</a> or Apache Cassandra, however it avoids an intermediate memory table, and writes directly to disk. This gives it excellent write throughput, as each inserted batch is only sorted by “primary key”, compressed, and written to disk to form a segment. The absence of a memory table or any notion of “freshness” of the data also means that it is append-only and data modification or deletion isn’t supported. The only way to delete data currently is to remove data by calendar months, as segments never overlap a month boundary. The ClickHouse team is actively working on making this configurable. On the other hand, this makes writing and segment merging conflict-free, so the ingestion throughput scales linearly with the number of parallel inserts until the I/O or cores are saturated. This, however, also means it is not fit for tiny batches, which is why we rely on Kafka and inserter services for buffering. ClickHouse then keeps constantly merging segments in the background, so many small parts will be merged and written more times (thus increasing write amplification) and too many unmerged parts will trigger aggressive throttling of insertions until the merging progresses. We have found that several insertions per table per second work best as a tradeoff between real-time ingestion and ingestion performance.</p>
+<p>The key to table read performance is indexing and the arrangement of the data on disk. No matter how fast processing is, when the engine needs to scan terabytes of data from disk and use only a fraction of it, it’s going to take time. ClickHouse is a columnar store, so each segment contains a file for each column, with sorted values for each row. This way whole columns not present in the query can be skipped, and then multiple cells can be processed in parallel with vectorized execution. In order to avoid full scans, each segment also has a sparse index file. Given that all columns are sorted by the “primary key”, the index file only contains marks (captured rows) of every Nth row in order to be able to keep it in memory even for very large tables. For example the default settings is to make a mark of every 8,192th row. This way only 122,070 marks are required to sparsely index a table with 1 trillion rows, which easily fits in memory. See <a href="https://medium.com/@f1yegor/clickhouse-primary-keys-2cf2a45d7324">primary keys in ClickHouse</a> for a deeper dive into how it works.</p>
+<p>When querying the table using primary key columns, the index returns approximate ranges of rows considered. Ideally the ranges should be wide and contiguous. For example, when the typical usage is to generate reports for individual zones, placing the zone on the first position of the primary key will result in rows sorted by zone in each column, making the disk reads for individual zones contiguous, whereas sorting primarily by timestamp would not. The rows can be sorted in only one way, so the primary key must be chosen carefully with the typical query load in mind. In our case, we optimized read queries for individual zones and have a separate table with sampled data for exploratory queries. The lesson learned is that instead of trying to optimize the index for all purposes and splitting the difference, we have made several tables instead.</p>
+<p>One such specialisation are tables with aggregations over zones. Queries across all rows are significantly more expensive, as there is no opportunity to exclude data from scanning. This makes it less practical for analysts to compute basic aggregations on long periods of time, so we decided to use <a href="https://clickhouse.yandex/reference_en.html#CREATE%20VIEW">materialized views</a> to incrementally compute predefined aggregations, such as counters, uniques, and quantiles. The materialized views leverage the sort phase on batch insertion to do productive work - computing aggregations. So after the newly inserted segment is sorted, it also produces a table with rows representing dimensions, and columns representing <a href="https://github.com/yandex/ClickHouse/blob/master/doc/developers/architecture.md#aggregate-functions">aggregation function state</a>. The difference between aggregation state and final result is that we can generate reports using an arbitrary time resolution without actually storing the precomputed data in multiple resolutions. In some cases the state and result can be the same -  for example basic counters, where hourly counts can be produced by summing per-minute counts, however it doesn’t make sense to sum unique visitors or latency quantiles. This is when aggregation state is much more useful, as it allows meaningful merging of more complicated states, such as <a href="https://en.wikipedia.org/wiki/HyperLogLog">HyperLogLog (HLL)</a> bitmap to produce hourly unique visitors estimate from minutely aggregations. The downside is that storing state can be much more expensive than final values - the aforementioned HLL state tends to be 20-100 bytes / row when compressed, while a counter is only 8 bytes (1 byte compressed on average). These tables are then used to quickly visualise general trends across zones or sites, and also by our API service that uses them opportunistically for simple queries. Having both incrementally aggregated and unaggregated data in the same place allowed us simplify the architecture by deprecating stream processing altogether.</p>
+<h3 id="infrastructureanddataintegrity">Infrastructure and data integrity</h3>
+<p>We started with RAID-10 composed of 12 6TB spinning disks on each node, but reevaluated it after the first inevitable disk failures. In the second iteration we migrated to RAID-0, for two reasons. First, it wasn’t possible to hot-swap just the faulty disks, and second the array rebuild took tens of hours which degraded I/O performance. It was significantly faster to replace a faulty node and use internal replication to populate it with data over the network (2x10GbE), than to wait for an array to finish rebuilding. To compensate for higher probability of node failure, we switched to 3-way replication and allocated replicas of each shard to different racks, and started planning for replication to a separate data warehouse.</p>
+<p>Another disk failure <a href="https://github.com/yandex/ClickHouse/issues/520">highlighted a problem</a> with the filesystem we used. Initially we used XFS, but it started to lock up during replication from 2 peers at the same time, thus breaking replication of segments before it completed. This issue has manifested itself with a lot of I/O activity with little disk usage increase as broken parts were deleted, so we gradually migrated to ext4 that didn’t have the same issue.</p>
+<h3 id="visualizingdata">Visualizing Data</h3>
+<p>At the time we relied solely on <a href="http://pandas.pydata.org">Pandas</a> and <a href="https://clickhouse.yandex/reference_en.html#HTTP%20interface">ClickHouse’s HTTP interface</a> for ad-hoc analyses, but we wanted to make it more accessible for both analysis and monitoring. Since we knew Caravel - now renamed to <a href="https://github.com/airbnb/superset">Superset</a> - from the experiments with Druid, we started working on an integration with ClickHouse.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/05/superset-1.png" alt=""></p>
+<p>Superset is a data visualisation platform designed to be intuitive, and allows analysts to interactively slice and dice the data without writing a single line of SQL. It was initially <a href="https://medium.com/airbnb-engineering/caravel-airbnb-s-data-exploration-platform-15a72aa610e5">built and open sourced by AirBnB</a> for Druid, but over time it has gained support for SQL-based backends using <a href="https://www.sqlalchemy.org">SQLAlchemy</a>, an abstraction and ORM for tens of different database dialects. So we wrote and open-sourced a <a href="https://github.com/cloudflare/sqlalchemy-clickhouse">ClickHouse dialect</a> and finally a native <a href="https://github.com/airbnb/superset/pull/1844">Superset integration</a> that has been merged a few days ago.</p>
+<p>Superset has served us well for ad-hoc visualisations, but it is still not polished enough for our monitoring use case. At Cloudflare we’re heavy users of Grafana for visualisation of all our metrics, so we wrote and open-sourced a <a href="https://github.com/vavrusa/grafana-sqldb-datasource">Grafana integration</a> as well.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/05/Screen-Shot-2017-05-08-at-12.39.47-1.png" alt=""></p>
+<p>It has allowed us to seamlessly extend our existing monitoring dashboards with the new analytical data. We liked it so much that we wanted to give the same ability to look at the analytics data to you, our users. So we built a <a href="https://blog.cloudflare.com/grafana-plugin">Grafana app</a> to visualise data from Cloudflare DNS Analytics. Finally, we made it available in your <a href="https://blog.cloudflare.com/dns-analytics/">Cloudflare dashboard analytics</a>. Over time we’re going to add new data sources, dimensions, and other useful ways how to visualise your data from Cloudflare. Let us know what you’d like to see next.</p>
+<p>Does solving these kinds of technical and operational challenges excite you? Cloudflare is always hiring for talented specialists and generalists within our <a href="https://www.cloudflare.com/careers/departments/engineering/">Engineering</a>, <a href="https://www.cloudflare.com/careers/departments/technical-operations/">Technical Operations</a> and <a href="https://www.cloudflare.com/careers">other teams</a>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+        <a href="/tag/analytics/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Analytics</a>
+        <a href="/tag/capn-proto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cap&#x27;n Proto</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-20T14:00:00Z">March 20, 2021 2:00PM</p>
+        <a href="/moving-k8s-communication-to-grpc/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Moving k8s communication to gRPC</h2>
+        </a>
+
+        <p class="gray1 lh-copy">How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-fattouche/" class="fw5 f2 black no-underline">Alex Fattouche</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/grpc/" class="no-underline f1 fw2 blue3 underline-hover">gRPC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kubernetes/" class="no-underline f1 fw2 blue3 underline-hover">Kubernetes</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-08T14:00:00Z">March 08, 2021 2:00PM</p>
+        <a href="/the-benefits-of-serving-stale-dns-entries-when-using-consul/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The benefits of serving stale DNS entries when using Consul</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We use Consul for service discovery, and we’ve deployed a cluster that spans several of our data centers. We were aware from the start that the DNS query latencies were not great from certain parts of the world that were furthest away from these data centers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andre-cruz/" class="fw5 f2 black no-underline">André Cruz</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/unbound/" class="no-underline f1 fw2 blue3 underline-hover">Unbound</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-30T13:14:40Z">November 30, 2020 1:14PM</p>
+        <a href="/improving-the-resiliency-of-our-infrastructure-dns-zone/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving the Resiliency of Our Infrastructure DNS Zone</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've improved the resiliency and management of our infrastructure DNS zone. In this post, we guide you through some of the "whats", "whys" and "hows" we encountered along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-timken/" class="fw5 f2 black no-underline">Ryan Timken</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/kiran/" class="fw5 f2 black no-underline">Kiran Naidoo</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/availability/" class="no-underline f1 fw2 blue3 underline-hover">Availability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/octodns/" class="no-underline f1 fw2 blue3 underline-hover">OctoDNS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-13T19:06:13Z">November 13, 2020 7:06PM</p>
+        <a href="/sad-dns-explained/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SAD DNS Explained</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Researchers from UC Riverside and Tsinghua University found a new way to revive a decade-old DNS cache poisoning attack. Read our deep dive into how the SAD DNS attack on DNS resolvers works, how we protect against this attack in 1.1.1.1, and what the future holds for DNS cache poisoning attacks....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek/" class="fw5 f2 black no-underline">Marek Vavruša</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns-poisoning/" class="no-underline f1 fw2 blue3 underline-hover">DNS Poisoning</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/side-channels/" class="no-underline f1 fw2 blue3 underline-hover">Side Channels</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

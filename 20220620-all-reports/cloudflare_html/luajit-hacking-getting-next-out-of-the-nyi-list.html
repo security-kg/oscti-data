@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>LuaJIT Hacking: Getting next() out of the NYI list</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/luajit-hacking-getting-next-out-of-the-nyi-list/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="LuaJIT Hacking: Getting next() out of the NYI list" />
+    <meta property="og:description" content="At Cloudflare we’re heavy users of LuaJIT and in the past have sponsored many improvements to its performance." />
+    <meta property="og:url" content="https://blog.cloudflare.com/luajit-hacking-getting-next-out-of-the-nyi-list/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/6822250770_d6f8399cf2_z.jpg" />
+    <meta property="article:published_time" content="2017-02-21T13:40:23.000Z" />
+    <meta property="article:modified_time" content="2020-08-20T18:06:36.000Z" />
+    <meta property="article:tag" content="LUA" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LuaJIT Hacking: Getting next() out of the NYI list" />
+    <meta name="twitter:description" content="At Cloudflare we’re heavy users of LuaJIT and in the past have sponsored many improvements to its performance." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/luajit-hacking-getting-next-out-of-the-nyi-list/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/6822250770_d6f8399cf2_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Javier Guerra" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="LUA, Programming, Speed &amp; Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Javier Guerra",
+        "image": "https://blog.cloudflare.com/content/images/2017/02/headshot.jpeg",
+        "url": "https://blog.cloudflare.com/author/javier-guerra/",
+        "sameAs": []
+    },
+    "headline": "LuaJIT Hacking: Getting next() out of the NYI list",
+    "url": "https://blog.cloudflare.com/luajit-hacking-getting-next-out-of-the-nyi-list/",
+    "datePublished": "2017-02-21T13:40:23.000Z",
+    "dateModified": "2020-08-20T18:06:36.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/6822250770_d6f8399cf2_z.jpg",
+    "keywords": "LUA, Programming, Speed & Reliability",
+    "description": "At Cloudflare we’re heavy users of LuaJIT and in the past have sponsored many improvements to its performance.\n\n",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-lua tag-programming tag-speed-and-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-lua tag-programming tag-speed-and-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">LuaJIT Hacking: Getting next() out of the NYI list</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-02-21T13:40:23Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 21, 2017 1:40PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/javier-guerra/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/02/headshot.jpeg" alt="Javier Guerra" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/javier-guerra" class="fw5 f3 no-underline black mr3">Javier Guerra</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>At Cloudflare we’re heavy users of LuaJIT and in the past have sponsored many improvements to its performance.</p>
+<p>LuaJIT is a powerful piece of software, maybe the highest performing JIT in the industry.  But it’s not always easy to get the most out of it, and sometimes a small change in one part of your code can negatively impact other, already optimized, parts.</p>
+<p>One of the first pieces of advice anyone receives when writing Lua code to run quickly using LuaJIT is “avoid the NYIs”: the language or library features that can’t be compiled because they’re NYI (not yet implemented). And that means they run in the interpreter.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/02/6822250770_d6f8399cf2_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a> <a href="https://www.flickr.com/photos/zengei/6822250770/in/photolist-boRPth-7xeiAm-e6H8w5-dSoqGF-FiYGj-okoVwy-e1ugbE-dXhvop-8fQNCX-974Bts-ekbDjn-p9HV9L-971y78-bdb8Hi-e2Us2u-8fU4pm-9ZFfXg-g469T-7Ft9Jc-9YWa6m-95HYN2-95J19D-5JeU76-95M3qb-PFZRj-9uYpbM-6bJrpt-D2DfZK-Ccqoxs-Jqvvxd-kSQzNX-JyLzNN-dEnx4T-dezBQR-e2NN7a-6aP8op-971xFi-974BBJ-qR8GWh-5De3Sy-974CTy-gyUry-dezAkY-7qHBJ2-eHJH4W-9v2qQs-dCQMt7-nBkbJ7-eZ8yc-e3u6kJ">image</a> by <a href="https://www.flickr.com/photos/zengei/">Dwayne Bent</a></small></p>
+<p>Another very attractive feature of LuaJIT is the FFI library, which allows Lua code to directly interface with C code and memory structures.  The JIT compiler weaves these memory operations in line with the generated machine language, making it much more efficient than using the traditional Lua C API.</p>
+<p>Unfortunately, if for any reason the Lua code using the FFI library has to run under the interpreter, it takes a very heavy performance hit.  As it happens, under the interpreter the FFI is usually much slower than the Lua C API or the basic operations. For many people, this means either avoiding the FFI  or committing to a permanent vigilance to maintain the code from falling back to the interpreter.</p>
+<h3 id="optimizingluajitcode">Optimizing LuaJIT Code</h3>
+<p>Before optimizing any code, it’s important to identify which parts are actually important.  It’s useless to discuss what’s the fastest way to add a few numbers before sending some data, if the send operation will take a million times longer than that addition. Likewise, there’s no benefit avoiding NYI features in code like initialization routines that might run only a few times, as it’s unlikely that the JIT would even try to optimize them, so they would always run in the interpreter.  Which, by the way, is also very fast; even faster than the first version of LuaJIT itself.</p>
+<p>But optimizing the core parts of a Lua program, like any deep inner loops, can yield huge improvements in the overall performance.  In similar situations, experienced developers using other languages are used to inspecting the assembly language generated by the compiler, to see if there’s some change to the source code that can make the result better.</p>
+<p>The command line LuaJIT executable provides a bytecode list when running with the <code>-jbc</code> option, a statistical profiler, activated with the <code>-jp</code> option, a trace list with <code>-jv</code>, and finally a detailed dump of all the JIT operations with <code>-jdump</code>.</p>
+<p>The last two provide lots of information very useful for understanding what actually happens with the Lua code while executing, but it can be a lot of work to read the huge lists generated by <code>-jdump</code>.  Also, some messages are hard to understand without a fairly complete understanding of how the tracing compiler in LuaJIT actually works.</p>
+<p>One very nice feature is that all these JIT options are implemented in Lua.  To accomplish this the JIT provides ‘hooks’ that can execute a Lua function at important moments with the relevant information. Sometimes the best way to understand what some <code>-jdump</code> output actually means is to read the code that generated that specific part of the output.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/02/6353190489_1363ec7f16_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/kevandotorg/6353190489/in/photolist-aFpLc4-6Rorty-gvhKC9-8UEeqU-aBoHof-9qr8bs-9qo6Ai-9qrafb-FhYA4L-CH4r5G-8HZcMK-pX32R-6SJMc6-pX39e-oXee8D-aBoHBJ-cLgitL-cLgeKY-3THPb-hzKrGL-cLggDJ-6Rh35p-dqkQyJ-7Ey5Pz-6RkwNh-6RgYDe-7C7F9S-6RgxKH-6RkLFN-i4HqqU-6Rktx9-6RkXKQ-6RgRqD-6RkmBs-6RgML2-6RkE4j-6Rg5nT-6RjKkq-6RfDK2-6RfRRc-6RfYfK-6RfUT8-6RjN4d-hzMBtc-hzNnyN-hzJiM8-hzJVpv-hzLE56-hzKU4c-9mQrRy">image</a> by <a href="https://www.flickr.com/photos/kevandotorg/">Kevan</a></small></p>
+<h3 id="introducingloom">Introducing Loom</h3>
+<p>After several rounds there, and being frustrated by the limitations of the sequentially-generated dump, I decided to write a different version of <code>-jdump</code>, one that gathered more information to process and add cross-references to help see how things are related before displaying.  The result is <a href="https://github.com/cloudflare/loom">loom</a>, which shows roughly the same information as <code>-jdump</code>, but with more resolved references and formatted in HTML with tables, columns, links and colors.  It has helped me a lot to understand my own code and the workings of LuaJIT itself.</p>
+<p>For example, let's consider the following code in a file called <code>twoloops.lua</code>:</p>
+<pre><code>for i=1,1000 do
+    for j=1,1000 do
+    end
+end
+</code></pre>
+<p>With the <code>-jv</code> option:</p>
+<pre><code>$ luajit -jv twoloops.lua
+[TRACE   1 twoloops.lua:2 loop]
+[TRACE   2 (1/3) twoloops.lua:1 -&gt; 1]
+</code></pre>
+<p>This tells us that there were two traces, the first one contains a loop, and the second one spawns from exit #3 of the other (the “(1/3)” part) and it’s endpoint returns to the start of trace #1.</p>
+<p>Ok, let’s get more detail with <code>-jdump</code>:</p>
+<pre><code>$ luajit -jdump twoloops.lua
+---- TRACE 1 start twoloops.lua:2
+0009  FORL     4 =&gt; 0009
+---- TRACE 1 IR
+0001    int SLOAD  #5    CI
+0002  + int ADD    0001  +1  
+0003 &gt;  int LE     0002  +1000
+0004 ------ LOOP ------------
+0005  + int ADD    0002  +1  
+0006 &gt;  int LE     0005  +1000
+0007    int PHI    0002  0005
+---- TRACE 1 mcode 47
+0bcbffd1  mov dword [0x40db1410], 0x1
+0bcbffdc  cvttsd2si ebp, [rdx+0x20]
+0bcbffe1  add ebp, +0x01
+0bcbffe4  cmp ebp, 0x3e8
+0bcbffea  jg 0x0bcb0014	-&gt;1
+-&gt;LOOP:
+0bcbfff0  add ebp, +0x01
+0bcbfff3  cmp ebp, 0x3e8
+0bcbfff9  jle 0x0bcbfff0	-&gt;LOOP
+0bcbfffb  jmp 0x0bcb001c	-&gt;3
+---- TRACE 1 stop -&gt; loop
+
+---- TRACE 2 start 1/3 twoloops.lua:1
+0010  FORL     0 =&gt; 0005
+0005  KSHORT   4   1
+0006  KSHORT   5 1000
+0007  KSHORT   6   1
+0008  JFORI    4 =&gt; 0010
+---- TRACE 2 IR
+0001    num SLOAD  #1    I
+0002    num ADD    0001  +1  
+0003 &gt;  num LE     0002  +1000
+---- TRACE 2 mcode 81
+0bcbff79  mov dword [0x40db1410], 0x2
+0bcbff84  movsd xmm6, [0x41704068]
+0bcbff8d  movsd xmm5, [0x41704078]
+0bcbff96  movsd xmm7, [rdx]
+0bcbff9a  addsd xmm7, xmm6
+0bcbff9e  ucomisd xmm5, xmm7
+0bcbffa2  jb 0x0bcb0014	-&gt;1
+0bcbffa8  movsd [rdx+0x38], xmm6
+0bcbffad  movsd [rdx+0x30], xmm6
+0bcbffb2  movsd [rdx+0x28], xmm5
+0bcbffb7  movsd [rdx+0x20], xmm6
+0bcbffbc  movsd [rdx+0x18], xmm7
+0bcbffc1  movsd [rdx], xmm7
+0bcbffc5  jmp 0x0bcbffd1
+---- TRACE 2 stop -&gt; 1
+</code></pre>
+<p>This tells us... well, a lot of things.  If you look closely, you’ll see the same two traces, one is a loop, the second starts at <code>1/3</code> and returns to trace #1.  Each one shows some bytecode instructions, an IR listing, and the final mcode.  There are several options to turn on and off each listing, and more info like the registers allocated to some IR instructions, the “snapshot” structures that allow the interpreter to continue when a compiled trace exits, etc.</p>
+<p>Now using loom:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2017/02/image00.png">![](https://blog.cloudflare<img src="https://blog.cloudflare.com/content/images/2017/02/image00.png" alt=""></a></p>
+<p>There’s the source code, with the corresponding bytecodes, and the same two traces, with IR and mcode listings.  The bytecode lines on the traces and on the top listings are linked, hovering on some arguments on the IR listing highlights the source and use of each value, the jumps between traces are correctly labeled (and colored), finally, clicking on the bytecode or IR column headers reveals more information: excerpts from the source code and snapshot formats, respectively.</p>
+<p>Writing it was a great learning experience, I had to read the dump script’s Lua sources and went much deeper in the LuaJIT sources than ever before.  And then, I was able to use loom not only to analyze and optimize Cloudflare’s Lua code, but also to watch the steps the compiler goes through to make it run fast, and also what happens when it’s not happy.</p>
+<h3 id="thecodeisthecodeisthecodeisthecode">The code is the code is the code is the code</h3>
+<p>LuaJIT handles up to four different representation of a program’s code:</p>
+<p>First comes the source code, what the developer writes.</p>
+<p>The parser analyzes the source code and produces the Bytecode, which is what the interpreter actually executes.  It has the same flow of the source code, grouped in functions, with all the calls, iterators, operations, etc.  Of course, there’s no nice formatting, comments, the local variable names are replaced by indices, and all constants (other than small numbers) are stored in a separate area.</p>
+<p>When the interpreter finds that a given point of the bytecode has been repeated several times, it’s considered a “hot” part of the code, and interprets it once again but this time it records each bytecode it encounters, generating a “code trace” or just “a trace”.  At the same time, it generates an “intermediate representation”, or IR, of the code as it’s executed.  The IR doesn’t represent the whole of the function or code portion, just the actual options it actually takes.</p>
+<p>A trace is finished when it hits a loop or a recursion, returns to a lower level than when started, hits a NYI operation, or simply becomes too long.  At this point, it can be either compiled into machine language, or aborted if it has reached some code that can’t be correctly translated.  If successful, the bytecode is patched with an entry to the machine code, or “mcode”.  If aborted, the initial trace point is “penalized” or even “blocklisted” to avoid wasting time trying to compile it again.</p>
+<h3 id="whatsnext">What’s <code>next()</code>?</h3>
+<p>One of the most visible characteristics of the Lua language is the heavy use of dictionary objects called <em>tables</em>.  From the <a href="https://www.lua.org/manual/5.1/manual.html#2.2">Lua manual</a>:</p>
+<p><em>“Tables are the sole data structuring mechanism in Lua; they can be used to represent ordinary arrays, symbol tables, sets, records, graphs, trees, etc.”</em></p>
+<p>To iterate over all the elements in a table, the idiomatic way is to use the standard library function <code>pairs()</code> like this:</p>
+<pre><code>for k, v in pairs(t) do
+    -- use the key in ‘k’ and the value in ‘v’
+end
+</code></pre>
+<p>In the standard Lua manual, <code>pairs()</code> is <a href="https://www.lua.org/manual/5.1/manual.html#pdf-pairs">defined</a> as “Returns three values: the <code>next</code> function, the table <code>t</code>, and <code>nil</code>”, so the previous code is the same as:</p>
+<pre><code>for k, v in next, t, nil do
+    -- use the key in ‘k’ and the value in ‘v’
+end
+</code></pre>
+<p>But unfortunately, both the <code>next()</code> and <code>pairs()</code> functions are listed as “not compiled” in the feared <a href="http://wiki.luajit.org/NYI#libraries_base-library">NYI list</a>.  That means that any such code runs on the interpreter and is not compiled, unless the code inside is complex enough, and has other inner loops (loops that doesn’t use <code>next()</code> or <code>pairs()</code>, of course).  Even in that case, the code would have to fall back to the interpreter at each loop end.</p>
+<p>This sad news creates a tradeoff: for performance sensitive parts of the code, don’t use the most Lua-like code style.  That motivates people to come up with several contortions to be able to use numerical iteration (which is compiled, and very efficient), like replacing any key with a number, storing all the keys in a numbered array, or store both keys and values at even/odd numeric indices.</p>
+<h3 id="gettingnextoutofthenyilist">Getting <code>next()</code> out of the NYI list</h3>
+<p>So, I finally have a non-NYI <code>next()</code> function! I'd like to say &quot;a fully JITtable <code>next()</code> function&quot;, but it wouldn't be totally true; as it happens, there's no way to avoid some annoying trace exits on table iteration.</p>
+<p>The purpose of the IR is to provide a representation of the execution path so it can be quickly optimized to generate the final mcode. For that, the IR traces are linear and type-specific; creating some interesting challenges for iteration on a generic container.</p>
+<h3 id="tracesarelinear">Traces are linear</h3>
+<p>Being linear means that each trace captures a single execution path, it can't contain conditional code or internal jumps.  The only conditional branches are the &quot;guards&quot; that make sure that the code to be executed is the appropriate one.  If a condition changes and it must now do something different, the trace must be exited.  If it happens several times, it will spawn a side trace and the exit will be patched into a conditional branch.  Very nice, but this still means that there can be at most one loop on each trace.</p>
+<p>The implementation of <code>next()</code> has to internally skip over empty slots in the table to only return valid key/value pairs.  If we try to express this in IR code, this would be the &quot;inner&quot; loop and the original loop would be an &quot;outer&quot; one, which doesn't have as much optimization opportunities.  In particular, it can't hoist invariable code out of the loop.</p>
+<p>The solution is to do that slot skipping in C.  Not using the Lua C API, of course, but the inner IR CALL instruction that is compiled into a &quot;fast&quot; call, using CPU registers for arguments as much as possible.</p>
+<h3 id="theirisintypespecificssaform">The IR is in Type-specific SSA form</h3>
+<p>The SSA form (<a href="https://en.wikipedia.org/wiki/Static_single_assignment_form">Static Single Assignment</a>) is key for many data flow analysis heuristics that allow quick optimizations like dead code removal, allocation sinking, type narrowing, strength reduction, etc. In LuaJIT's IR it means every instruction is usable as a value for subsequent instructions and has a declared type, fixed at the moment when the trace recorder emits this particular IR instruction.  In addition, every instruction can be a type guard, if the arguments are not of the expected type the trace will be exited.</p>
+<p>Lua is dynamically typed, every value is tagged with type information so the bytecode interpreter can apply the correct operations on it.  This allows us to have variables and tables that can contain and pass around any kind of object without changing the source code.  Of course, this requires the interpreter to be coded very &quot;defensively&quot;, to consider all valid ramifications of every instruction, limiting the possibility of optimizations.  The IR traces, on the other hand, are optimized for a single variation of the code, and deal with only the value types that are actually observed while executing.</p>
+<p>For example, this simple code creates a 1,000 element array and then copies to another table:</p>
+<pre><code>local t,t2 = {},{}
+for i=1,1000 do
+    t[i] = i
+end
+for i,v in ipairs(t) do
+    t2[i]=v
+end
+</code></pre>
+<p>resulting in this IR for the second loop, the one that does the copy:</p>
+<pre><code>0023 ------------ LOOP ------------
+0024          num CONV   0017  num.int
+0025       &gt;  int ABC    0005  0017
+0026          p32 AREF   0007  0017
+0027          num ASTORE 0026  0022
+0028 rbp    + int ADD    0017  +1
+0029       &gt;  int ABC    0018  0028
+0030          p32 AREF   0020  0028
+0031 xmm7  &gt;+ num ALOAD  0030
+0032 xmm7     num PHI    0022  0031
+0033 rbp      int PHI    0017  0028
+0034 rbx      nil RENAME 0017  #3
+0035 xmm6     nil RENAME 0022  #2
+</code></pre>
+<p>Here we see the <code>ALOAD</code> in instruction <code>0031</code> assures that the value loaded from the table is in effect a number.  If it happens to be any other value, the guard fails and the trace is exited.</p>
+<p>But if we do an array of strings instead of numbers?</p>
+<p>a small change:</p>
+<pre><code>local t,t2 = {},{}
+for i=1,1000 do
+    t[i] = 's'..i
+end
+for i,v in ipairs(t) do
+    t2[i]=v
+end
+</code></pre>
+<p>gives us this:</p>
+<pre><code>0024 ------------ LOOP ------------
+0025          num CONV   0018  num.int
+0026       &gt;  int ABC    0005  0018
+0027          p32 AREF   0007  0018
+0028          str ASTORE 0027  0023
+0029 rbp    + int ADD    0018  +1
+0030       &gt;  int ABC    0019  0029
+0031          p32 AREF   0021  0029
+0032 rbx   &gt;+ str ALOAD  0031
+0033 rbx      str PHI    0023  0032
+0034 rbp      int PHI    0018  0029
+0035 r15      nil RENAME 0018  #3
+0036 r14      nil RENAME 0023  #2
+</code></pre>
+<p>It's the same code, but the type that <code>ALOAD</code> is guarding is now a string (and it now uses a different register, I guess a vector register isn't appropriate for a string pointer).</p>
+<p>And if the table has a values of a mix of types?</p>
+<pre><code>local t,t2={},{}
+for i=1,1000,2 do
+    t[i], t[i+1] = i, 's'..i
+end
+for i,v in ipairs(t)
+    do t2[i]=v
+end
+
+0031 ------------ LOOP ------------
+0032          num CONV   0027  num.int
+0033       &gt;  int ABC    0005  0027
+0034          p32 AREF   0007  0027
+0035          str ASTORE 0034  0030
+0036 r15      int ADD    0027  +1
+0037       &gt;  int ABC    0019  0036
+0038          p32 AREF   0021  0036
+0039 xmm7  &gt;  num ALOAD  0038
+0040       &gt;  int ABC    0005  0036
+0041          p32 AREF   0007  0036
+0042          num ASTORE 0041  0039
+0043 rbp    + int ADD    0027  +2
+0044       &gt;  int ABC    0019  0043
+0045          p32 AREF   0021  0043
+0046 rbx   &gt;+ str ALOAD  0045
+0047 rbx      str PHI    0030  0046
+0048 rbp      int PHI    0027  0043
+</code></pre>
+<p>Now there are two <code>ALOAD</code>s, (and two <code>ASTORE</code>s), one for 'num' and one for 'str'.  In other words, the JIT unrolled the loop and found that that made the types constant. <code>=8-O</code></p>
+<p>Of course, this would happen only on very simple and regular patterns.  In general, it's wiser to avoid unpredictable type mixing; but polymorphic code will be optimized for each type that it's actually used with.</p>
+<h3 id="backtonext">Back to <code>next()</code></h3>
+<p>First let's see the current implementation of <code>next()</code> as used by the interpreter:</p>
+<pre><code>lj_tab.c
+/* Advance to the next step in a table traversal. */
+int lj_tab_next(lua_State *L, GCtab *t, TValue *key)
+{
+  uint32_t i = keyindex(L, t, key);  /* Find predecessor key index. */
+  for (i++; i &lt; t-&gt;asize; i++)  /* First traverse the array keys. */
+    if (!tvisnil(arrayslot(t, i))) {
+      setintV(key, i);
+      copyTV(L, key+1, arrayslot(t, i));
+      return 1;
+    }
+  for (i -= t-&gt;asize; i &lt;= t-&gt;hmask; i++) {  /* Then traverse the hash keys. */
+    Node *n = &amp;noderef(t-&gt;node)[i];
+    if (!tvisnil(&amp;n-&gt;val)) {
+      copyTV(L, key, &amp;n-&gt;key);
+      copyTV(L, key+1, &amp;n-&gt;val);
+      return 1;
+    }
+  }
+  return 0;  /* End of traversal. */
+}
+</code></pre>
+<p>It takes the input key as a <code>TValue</code> pointer and calls <code>keyindex()</code>.  This helper function searches for the key in the table and returns an index; if the key is an integer in the range of the array part, the index is the key itself.  If not, it performs a hash query and returns the index of the Node, offset by the array size, if successful, or signals an error if not found (it's an error to give a nonexistent key to <code>next()</code>).</p>
+<p>Back at <code>lj_tab_next()</code>, the index is first incremented, and if it's still within the array, it's iterated over any hole until a non-<strong><code>nil</code></strong> value is found.  If it wasn't in the array (or there’s no next value there), it performs a similar &quot;skip the **<code>nil</code>**s&quot; on the Node table.</p>
+<p>The new <code>lj_record_next()</code> function in <code>lj_record.c</code>, like some other record functions there, first checks not only the input parameters, but also the return values to generate the most appropriate code for this specific iteration, assuming that it will likely be optimal for subsequent iterations.  Of course, any such assumption must be backed by the appropriate guard.</p>
+<p>For <code>next()</code>, we choose between two different forms, if the return key is in the array part, then it uses <code>lj_tab_nexta()</code>, which takes the input key as an integer and returns the next key, also as an integer, in the <code>rax</code> register.  We don't do the equivalent to the <code>keyindex()</code> function, just check (with a guard) that the key is within the bounds of the array:</p>
+<pre><code>lj_tab.c
+/* Get the next array index */
+MSize LJ_FASTCALL lj_tab_nexta(GCtab *t, MSize k)
+{
+  for (k++; k &lt; t-&gt;asize; k++)
+    if (!tvisnil(arrayslot(t, k)))
+      break;
+  return k;
+}
+</code></pre>
+<p>The IR code looks like this:</p>
+<pre><code>0014 r13      int FLOAD  0011  tab.asize
+0015 rsi   &gt;  int CONV   0012  int.num
+0017 rax    + int CALLL  lj_tab_nexta  (0011 0015)
+0018       &gt;  int ABC    0014  0017
+0019 r12      p32 FLOAD  0011  tab.array
+0020          p32 AREF   0019  0017
+0021 [8]   &gt;+ num ALOAD  0020
+</code></pre>
+<p>Clearly, the <code>CALL</code> itself (at <code>0017</code>) is typed as '<code>int</code>', as natural for an array key; and the <code>ALOAD</code> (<code>0021</code>) is '<code>num</code>', because that's what the first few values happened to be.</p>
+<p>When we finish with the array part, the bounds check (instruction <code>ABC</code> on <code>0018</code>) would fail and soon new IR would be generated.  This time we use the <code>lj_tab_nexth()</code> function.</p>
+<pre><code>lj_tab.c
+LJ_FUNCA const Node *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n)
+{
+  const Node *nodeend = noderef(t-&gt;node)+t-&gt;hmask;
+  for (n++; n &lt;= nodeend; n++) {
+    if (!tvisnil(&amp;n-&gt;val)) {
+      return n;
+    }
+  }
+  return &amp;G(L)-&gt;nilnode;
+}
+</code></pre>
+<p>But before doing the &quot;skip the **<code>nil</code>**s&quot;, we need to do a hash query to find the initial <code>Node</code> entry.  Fortunately, the <code>HREF</code> IR instruction does that: This is the IR:</p>
+<pre><code>0014 rdx      p32 HREF   0011  0012
+0016 r12      p32 CALLL  lj_tab_nexth  (0011 0014)
+0017 rax   &gt;+ str HKLOAD 0016
+0018 [8]   &gt;+ num HLOAD  0016
+</code></pre>
+<p>There's a funny thing here: <code>HREF</code> is supposed to return a reference to a value in the hash table, and the last argument in <code>lj_tab_nexth()</code> is a <code>Node</code> pointer.  Let's see the <code>Node</code> definition:</p>
+<pre><code>lj_obj.h
+/* Hash node. */
+typedef struct Node {
+  TValue val;       /* Value object. Must be first field. */
+  TValue key;       /* Key object. */
+  MRef next;        /* Hash chain. */
+#if !LJ_GC64
+  MRef freetop;     /* Top of free elements (stored in t-&gt;node[0]). */
+#endif
+} Node;
+</code></pre>
+<p>Ok... the value is the first field, and it says right there &quot;Must be first field&quot;.  Looks like it's not the first place with some hand-wavy pointer casts.</p>
+<p>The return value of <code>lj_tab_next()</code> is a <code>Node</code> pointer, which can likewise be implicitly cast by <code>HLOAD</code> to get the value.  To get the key, I added the <code>HKLOAD</code> instruction. Both are guarding for the expected types of the value and key, respectively.</p>
+<h3 id="letstakeitforaspin">Let's take it for a spin</h3>
+<p>So, how does it perform?  These tests do a thousand loops over a 10,000 element table, first using <code>next()</code> and then <code>pairs()</code>, with a simple addition in the inner loop.  To get <code>pairs()</code> compiled, I just disabled the <code>ISNEXT</code>/<code>ITERN</code> optimization, so it actually uses <code>next()</code>.  In the third test the variable in the addition is initialized to <code>0ULL</code> instead of just <code>0</code>, triggering the use of FFI.</p>
+<p>First test is with all 10,000 elements on sequential integers, making the table a valid sequence, so <code>ipairs()</code> (which is already compiled) can be used just as well:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2017/02/image02.png">![](https://blog.cloudflare<img src="https://blog.cloudflare.com/content/images/2017/02/image02.png" alt=""></a></p>
+<p>So, compiled <code>next()</code> is quite a lot faster, but the <code>pairs()</code> optimization in the interpreter is very fast.  On the other hand, the smallest smell of FFI completely trashes interpreter performance, while making compiled code slightly tighter.  Finally, <code>ipairs()</code> is faster, but a big part of it is because it stops on the first <strong><code>nil</code></strong>, while <code>next()</code> has to skip over every <strong><code>nil</code></strong> at the end of the array, which by default can be up to twice as big as the sequence itself.</p>
+<p>Now with 5,000 (sequential) integer keys and 5,000 string keys.  Of course, we can't use <code>ipairs()</code> here:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2017/02/image01.png">![](https://blog.cloudflare<img src="https://blog.cloudflare.com/content/images/2017/02/image01.png" alt=""></a></p>
+<p>Roughly the same pattern: the compiled <code>next()</code> performance is very much the same on the three forms (used directly, under <code>pairs()</code> and with FFI code), while the interpreter benefits from the <code>pairs()</code> optimization and almost dies with FFI.  In this case, the interpreted <code>pairs()</code> actually surpasses the compiled <code>next()</code> performance, hinting that separately optimizing <code>pairs()</code> is still desirable.</p>
+<p>A big factor in the interpreter <code>pairs()</code> is that it doesn't use <code>next()</code>; instead it directly drives the loop with a hidden variable to iterate in the <code>Node</code> table without having to perform a hash lookup on every step.</p>
+<p>Repeating that in a compiled <code>pairs()</code> would be equally beneficial; but has to be done carefully to maintain compatibility with the interpreter.  On any trace exit the interpreter would kick in and must be able to seamlessly continue iterating.  For that, the rest of the system has to be aware of that hidden variable.</p>
+<p>The best part of this is that we have lots of very challenging, yet deeply rewarding, work ahead of us! Come <a href="https://www.cloudflare.com/join-our-team/">work for us</a> on making LuaJIT faster and more.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/lua/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">LUA</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-12-12T13:00:00Z">December 12, 2018 1:00PM</p>
+        <a href="/more-consistent-luajit-performance/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">More consistent LuaJIT performance</h2>
+        </a>
+
+        <p class="gray1 lh-copy">A year ago I wrote about a project that Cloudflare were funding at King's College London to help improve LuaJIT. Our twelve months is now up. How did we do?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/guest-author/" class="fw5 f2 black no-underline">Guest Author</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/lua/" class="no-underline f1 fw2 blue3 underline-hover">LUA</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-05-09T09:17:07+01:00">May 09, 2016 9:17AM</p>
+        <a href="/first-bay-area-openresty-meetup/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">First Bay Area OpenResty Meetup</h2>
+        </a>
+
+        <p class="gray1 lh-copy">On March 9, 章亦春, known to most of us as agentzh, organized the first Bay Area OpenResty Meetup at CloudFlare's San Francisco office....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/lua/" class="no-underline f1 fw2 blue3 underline-hover">LUA</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/nginx/" class="no-underline f1 fw2 blue3 underline-hover">NGINX</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/events/" class="no-underline f1 fw2 blue3 underline-hover">Events</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/meetup/" class="no-underline f1 fw2 blue3 underline-hover">MeetUp</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

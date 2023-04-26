@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>eBPF, Sockets, Hop Distance and manually writing eBPF assembly</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/epbf_sockets_hop_distance/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="eBPF, Sockets, Hop Distance and manually writing eBPF assembly" />
+    <meta property="og:description" content="A friend gave me an interesting task: extract IP TTL values from TCP connections established by a userspace program. This seemingly simple task quickly exploded into an epic Linux system programming hack." />
+    <meta property="og:url" content="https://blog.cloudflare.com/epbf_sockets_hop_distance/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/03/3845353725_7d7c624f34_z-1.jpg" />
+    <meta property="article:published_time" content="2018-03-29T10:43:38.000Z" />
+    <meta property="article:modified_time" content="2020-08-11T17:25:37.000Z" />
+    <meta property="article:tag" content="TTL" />
+    <meta property="article:tag" content="TCP" />
+    <meta property="article:tag" content="IPv4" />
+    <meta property="article:tag" content="IPv6" />
+    <meta property="article:tag" content="eBPF" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="eBPF, Sockets, Hop Distance and manually writing eBPF assembly" />
+    <meta name="twitter:description" content="A friend gave me an interesting task: extract IP TTL values from TCP connections established by a userspace program. This seemingly simple task quickly exploded into an epic Linux system programming hack." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/epbf_sockets_hop_distance/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/03/3845353725_7d7c624f34_z-1.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TTL, TCP, IPv4, IPv6, eBPF" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "eBPF, Sockets, Hop Distance and manually writing eBPF assembly",
+    "url": "https://blog.cloudflare.com/epbf_sockets_hop_distance/",
+    "datePublished": "2018-03-29T10:43:38.000Z",
+    "dateModified": "2020-08-11T17:25:37.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/03/3845353725_7d7c624f34_z-1.jpg",
+    "keywords": "TTL, TCP, IPv4, IPv6, eBPF",
+    "description": "A friend gave me an interesting task: extract IP TTL values from TCP connections established by a userspace program. This seemingly simple task quickly exploded into an epic Linux system programming hack. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-ttl tag-tcp tag-ipv4 tag-ipv6 tag-ebpf sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-ttl tag-tcp tag-ipv4 tag-ipv6 tag-ebpf ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">eBPF, Sockets, Hop Distance and manually writing eBPF assembly</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-03-29T11:43:38+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 29, 2018 11:43AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>A friend gave me an interesting task: extract IP TTL values from TCP connections established by a userspace program. This seemingly simple task quickly exploded into an epic Linux system programming hack. The result code is grossly over engineered, but boy, did we learn plenty in the process!</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/3845353725_7d7c624f34_z.jpg" alt="3845353725_7d7c624f34_z"><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a> <a href="https://www.flickr.com/photos/paulmiller/3845353725/">image</a> by <a href="https://www.flickr.com/photos/paulmiller">Paul Miller</a></small></p>
+<h3 id="context">Context</h3>
+<p>You may wonder why she wanted to inspect the TTL packet field (formally known as &quot;IP Time To Live (TTL)&quot; in IPv4, or &quot;Hop Count&quot; in IPv6)? The reason is simple - she wanted to ensure that the connections are routed outside of our datacenter. The &quot;Hop Distance&quot; - the difference between the TTL value set by the originating machine and the TTL value in the packet received at its destination - shows how many routers the packet crossed. If a packet crossed two or more routers, we know it indeed came from outside of our datacenter.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-29-at-10.52.49-AM-1.png" alt="Screen-Shot-2018-03-29-at-10.52.49-AM-1"></p>
+<p>It's uncommon to look at TTL values (except for their intended purpose of mitigating routing loops by checking when the TTL reaches zero). The normal way to deal with the problem we had would be to blocklist IP ranges of our servers. But it’s not that simple in our setup. Our IP numbering configuration is rather baroque, with plenty of Anycast, Unicast and Reserved IP ranges. Some belong to us, some don't. We wanted to avoid having to maintain a hard-coded blocklist of IP ranges.</p>
+<p>The gist of the idea is: we want to note the TTL value from a returned SYN+ACK packet. Having this number we can estimate the Hop Distance - number of routers on the path. If the Hop Distance is:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-29-at-10.50.38-AM.png" alt="Screen-Shot-2018-03-29-at-10.50.38-AM"></p>
+<ul>
+<li><strong>zero</strong>: we know the connection went to localhost or a local network.</li>
+</ul>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-29-at-10.49.42-AM.png" alt="Screen-Shot-2018-03-29-at-10.49.42-AM"></p>
+<ul>
+<li><strong>one</strong>: connection went through our router, and was terminated just behind it.</li>
+</ul>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-29-at-10.49.48-AM.png" alt="Screen-Shot-2018-03-29-at-10.49.48-AM"></p>
+<ul>
+<li><strong>two</strong>: connection went through two routers. Most possibly our router, and one just near to it.</li>
+</ul>
+<p>For our use case, we want to see if the Hop Distance was two or more - this would ensure the connection was routed outside the datacenter.</p>
+<h3 id="notsoeasy">Not so easy</h3>
+<p>It's easy to read TTL values from a userspace application, right? No. It turns out it's almost impossible. Here are the theoretical options we considered early on:</p>
+<p>A) Run a libpcap/tcpdump-like raw socket, and catch the SYN+ACK's manually. We ruled out this design quickly - it requires elevated privileges. Also, raw sockets are pretty fragile: they can suffer packet loss if the userspace application can’t keep up.</p>
+<p>B) Use the IP_RECVTTL socket option. IP_RECVTTL requests a &quot;cmsg&quot; data to be attached to control/ancillary data in a <code>recvmsg()</code> syscall. This is a good choice for UDP connections, but this socket option is not supported by TCP SOCK_STREAM sockets.</p>
+<p>Extracting the TTL is not so easy.</p>
+<h3 id="so_attach_filtertoruletheworld">SO_ATTACH_FILTER to rule the world!</h3>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/315128991_d49c312fbc_z.jpg" alt="315128991_d49c312fbc_z"><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a> <a href="https://www.flickr.com/photos/leejordan/315128991/">image</a> by <a href="https://www.flickr.com/photos/leejordan/">Lee Jordan</a></small></p>
+<p>Wait, there is a third way!</p>
+<p>You see, for quite some time it has been possible to attach a BPF filtering program to a socket. See <a href="http://man7.org/linux/man-pages/man7/socket.7.html"><code>socket(7)</code></a></p>
+<pre><code>SO_ATTACH_FILTER (since Linux 2.2), SO_ATTACH_BPF (since Linux 3.19)
+    Attach a classic BPF (SO_ATTACH_FILTER) or an extended BPF
+    (SO_ATTACH_BPF) program to the socket for use as a filter of
+    incoming packets.  A packet will be dropped if the filter pro‐
+    gram returns zero.  If the filter program returns a nonzero
+    value which is less than the packet's data length, the packet
+    will be truncated to the length returned.  If the value
+    returned by the filter is greater than or equal to the
+    packet's data length, the packet is allowed to proceed unmodi‐
+    fied.
+</code></pre>
+<p>You probably take advantage of SO_ATTACH_FILTER already: This is how tcpdump/wireshark does filtering when you're dumping packets off the wire.</p>
+<p>How does it work? Depending on the result of a <a href="https://blog.cloudflare.com/bpf-the-forgotten-bytecode/">BPF program</a>, packets can be filtered, truncated or passed to the socket without modification. Normally SO_ATTACH_FILTER is used for RAW sockets, but surprisingly, BPF filters can also be attached to normal SOCK_STREAM and SOCK_DGRAM sockets!</p>
+<p>We don't want to truncate packets though - we want to extract the TTL. Unfortunately with Classical BPF (cBPF) it's impossible to extract any data from a running BPF filter program.</p>
+<h3 id="ebpfandmaps">eBPF and maps</h3>
+<p>This changed with modern BPF machinery, which includes:</p>
+<ul>
+<li>modernised eBPF bytecode</li>
+<li>eBPF maps</li>
+<li><a href="https://blog.cloudflare.com/epbf_sockets_hop_distance/man7.org/linux/man-pages/man2/bpf.2.html"><code>bpf()</code> syscall</a></li>
+<li>SO_ATTACH_BPF socket option</li>
+</ul>
+<p>eBPF bytecode can be thought of as an extension to Classical BPF, but it's the extra features that really let it shine.</p>
+<p>The gem is the &quot;map&quot; abstraction. An eBPF map is a thingy that allows an eBPF program to store data and share it with a userspace code. Think of an eBPF map as a data structure (a hash table most usually) shared between a userspace program and an eBPF program running in kernel space.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-29-at-10.59.43-AM.png" alt="Screen-Shot-2018-03-29-at-10.59.43-AM"></p>
+<p>To solve our TTL problem, we can use eBPF filter program. It will look at the TTL values of passing packets, and save them in an eBPF map. Later, we can inspect the eBPF map and analyze the recorded values from userspace.</p>
+<h3 id="so_attach_bpftoruletheworld">SO_ATTACH_BPF to rule the world!</h3>
+<p>To use eBPF we need a number of things set up. First, we need to create an &quot;eBPF map&quot;. There <a href="https://elixir.bootlin.com/linux/v4.15.13/source/include/uapi/linux/bpf.h#L99">are many specialized map types</a>, but for our purposes let's use the &quot;hash&quot; BPF_MAP_TYPE_HASH type.</p>
+<p>We need to figure out the <em>&quot;bpf(BPF_MAP_CREATE, map type, key size, value size, limit, flags)&quot;</em> parameters. For our small TTL program, let's set 4 bytes for key size, and 8 byte value size. The max element limit is set to 5. It doesn't matter, we expect all the packets in one connection to have just one coherent TTL value anyway.</p>
+<p>This is how it would look in a <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2018-03-ebpf/ebpf.go#L57">Golang code</a>:</p>
+<pre><code>bpfMapFd, err := ebpf.NewMap(ebpf.Hash, 4, 8, 5, 0)
+</code></pre>
+<p>A word of warning is needed here. BPF maps use the &quot;locked memory&quot; resource. With multiple BPF programs and maps, it's easy to exhaust the default tiny 64 KiB limit. Consider bumping this with <code>ulimit -l</code>, for example:</p>
+<pre><code>ulimit -l 10240
+</code></pre>
+<p>The <code>bpf()</code> syscall returns a file descriptor pointing to the kernel BPF map we just created. With it handy we can operate on a map. The possible operations are:</p>
+<ul>
+<li><code>bpf(BPF_MAP_LOOKUP_ELEM, &lt;key&gt;)</code></li>
+<li><code>bpf(BPF_MAP_UPDATE_ELEM, &lt;key&gt;, &lt;value&gt;, &lt;flags&gt;)</code></li>
+<li><code>bpf(BPF_MAP_DELETE_ELEM, &lt;key&gt;)</code></li>
+<li><code>bpf(BPF_MAP_GET_NEXT_KEY, &lt;key&gt;)</code></li>
+</ul>
+<p>More on this later.</p>
+<p>With the map created, we need to create a BPF program. As opposed to classical BPF - where the bytecode was a parameter to SO_ATTACH_FILTER - the bytecode is now loaded by the <code>bpf()</code> syscall. Specifically: <code>bpf(BPF_PROG_LOAD)</code>.</p>
+<p>In our <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2018-03-ebpf/ebpf.go#L78-L131">Golang program the eBPF program setup</a> looks like:</p>
+<pre><code>ebpfInss := ebpf.Instructions{
+	ebpf.BPFIDstOffSrc(ebpf.LdXW, ebpf.Reg0, ebpf.Reg1, 16),
+	ebpf.BPFIDstOffImm(ebpf.JEqImm, ebpf.Reg0, 3, int32(htons(ETH_P_IPV6))),
+	ebpf.BPFIDstSrc(ebpf.MovSrc, ebpf.Reg6, ebpf.Reg1),
+	ebpf.BPFIImm(ebpf.LdAbsB, int32(-0x100000+8)),
+...
+	ebpf.BPFIDstImm(ebpf.MovImm, ebpf.Reg0, -1),
+	ebpf.BPFIOp(ebpf.Exit),
+}
+
+bpfProgram, err := ebpf.NewProgram(ebpf.SocketFilter, &amp;ebpfInss, &quot;GPL&quot;, 0)
+</code></pre>
+<p>Writing eBPF by hand is rather controversial. Most people use <code>clang</code> (from version 3.7 onwards) to compile a code written in a C dialect into an eBPF bytecode. The resulting bytecode is saved in an ELF file, which can be loaded by most eBPF libraries. This ELF file also includes description of maps, so you don’t need to set them manually.</p>
+<p>I personally don't see the point in adding an ELF/clang dependency for simple SO_ATTACH_BPF snippets. Don't be afraid of the raw bytecode!</p>
+<h3 id="bpfcallingconvention">BPF calling convention</h3>
+<p>Before we go further we should highlight couple of things about the eBPF environment. The official kernel documentation isn't too friendly:</p>
+<ul>
+<li><a href="https://www.kernel.org/doc/Documentation/networking/filter.txt">Documentation/networking/filter.txt</a></li>
+</ul>
+<p>The first important bit to know, is the calling convention:</p>
+<ul>
+<li>R0 - return value from in-kernel function, and exit value for eBPF program</li>
+<li>R1-R5 - arguments from eBPF program to in-kernel function</li>
+<li>R6-R9 - callee saved registers that in-kernel function will preserve</li>
+<li>R10 - read-only frame pointer to access stack</li>
+</ul>
+<p>When the BPF is started, R1 contains a pointer to <code>ctx</code>. This data structure <a href="https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L799">is defined as <code>struct __sk_buff</code></a>. For example, to access the <code>protocol</code> field you'd need to run:</p>
+<pre><code>r0 = *(u32 *)(r1 + 16)
+</code></pre>
+<p>Or in other words:</p>
+<pre><code>ebpf.BPFIDstOffSrc(ebpf.LdXW, ebpf.Reg0, ebpf.Reg1, 16),
+</code></pre>
+<p>Which is exactly what we do in first line of our program, since we need to choose between IPv4 or IPv6 code branches.</p>
+<h3 id="accessingthebpfpayload">Accessing the BPF payload</h3>
+<p>Next, there are special instructions for packet payload loading. Most BPF programs (but not all!) run in the context of packet filtering, so it makes sense to accelerate data lookups by having magic opcodes for accessing packet data.</p>
+<p>Instead of dereferencing context, like <code>ctx-&gt;data[x]</code> to load a byte, BPF supports the <code>BPF_LD</code> instruction that can do it in one operation. There are caveats though, the documentation says:</p>
+<pre><code>eBPF has two non-generic instructions: (BPF_ABS | &lt;size&gt; | BPF_LD) and
+(BPF_IND | &lt;size&gt; | BPF_LD) which are used to access packet data.
+
+They had to be carried over from classic BPF to have strong performance of
+socket filters running in eBPF interpreter. These instructions can only
+be used when interpreter context is a pointer to 'struct sk_buff' and
+have seven implicit operands. Register R6 is an implicit input that must
+contain pointer to sk_buff. Register R0 is an implicit output which contains
+the data fetched from the packet. Registers R1-R5 are scratch registers
+and must not be used to store the data across BPF_ABS | BPF_LD or
+BPF_IND | BPF_LD instructions.
+</code></pre>
+<p>In other words: before calling <code>BPF_LD</code> we must move <code>ctx</code> to R6, like this:</p>
+<pre><code>ebpf.BPFIDstSrc(ebpf.MovSrc, ebpf.Reg6, ebpf.Reg1),
+</code></pre>
+<p>Then we can call the load:</p>
+<pre><code>ebpf.BPFIImm(ebpf.LdAbsB, int32(-0x100000+7)),
+</code></pre>
+<p>At this stage the result is in r0, but we must remember the r1-r5 should be considered dirty. For an instruction the <code>BPF_LD</code> looks very much like a function call.</p>
+<h3 id="magicallayer3offset">Magical Layer 3 offset</h3>
+<p>Next note the load offset - we loaded the <code>-0x100000+7</code> byte of the packet. This magic offset is another BPF context curiosity. It turns out that the BPF script loaded under SO_ATTACH_BPF on a SOCK_STREAM (or SOCK_DGRAM) socket, will only see Layer 4 and higher OSI layers by default. To extract the TTL we need access to the layer 3 header (i.e. the IP header). To access L3 in the L4 context, we must offset the data lookups by magical -0x100000.</p>
+<p>This magic constant <a href="https://github.com/torvalds/linux/blob/ead751507de86d90fa250431e9990a8b881f713c/include/uapi/linux/filter.h#L84">is defined in the kernel</a>.</p>
+<p>For completeness, the <code>+7</code> is, of course, the offset of the TTL field in an IPv4 packet. Our small BPF program also supports IPv6 where the TTL/Hop Count is at offset <code>+8</code>.</p>
+<h3 id="returnvalue">Return value</h3>
+<p>Finally, the return value of the BPF program is meaningful. In the context of packet filtering it will be interpreted as a truncated packet length.<br>
+Had we returned 0 - the packet would be dropped and wouldn't be seen by the userspace socket application. It's quite interesting that we can do packet-based data manipulation with eBPF on a stream-based socket. Anyway, our script returns -1, which when cast to unsigned will be interpreted as a very large number:</p>
+<pre><code>ebpf.BPFIDstImm(ebpf.MovImm, ebpf.Reg0, -1),
+ebpf.BPFIOp(ebpf.Exit),
+</code></pre>
+<h3 id="extractingdatafrommap">Extracting data from map</h3>
+<p>Our running BPF program will set a key on our map for any matched packet. The key is the recorded TTL value, the value is the packet count. The value counter is somewhat vulnerable to a tiny race condition, but it's ignorable for our purposes. Later on, to extract the data from userspace program we use this Golang loop:</p>
+<pre><code>var (
+	value   MapU64
+	k1, k2  MapU32
+)
+
+for {
+	ok, err := bpfMap.Get(k1, &amp;value, 8)
+	if ok {
+		// k1 is TTL, value is counter
+		...
+	}
+
+	ok, err = bpfMap.GetNextKey(k1, &amp;k2, 4)
+	if err != nil || ok == false {
+		break
+	}
+	k1 = k2
+}
+</code></pre>
+<h3 id="puttingitalltogether">Putting it all together</h3>
+<p>Now with all the pieces ready we can make it a proper runnable program. There is little point in discussing it here, so allow me to refer to the source code. The BPF pieces are here:</p>
+<ul>
+<li><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2018-03-ebpf/ebpf.go">ebpf.go</a></li>
+</ul>
+<p>We haven't discussed how to catch inbound SYN+ACK in the BPF program. This is a matter of setting up BPF before calling <code>connect()</code>. Sadly, it's impossible to customize <code>net.Dial</code> in Golang. Instead we wrote a surprisingly painful and awful custom Dial implementation. The ugly custom dialer code is here:</p>
+<ul>
+<li><a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2018-03-ebpf/magic_conn.go">magic_conn.go</a></li>
+</ul>
+<p>To run all this you need kernel 4.4+ Kernel with the <code>bpf()</code> syscall compiled in. BPF features of specific kernels are documented in this superb page from BCC:</p>
+<ul>
+<li><a href="https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md">docs/kernel-versions.md</a></li>
+</ul>
+<p>Run the code to observe the TTL Hop Counts:</p>
+<pre><code>$ ./ttl-ebpf tcp4://google.com:80 tcp6://google.com:80 \
+             tcp4://cloudflare.com:80 tcp6://cloudflare.com:80
+[+] TTL distance to tcp4://google.com:80 172.217.4.174 is 6
+[+] TTL distance to tcp6://google.com:80 [2607:f8b0:4005:809::200e] is 4
+[+] TTL distance to tcp4://cloudflare.com:80 198.41.215.162 is 3
+[+] TTL distance to tcp6://cloudflare.com:80 [2400:cb00:2048:1::c629:d6a2] is 3
+</code></pre>
+<h3 id="takeaways">Takeaways</h3>
+<p>In this blog post we dived into the new eBPF machinery, including the <code>bpf()</code> syscall, maps and SO_ATTACH_BPF. This work allowed me to realize the potential of running SO_ATTACH_BPF on fully established TCP sockets. Undoubtedly, eBPF still requires plenty of love and documentation, but it seems to be a perfect bridge to expose low level toggles to userspace applications.</p>
+<p>I highly recommend keeping the dependencies small. For small BPF programs, like the one shown, there is little need for complex clang compilation and ELF loading. Don't be afraid of the eBPF bytecode!</p>
+<p>We only touched on SO_ATTACH_BPF, where we analyzed network packets with BPF running on network sockets. There is more! First, you can attach BPFs to a dozen &quot;things&quot;, XDP being the most obvious example. <a href="https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L119">Full list</a>. Then, it's possible to actually affect kernel packet processing, here is a <a href="https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L318">full list of helper functions</a>, some of which can modify kernel data structures.</p>
+<p>In February <a href="https://lwn.net/Articles/747551/">LWN jokingly wrote</a>:</p>
+<pre><code>Developers should be careful, though; this could
+prove to be a slippery slope leading toward something 
+that starts to look like a microkernel architecture.
+</code></pre>
+<p>There is a grain of truth here. Maybe the ability to run eBPF on variety of subsystems feels like microkernel coding, but definitely the SO_ATTACH_BPF smells like <a href="https://en.wikipedia.org/wiki/STREAMS">STREAMS</a> programming model <a href="https://cseweb.ucsd.edu/classes/fa01/cse221/papers/ritchie-stream-io-belllabs84.pdf">from 1984</a>.</p>
+<hr>
+<p>Thanks to <a href="https://twitter.com/akajibi">Gilberto Bertin</a> and <a href="https://twitter.com/dwragg">David Wragg</a> for helping out with the eBPF bytecode.</p>
+<hr>
+<p><em>Doing eBPF work sound interesting? Join our <a href="https://boards.greenhouse.io/cloudflare/jobs/589572">world famous team</a> in London, Austin, San Francisco, Champaign and our elite office in Warsaw, Poland</em>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/ttl/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TTL</a>
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+        <a href="/tag/ipv4/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">IPv4</a>
+        <a href="/tag/ipv6/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">IPv6</a>
+        <a href="/tag/ebpf/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">eBPF</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-05-19T03:13:00+01:00">May 19, 2012 3:13AM</p>
+        <a href="/never-deal-with-dns-propagation-again/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Never Deal With DNS Propagation Again</h2>
+        </a>
+
+        <p class="gray1 lh-copy">At CloudFlare, we think a lot about the Domain Name Service -- better known as DNS, the Internet's address book. CloudFlare uses DNS to bring performance and security to our customers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-roberts/" class="fw5 f2 black no-underline">John Roberts</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ttl/" class="no-underline f1 fw2 blue3 underline-hover">TTL</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

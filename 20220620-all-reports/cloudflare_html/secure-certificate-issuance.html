@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Securing Certificate Issuance using Multipath DCV</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="PKI grants servers the ability to securely serve websites by issuing digital certificates, providing the foundation for encrypted and authentic communication." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/secure-certificate-issuance/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Securing Certificate Issuance using Multipath DCV" />
+    <meta property="og:description" content="Trust on the Internet is underpinned by the Public Key Infrastructure (PKI). PKI grants servers the ability to securely serve websites by issuing digital certificates, providing the foundation for encrypted and authentic communication." />
+    <meta property="og:url" content="https://blog.cloudflare.com/secure-certificate-issuance/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/06/Screen-Shot-2019-06-17-at-8.46.28-AM-1.png" />
+    <meta property="article:published_time" content="2019-06-18T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-12-06T17:07:20.000Z" />
+    <meta property="article:tag" content="Crypto Week" />
+    <meta property="article:tag" content="Crypto" />
+    <meta property="article:tag" content="Cryptography" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="BGP" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="CFSSL" />
+    <meta property="article:tag" content="HTTPS" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Securing Certificate Issuance using Multipath DCV" />
+    <meta name="twitter:description" content="Trust on the Internet is underpinned by the Public Key Infrastructure (PKI). PKI grants servers the ability to securely serve websites by issuing digital certificates, providing the foundation for encrypted and authentic communication." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/secure-certificate-issuance/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/06/Screen-Shot-2019-06-17-at-8.46.28-AM-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Dina Kozlov" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Crypto Week, Crypto, Cryptography, DNS, BGP, TLS, CFSSL, HTTPS, Security, Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Dina Kozlov",
+        "image": "https://blog.cloudflare.com/content/images/2019/06/headshot.jpg",
+        "url": "https://blog.cloudflare.com/author/dina/",
+        "sameAs": []
+    },
+    "headline": "Securing Certificate Issuance using Multipath DCV",
+    "url": "https://blog.cloudflare.com/secure-certificate-issuance/",
+    "datePublished": "2019-06-18T13:00:00.000Z",
+    "dateModified": "2019-12-06T17:07:20.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/06/Screen-Shot-2019-06-17-at-8.46.28-AM-1.png",
+    "keywords": "Crypto Week, Crypto, Cryptography, DNS, BGP, TLS, CFSSL, HTTPS, Security, Reliability",
+    "description": "Trust on the Internet is underpinned by the Public Key Infrastructure (PKI). PKI grants servers the ability to securely serve websites by issuing digital certificates, providing the foundation for encrypted and authentic communication. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-crypto-week tag-crypto tag-cryptography tag-dns tag-bgp tag-tls tag-cfssl tag-https tag-security tag-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-crypto-week tag-crypto tag-cryptography tag-dns tag-bgp tag-tls tag-cfssl tag-https tag-security tag-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Securing Certificate Issuance using Multipath Domain Control Validation</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-06-18T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 18, 2019 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/dina/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2019/06/headshot.jpg" alt="Dina Kozlov" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/dina" class="fw5 f3 no-underline black mr3">Dina Kozlov</a>
+                </div>
+            </li>
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/gabbi/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/11/IMG_9719.jpg" alt="Gabbi Fisher" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/gabbi" class="fw5 f3 no-underline black mr3">Gabbi Fisher</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/image1-6.png" class="kg-image"></figure><p>This blog post is part of <a href="https://blog.cloudflare.com/welcome-to-crypto-week-2019/">Crypto Week 2019</a>.</p><p>Trust on the Internet is underpinned by the Public Key Infrastructure (PKI). PKI grants servers the ability to securely serve websites by issuing digital certificates, providing the foundation for encrypted and authentic communication.</p><p>Certificates make HTTPS encryption possible by using the public key in the certificate to verify server identity. HTTPS is especially important for websites that transmit sensitive data, such as banking credentials or private messages. Thankfully, modern browsers, such as Google Chrome, flag websites not secured using HTTPS by marking them “Not secure,” allowing users to be more security conscious of the websites they visit.</p><p>This blog post introduces a new, free tool Cloudflare offers to CAs so they can further secure certificate issuance. But before we dive in too deep, let’s talk about where certificates come from.</p><h3 id="certificate-authorities">Certificate Authorities</h3><p>Certificate Authorities (CAs) are the institutions responsible for issuing certificates. </p><p>When issuing a certificate for any given domain, they use Domain Control Validation (DCV) to verify that the entity requesting a certificate for the domain is the legitimate owner of the domain. With DCV the domain owner:</p><ol><li>creates a DNS resource record for a domain;</li><li>uploads a document to the web server located at that domain; OR</li><li>proves ownership of the domain’s administrative email account. </li></ol><p>The DCV process prevents adversaries from obtaining private-key and certificate pairs for domains not owned by the requestor.  </p><p>Preventing adversaries from acquiring this pair is critical: if an incorrectly issued certificate and private-key pair wind up in an adversary’s hands, they could pose as the victim’s domain and serve sensitive HTTPS traffic. This violates our existing trust of the Internet, and compromises private data on a potentially massive scale. </p><p>For example, an adversary that tricks a CA into mis-issuing a certificate for gmail.com could then perform TLS handshakes while pretending to be Google, and exfiltrate cookies and login information to gain access to the victim’s Gmail account. The risks of certificate mis-issuance are clearly severe.</p><h3 id="domain-control-validation">Domain Control Validation</h3><p>To prevent attacks like this, CAs only issue a certificate after performing DCV. One way of validating domain ownership is through HTTP validation, done by uploading a text file to a specific HTTP endpoint on the webserver they want to secure.  Another DCV method is done using email verification, where an email with a validation code link is sent to the administrative contact for the domain.</p><h3 id="http-validation">HTTP Validation</h3><p>Suppose Alice buys the domain name aliceswonderland.com and wants to get a dedicated certificate for this domain. Alice chooses to use Let’s Encrypt as their certificate authority. First, Alice must generate their own private key and create a certificate signing request (CSR). She sends the CSR to Let’s Encrypt, but the CA won’t issue a certificate for that CSR and private key until they know Alice owns aliceswonderland.com. Alice can then choose to prove that she owns this domain through HTTP validation.</p><p>When Let’s Encrypt performs DCV over HTTP, they require Alice to place a randomly named file in the <code>/.well-known/acme-challenge</code> path for her website. The CA must retrieve the text file by sending an HTTP <code>GET</code> request to <code>http://aliceswonderland.com/.well-known/acme-challenge/&lt;random_filename&gt;</code>. An expected value must be present on this endpoint for DCV to succeed.</p><p>For HTTP validation, Alice would upload a file to <code>http://aliceswonderland.com/.well-known/acme-challenge/YnV0dHNz</code> </p><p>where the body contains: </p><!--kg-card-begin: markdown--><pre><code>curl http://aliceswonderland.com/.well-known/acme-challenge/YnV0dHNz
+
+GET /.well-known/acme-challenge/YnV0dHNz
+Host: aliceswonderland.com
+
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+
+YnV0dHNz.TEST_CLIENT_KEY
+</code></pre>
+<!--kg-card-end: markdown--><p>The CA instructs them to use the Base64 token <code>YnV0dHNz</code>. <code>TEST_CLIENT_KEY</code> in an account-linked key that only the certificate requestor and the CA know. The CA uses this field combination to verify that the certificate requestor actually owns the domain. Afterwards, Alice can get her certificate for her website!</p><h3 id="dns-validation">DNS Validation</h3><p>Another way users can validate domain ownership is to add a DNS TXT record containing a verification string or <em>token</em> from the CA to their domain’s resource records. For example, here’s a domain for an enterprise validating itself towards Google:</p><!--kg-card-begin: markdown--><pre><code>$ dig TXT aliceswonderland.com
+aliceswonderland.com.	 28 IN TXT &quot;google-site-verification=COanvvo4CIfihirYW6C0jGMUt2zogbE_lC6YBsfvV-U&quot;
+</code></pre>
+<!--kg-card-end: markdown--><p></p><p>Here, Alice chooses to create a TXT DNS resource record with a specific token value. A Google CA can verify the presence of this token to validate that Alice actually owns her website.</p><h3 id="types-of-bgp-hijacking-attacks">Types of BGP Hijacking Attacks</h3><p>Certificate issuance is required for servers to securely communicate with clients. This is why it’s so important that the process responsible for issuing certificates is also secure. Unfortunately, this is not always the case. </p><p>Researchers at Princeton University recently discovered that common DCV methods are vulnerable to attacks executed by network-level adversaries. If Border Gateway Protocol (BGP) is the “postal service” of the Internet responsible for delivering data through the most efficient routes, then Autonomous Systems (AS) are individual post office branches that represent an Internet network run by a single organization. Sometimes network-level adversaries advertise false routes over BGP to steal traffic, especially if that traffic contains something important, like a domain’s certificate. </p><p><a href="https://www.princeton.edu/~pmittal/publications/bgp-tls-usenix18.pdf"><em>Bamboozling Certificate Authorities with BGP</em></a> highlights five types of attacks that can be orchestrated during the DCV process to obtain a certificate for a domain the adversary does not own. After implementing these attacks, the authors were able to (ethically) obtain certificates for domains they did not own from the top five CAs: Let’s Encrypt, GoDaddy, Comodo, Symantec, and GlobalSign. But how did they do it?</p><h3 id="attacking-the-domain-control-validation-process">Attacking the Domain Control Validation Process</h3><p>There are two main approaches to attacking the DCV process with BGP hijacking:</p><ol><li>Sub-Prefix Attack</li><li>Equally-Specific-Prefix Attack</li></ol><p>These attacks create a vulnerability when an adversary sends a certificate signing request for a victim’s domain to a CA. When the CA verifies the network resources using an <code>HTTP GET</code>  request (as discussed earlier), the adversary then uses BGP attacks to hijack traffic to the victim’s domain in a way that the CA’s request is rerouted to the adversary and not the domain owner. To understand how these attacks are conducted, we first need to do a little bit of math.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/Domain-Control-Validation-Process@1.5x.png" class="kg-image"></figure><p>Every device on the Internet uses an IP (Internet Protocol) address as a numerical identifier. IPv6 addresses contain 128 bits and follow a slash notation to indicate the size of the prefix. So, in the network address <strong>2001:DB8:1000::/48</strong>, “<strong>/48</strong>” refers to how many bits the network contains. This means that there are 80 bits left that contain the host addresses, for a total of 10,240 host addresses. The smaller the prefix number, the more host addresses remain in the network. With this knowledge, let’s jump into the attacks! </p><h4 id="attack-one-sub-prefix-attack">Attack one: Sub-Prefix Attack</h4><p>When BGP announces a route, the router always prefers to follow the more specific route. So if <strong>2001:DB8::/32</strong> and <strong>2001:DB8:1000::/48</strong> are advertised, the router will use the latter as it is the more specific prefix. This becomes a problem when an adversary makes a BGP announcement to a specific IP address while using the victim’s domain IP address. Let’s say the IP address for our victim, leagueofentropy.com, is <strong>2001:DB8:1000::1 </strong>and announced as <strong>2001:DB8::/32</strong>. If an adversary announces the prefix <strong>2001:DB8:1000::/48</strong>, then they will capture the victim’s traffic, launching a <em>sub-prefix hijack attack</em>.<strong> </strong></p><p>In an IPv4 attack, such as the <a href="https://blog.cloudflare.com/bgp-leaks-and-crypto-currencies/">attack</a> during April 2018, this was /24 and /23 announcements, with the more specific /24 being announced by the nefarious entity. In IPv6, this could be a /48 and /47 announcement. In both scenarios, /24's and /48's are the smallest blocks allowed to be routed globally. In the diagram below, <strong>/47</strong> is Texas and <strong>/48</strong> is the more specific Austin, Texas. The new (but nefarious) routes overrode the existing routes for portions of the Internet. The attacker then ran a nefarious DNS server on the normal IP addresses with DNS records pointing at some new nefarious web server instead of the existing server. This attracted the traffic destined for the victim’s domain within the area the nefarious routes were being propagated. The reason this attack was successful was because a more specific prefix is always preferred by the receiving routers.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/1-Traditional-Equally-specific-Sub-Prefix-Attack-KC-0A-@3x.png" class="kg-image"></figure><h4 id="attack-two-equally-specific-prefix-attack">Attack two: Equally-Specific-Prefix Attack</h4><p>In the last attack, the adversary was able to hijack traffic by offering a more specific announcement, but what if the victim’s prefix is <strong>/48</strong> and a sub-prefix attack is not viable? In this case, an attacker would launch an <strong>equally-specific-prefix hijack</strong>, where the attacker announces the same prefix as the victim. This means that the AS chooses the preferred route between the victim and the adversary’s announcements based on properties like path length. This attack only ever intercepts a portion of the traffic. </p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/2-Traditional-EquallyPrefix-Attack-0A-KC@3x.png" class="kg-image"></figure><p>There are more advanced attacks that are covered in more depth in the paper. They are fundamentally similar attacks but are more stealthy.</p><p>Once an attacker has successfully obtained a bogus certificate for a domain that they do not own, they can perform a convincing attack where they pose as the victim’s domain and are able to decrypt and intercept the victim’s TLS traffic. The ability to decrypt the TLS traffic allows the adversary to completely Monster-in-the-Middle (MITM) encrypted TLS traffic and reroute Internet traffic destined for the victim’s domain to the adversary. To increase the stealthiness of the attack, the adversary will continue to forward traffic through the victim’s domain to perform the attack in an undetected manner. </p><h3 id="dns-spoofing">DNS Spoofing</h3><p>Another way an adversary can gain control of a domain is by spoofing DNS traffic by using a source IP address that belongs to a DNS nameserver. Because anyone can modify their packets’ outbound IP addresses, an adversary can fake the IP address of any DNS nameserver involved in resolving the victim’s domain, and impersonate a nameserver when responding to a CA.</p><p>This attack is more sophisticated than simply spamming a CA with falsified DNS responses. Because each DNS query has its own randomized query identifiers and source port, a fake DNS response must match the DNS query’s identifiers to be convincing. Because these query identifiers are random, making a spoofed response with the correct identifiers is extremely difficult.</p><p>Adversaries can fragment User Datagram Protocol (UDP) DNS packets so that identifying DNS response information (like the random DNS query identifier) is delivered in one packet, while the actual answer section follows in another packet. This way, the adversary spoofs the DNS response to a legitimate DNS query.</p><p>Say an adversary wants to get a mis-issued certificate for victim.com by forcing packet fragmentation and spoofing DNS validation. The adversary sends a DNS nameserver for victim.com a ICMP "fragmentation needed" packet with a small Maximum Transmission Unit, or maximum byte size. This gets the nameserver to start fragmenting DNS responses. When the CA sends a DNS query to a nameserver for victim.com asking for victim.com’s TXT records, the nameserver will fragment the response into the two packets described above: the first contains the query ID and source port, which the adversary cannot spoof, and the second one contains the answer section, which the adversary can spoof. The adversary can continually send a spoofed answer to the CA throughout the DNS validation process, in the hopes of sliding their spoofed answer in before the CA receives the real answer from the nameserver.</p><p>In doing so, the answer section of a DNS response (the important part!) can be falsified, and an adversary can trick a CA into mis-issuing a certificate.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/DNS-Spoofing@3x.png" class="kg-image"></figure><h3 id="solution">Solution</h3><p>At first glance, one could think a Certificate Transparency log could expose a mis-issued certificate and allow a CA to quickly revoke it. CT logs, however, can take up to 24 hours to include newly issued certificates, and certificate revocation can be inconsistently followed among different browsers. We need a solution that allows CAs to proactively prevent this attacks, not retroactively address them.</p><p>We’re excited to announce that Cloudflare provides CAs a free API to leverage our global network to perform DCV from multiple vantage points around the world. This API bolsters the DCV process against BGP hijacking and off-path DNS attacks.</p><p>Given that Cloudflare runs 175+ datacenters around the world, we are in a unique position to perform DCV from multiple vantage points. Each datacenter has a unique path to DNS nameservers or HTTP endpoints, which means that successful hijacking of a BGP route can only affect a subset of DCV requests, further hampering BGP hijacks. And since we use RPKI, we actually sign and verify BGP routes.</p><p>This DCV checker additionally protects CAs against off-path, DNS spoofing attacks. An additional feature that we built into the service that helps protect against off-path attackers is DNS query source IP randomization. By making the source IP unpredictable to the attacker, it becomes more challenging to spoof the second fragment of the forged DNS response to the DCV validation agent.</p><p>By comparing multiple DCV results collected over multiple paths, our DCV API makes it virtually impossible for an adversary to mislead a CA into thinking they own a domain when they actually don’t. CAs can use our tool to ensure that they only issue certificates to rightful domain owners.</p><p>Our multipath DCV checker consists of two services:</p><ol><li>DCV agents responsible for performing DCV out of a specific datacenter, and</li><li>a DCV orchestrator that handles multipath DCV requests from CAs and dispatches them to a subset of DCV agents.</li></ol><p>When a CA wants to ensure that DCV occurred without being intercepted, it can send a request to our API specifying the type of DCV to perform and its parameters.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/06/Mulitpath-DCV@3x.png" class="kg-image"></figure><p>The DCV orchestrator then forwards each request to a random subset of over 20 DCV agents in different datacenters. Each DCV agent performs the DCV request and forwards the result to the DCV orchestrator, which aggregates what each agent observed and returns it to the CA. </p><p>This approach can also be generalized to performing multipath queries over DNS records, like Certificate Authority Authorization (CAA) records. CAA records authorize CAs to issue certificates for a domain, so spoofing them to trick unauthorized CAs into issuing certificates is another attack vector that multipath observation prevents.</p><p>As we were developing our multipath checker, we were in contact with the Princeton research group that introduced the proof-of-concept (PoC) of certificate mis-issuance through BGP hijacking attacks. Prateek Mittal, coauthor of the <em>Bamboozling Certificate Authorities with BGP</em> paper, wrote:</p><blockquote>“Our analysis shows that domain validation from multiple vantage points significantly mitigates the impact of localized BGP attacks. We recommend that all certificate authorities adopt this approach to enhance web security. A particularly attractive feature of Cloudflare’s implementation of this defense is that Cloudflare has access to a vast number of vantage points on the Internet, which significantly enhances the robustness of domain control validation.”</blockquote><p>Our DCV checker follows our belief that trust on the Internet must be distributed, and vetted through third-party analysis (like that provided by Cloudflare) to ensure consistency and security. This tool joins our <a href="https://blog.cloudflare.com/introducing-certificate-transparency-and-nimbus/">pre-existing Certificate Transparency monitor</a> as a set of services CAs are welcome to use in improving the accountability of certificate issuance.</p><h3 id="an-opportunity-to-dogfood">An Opportunity to Dogfood</h3><p>Building our multipath DCV checker also allowed us to <a href="https://en.wikipedia.org/wiki/Eating_your_own_dog_food"><em>dogfood</em></a> multiple Cloudflare products. </p><p>The DCV orchestrator as a simple fetcher and aggregator was a fantastic candidate for <a href="https://developers.cloudflare.com/workers/">Cloudflare Workers</a>. We implemented the orchestrator in TypeScript using <a href="https://blog.cloudflare.com/generating-documentation-for-typescript-projects/">this post</a> as a guide, and created a typed, reliable orchestrator service that was easy to deploy and iterate on. Hooray that we don’t have to maintain our own <code>dcv-orchestrator</code>  server!</p><p>We use <a href="https://developers.cloudflare.com/argo-tunnel/">Argo Tunnel</a> to allow Cloudflare Workers to contact DCV agents. Argo Tunnel allows us to easily and securely expose our DCV agents to the Workers environment. Since Cloudflare has approximately 175 datacenters running DCV agents, we expose many services through Argo Tunnel, and have had the opportunity to load test Argo Tunnel as a power user with a wide variety of origins. Argo Tunnel readily handled this influx of new origins!</p><h3 id="getting-access-to-the-multipath-dcv-checker">Getting Access to the Multipath DCV Checker</h3><p>If you and/or your organization are interested in trying our DCV checker, email <a href="/cdn-cgi/l/email-protection#d2b6b1a492b1bebda7b6b4beb3a0b7fcb1bdbf"><span class="__cf_email__" data-cfemail="f6929580b6959a998392909a978493d895999b">[email&#160;protected]</span></a> and let us know! We’d love to hear more about how multipath querying and validation bolsters the security of your certificate issuance.</p><p>As a new class of BGP and IP spoofing attacks threaten to undermine PKI fundamentals, it’s important that website owners advocate for multipath validation when they are issued certificates. We encourage all CAs to use multipath validation, whether it is Cloudflare’s or their own. Jacob Hoffman-Andrews, Tech Lead, Let’s Encrypt, wrote:</p><blockquote>“BGP hijacking is one of the big challenges the web PKI still needs to solve, and we think multipath validation can be part of the solution. We’re testing out our own implementation and we encourage other CAs to pursue multipath as well”</blockquote><p>Hopefully in the future, website owners will look at multipath validation support when selecting a CA.</p>
+            </div>
+        </section>
+
+        <a href="/tag/crypto-week/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto Week</a>
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+        <a href="/tag/cryptography/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cryptography</a>
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+        <a href="/tag/bgp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">BGP</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-01T13:01:00Z">November 01, 2019 1:01PM</p>
+        <a href="/going-keyless-everywhere/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Going Keyless Everywhere</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Time flies. The Heartbleed vulnerability was discovered just over five and a half years ago. Heartbleed became a household name not only because it was one of the first bugs with its own web page and logo, but because of what it revealed about the fragility of the Internet as a whole....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/cbroglie/" class="fw5 f2 black no-underline">Chris Broglie</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto-week/" class="no-underline f1 fw2 blue3 underline-hover">Crypto Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/keyless-ssl/" class="no-underline f1 fw2 blue3 underline-hover">Keyless SSL</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-01T13:00:00Z">November 01, 2019 1:00PM</p>
+        <a href="/keyless-delegation/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Delegated Credentials for TLS</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we’re happy to announce support for a new cryptographic protocol that helps make it possible to deploy encrypted services in a global network while still maintaining fast performance and tight control of private keys: Delegated Credentials for TLS....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/watson/" class="fw5 f2 black no-underline">Watson Ladd</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto-week/" class="no-underline f1 fw2 blue3 underline-hover">Crypto Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/keyless-ssl/" class="no-underline f1 fw2 blue3 underline-hover">Keyless SSL</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-10-31T13:00:00Z">October 31, 2019 1:00PM</p>
+        <a href="/announcing-cfnts/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Announcing cfnts: Cloudflare&#x27;s implementation of NTS in Rust</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Several months ago we announced that we were providing a new public time service. Part of what we were providing was the first major deployment of the new Network Time Security protocol, with a newly written implementation of NTS in Rust....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/watson/" class="fw5 f2 black no-underline">Watson Ladd</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/pop-chun/" class="fw5 f2 black no-underline">Pop Chunhapanya</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto-week/" class="no-underline f1 fw2 blue3 underline-hover">Crypto Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/nts/" class="no-underline f1 fw2 blue3 underline-hover">NTS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-10-30T13:00:00Z">October 30, 2019 1:00PM</p>
+        <a href="/the-tls-post-quantum-experiment/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The TLS Post-Quantum Experiment</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In June, we announced a wide-scale post-quantum experiment with Google. We implemented two post-quantum (i.e., not yet known to be broken by quantum computers) key exchanges, integrated them into our TLS stack and deployed the implementation on our edge servers and in Chrome Canary clients....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/kris/" class="fw5 f2 black no-underline">Kris Kwiatkowski</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/luke/" class="fw5 f2 black no-underline">Luke Valenta</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto-week/" class="no-underline f1 fw2 blue3 underline-hover">Crypto Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quantum/" class="no-underline f1 fw2 blue3 underline-hover">Quantum</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"version":"2021.2.0","rayId":"633cc85c38f657a9","si":10}'></script>
+</body>
+
+</html>

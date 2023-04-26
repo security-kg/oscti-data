@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Improving compression with a preset DEFLATE dictionary</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/improving-compression-with-preset-deflate-dictionary/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Improving compression with a preset DEFLATE dictionary" />
+    <meta property="og:description" content="A few years ago Google made a proposal for a new HTTP compression method, called SDCH (SanDwiCH). The idea behind the method is to create a dictionary of long strings that appear throughout many pages of the same domain (or popular search results)." />
+    <meta property="og:url" content="https://blog.cloudflare.com/improving-compression-with-preset-deflate-dictionary/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/15585984911_6a6bff8f30_z.jpg" />
+    <meta property="article:published_time" content="2015-03-30T09:21:21.000Z" />
+    <meta property="article:modified_time" content="2018-08-24T01:16:25.000Z" />
+    <meta property="article:tag" content="Google" />
+    <meta property="article:tag" content="Optimization" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Compression" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Improving compression with a preset DEFLATE dictionary" />
+    <meta name="twitter:description" content="A few years ago Google made a proposal for a new HTTP compression method, called SDCH (SanDwiCH). The idea behind the method is to create a dictionary of long strings that appear throughout many pages of the same domain (or popular search results)." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/improving-compression-with-preset-deflate-dictionary/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/15585984911_6a6bff8f30_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Vlad Krasnov" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Google, Optimization, Speed &amp; Reliability, Compression" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Vlad Krasnov",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/165e069.jpg",
+        "url": "https://blog.cloudflare.com/author/vlad-krasnov/",
+        "sameAs": []
+    },
+    "headline": "Improving compression with a preset DEFLATE dictionary",
+    "url": "https://blog.cloudflare.com/improving-compression-with-preset-deflate-dictionary/",
+    "datePublished": "2015-03-30T09:21:21.000Z",
+    "dateModified": "2018-08-24T01:16:25.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/15585984911_6a6bff8f30_z.jpg",
+    "keywords": "Google, Optimization, Speed & Reliability, Compression",
+    "description": "A few years ago Google made a proposal for a new HTTP compression method, called SDCH (SanDwiCH). The idea behind the method is to create a dictionary of long strings that appear throughout many pages of the same domain (or popular search results).",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-google tag-optimization tag-speed-and-reliability tag-compression sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-google tag-optimization tag-speed-and-reliability tag-compression ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Improving compression with a preset DEFLATE dictionary</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2015-03-30T10:21:21+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 30, 2015 10:21AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/vlad-krasnov/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/165e069.jpg" alt="Vlad Krasnov" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/vlad-krasnov" class="fw5 f3 no-underline black mr3">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>A few years ago Google made a proposal for a new HTTP compression method, called SDCH (SanDwiCH). The idea behind the method is to create a dictionary of long strings that appear throughout many pages of the same domain (or popular search results). The compression is then simply searching for the appearance of the long strings in a dictionary and replacing them with references to the aforementioned dictionary. Afterwards the output is further compressed with <a href="https://en.wikipedia.org/wiki/DEFLATE">DEFLATE</a>.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/03/15585984911_6a6bff8f30_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY SA 2.0</a> <a href="https://www.flickr.com/photos/quinnanya/15585984911/in/photolist-pKhfiM-52LCYm-abTcAV-9eBXNP-9EQsPE-k2zt7W-3wGhDE-8FHYSs-4H94jD-8FFL2G-4U8deD-8FHZ7h-9zxQ3Q-96AfdV-8F5h1w-8FjCSW-8FeYBM-RbMqS-8FgTbT-8FjUvd-8FgF7T-8FjM4E-8Fgwtt-8Fjvxf-8FjtpU-8FjpUm-8Fjn3u-8Fjiv9-8Ff5ex-8Fid39-8FeTN6-8Fi3KW-8F29dP-8FhaH2-8FkcNm-8Fk8Kw-6DASnR-3T6V24-7PMw1h-7PJhZ8-uMSAt-cUzN8q-4fjD2P-eRviNL-BZg6b-qz5e4C-cqkfc-4szYvT-u1RCZ-ctvmWW">image</a> by <a href="https://www.flickr.com/photos/quinnanya/">Quinn Dombrowski</a></small></p>
+<p>With the right dictionary for the right page the savings can be spectacular, even 70% smaller than gzip alone. In theory, a whole file can be replaced by a single token.</p>
+<p>The drawbacks of the method are twofold: first - the dictionary that is created is fairly large and must be distributed as a separate file, in fact the dictionary is often larger than the individual pages it compresses; second - the dictionary is usually absolutely useless for another set of pages.</p>
+<p>For large domains that are visited repeatedly the advantage is huge: at a cost of single dictionary download, all the following page views can be compressed with much higher efficiency. Currently we aware of Google and LinkedIn compressing content with SDCH.</p>
+<h3 id="sdchformillionsofdomains">SDCH for millions of domains</h3>
+<p>Here at CloudFlare our task is to support millions of domains, which have little in common, and creating a single SDCH dictionary is very difficult. Nevertheless better compression is important, because it produces smaller payloads, which result in content being delivered faster to our clients. That is why we set out to find that little something that is common to all the pages and to see if we could compress them further.</p>
+<p>Besides SDCH (which is only supported by the Chrome browser), the common compression methods over HTTP are gzip and DEFLATE. Some do not know it but the compression they perform is identical. The two formats differ in the content headers they use, with gzip having slightly larger headers, and the error detection function - gzip uses CRC32, whereas DEFLATE uses Adler32.</p>
+<p>Usually the servers opt to compress with gzip, however its cousin DEFLATE supports a neat feature called &quot;Preset Dictionary&quot;. This dictionary is not like the dictionary used by SDCH, in fact it is not a real dictionary. To understand how this &quot;dictionary&quot; can be used to our advantage, it is important to understand how the DEFLATE algorithm works.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/03/5510506796_dff8c07b64_z.jpg" alt=""><br>
+<small><a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://www.flickr.com/photos/crdot/5510506796/in/photolist-9oWMFS-5ZetrG-aB6EXd-7BFq6C-8bfuDz-8a7u13-8bfv1z-89PDmK-8a7uvj-8a4fbn-89STbj-5U3gbF-8a4fPH-8a7qPA-89PADp-7BFqLU-8a4fha-7A9GMJ-89SQaN-8biMCh-89PASH-89PCRT-8biMuU-8biM8j-89PCgx-8a7unY-89SSf3-49Vg4c-89PzPn-8a4e4B-89PziH-8biMRU-8a7uHq-ngPPhQ-nkCZTe-7TQ4Yj-8a7qhy-8biLH7-8a7rCW-8a4fp4-76ixPX-8a4fiH-7BFqow-eijkuy-8a7uDY-8a4aat-89Pzv8-89SQdU-nkDdYH-89Pzsp">image</a> by <a href="https://www.flickr.com/photos/crdot/">Caleb Roenigk</a></small></p>
+<p>The DEFLATE algorithm consists of two stages, first it performs the LZ77 algorithm, where it simply goes over the input, and replaces occurrences of previously encountered strings with (short) &quot;directions&quot; where the same string can be found in the previous input. The directions are a tuple of (length, distance), where distance tells how far back in the input the string was and length tells how many bytes were matched. The minimal length deflate will match is 3 (4 in the highly optimized implementation CloudFlare uses), the maximal length is 258, and the farthest distance back is 32KB.</p>
+<p>This is an illustration of the LZ77 algorithm:</p>
+<p>Input:</p>
+<style>
+table.centered {
+	margin-top: 20px;
+    margin-bottom: 20px;
+}
+table.centered tbody tr td {
+	text-align: center;
+    border: 1px solid black;
+}
+</style>
+<table class="centered" border="1" width="100%" align="center" cellspacing="0" cellpadding="0"><tbody><tr><td>L</td><td>i</td><td>t</td><td>t</td><td>l</td><td>e</td><td> </td><td>b</td><td>u</td><td>n</td><td>n</td><td>y</td><td ></td><td>F</td><td>o</td><td>o</td><td></td><td>F</td><td>o</td><td>o</td></tr>
+<tr><td></td><td>W</td><td>e</td><td>n</td><td>t</td><td></td><td>h</td><td>o</td><td>p</td><td>p</td><td>i</td><td>n</td><td>g</td><td></td><td>t</td><td>h</td><td>r</td><td>o</td><td>u</td><td>g</td></tr>
+<tr><td>h</td><td></td><td>t</td><td>h</td><td>e</td><td></td><td>f</td><td>o</td><td>r</td><td>e</td><td>s</td><td>t</td><td></td><td>S</td><td>c</td><td>o</td><td>o</td><td>p</td><td>i</td><td>n</td></tr>
+<tr><td>g</td><td></td><td>u</td><td>p</td><td></td><td>t</td><td>h</td><td>e</td><td></td><td>f</td><td>i</td><td>e</td><td>l</td><td>d</td><td></td><td>m</td><td>i</td><td>c</td><td>e</td><td></td></tr>
+<tr><td>A</td><td>n</td><td>d</td><td></td><td>b</td><td>o</td><td>p</td><td>p</td><td>i</td><td>n</td><td>g</td><td></td><td>t</td><td>h</td><td>e</td><td>m</td><td></td><td>o</td><td>n</td><td></td></tr>
+<tr><td>t</td><td>h</td><td>e</td><td></td><td>h</td><td>e</td><td>a</td><td>d</td><td></td><td>D</td><td>o</td><td>w</td><td>n</td><td ></td><td>c</td><td>a</td><td>m</td><td>e</td><td></td><td>t</td></tr>
+<tr><td>h</td><td>e</td><td></td><td>G</td><td>o</td><td>o</td><td>d</td><td></td><td>F</td><td>a</td><td>i</td><td>r</td><td>y</td><td>,</td><td></td><td>a</td><td>n</td><td>d</td><td ></td><td>s</td></tr>
+<tr><td>h</td><td>e</td><td></td><td>s</td><td>a</td><td>i</td><td>d</td><td></td><td>&quot;</td><td>L</td><td>i</td><td>t</td><td>t</td><td>l</td><td>e</td><td ></td><td>b</td><td>u</td><td>n</td><td>n</td></tr>
+<tr><td>y</td><td ></td><td>F</td><td>o</td><td>o</td><td></td><td>F</td><td>o</td><td>o</td><td></td><td>I</td><td></td><td>d</td><td>o</td><td>n</td><td>'</td><td>t</td><td></td><td>w</td><td>a</td></tr>
+<tr><td>n</td><td>t</td><td></td><td>t</td><td>o</td><td></td><td>s</td><td>e</td><td>e</td><td></td><td>y</td><td>o</td><td>u</td><td></td><td>S</td><td>c</td><td>o</td><td>o</td><td>p</td><td>i</td></tr>
+<tr><td>n</td><td>g</td><td></td><td>u</td><td>p</td><td></td><td>t</td><td>h</td><td>e</td><td></td><td>f</td><td>i</td><td>e</td><td>l</td><td>d</td><td></td><td>m</td><td>i</td><td>c</td><td>e</td></tr>
+<tr><td></td><td>A</td><td>n</td><td>d</td><td></td><td>b</td><td>o</td><td>p</td><td>p</td><td>i</td><td>n</td><td>g</td><td></td><td>t</td><td>h</td><td>e</td><td>m</td><td></td><td>o</td><td>n</td></tr>
+<tr><td></td><td>t</td><td>h</td><td>e</td><td></td><td>h</td><td>e</td><td>a</td><td>d</td><td>.</td><td>&quot;</td></tr></tbody></table>
+<p>Output (length tokens are blue, distance tokens are red):</p>
+<table class="centered" border="1" align="center" width="100%" cellspacing="0" cellpadding="0"><tbody>
+<tr><td>L</td><td>i</td><td>t</td><td>t</td><td>l</td><td>e</td><td ></td><td>b</td><td>u</td><td>n</td><td>n</td><td>y</td><td ></td><td>F</td><td>o</td><td>o</td><td><font color=blue>5</font></td><td><font color=red>4</font></td><td>W</td><td>e</td></tr>
+<tr><td>n</td><td>t</td><td ></td><td>h</td><td>o</td><td>p</td><td>p</td><td>i</td><td>n</td><td>g</td><td ></td><td>t</td><td>h</td><td>r</td><td>o</td><td>u</td><td>g</td><td>h</td><td><font color=blue>3</font></td><td><font color=red>8</font></td></tr>
+<tr><td>e</td><td ></td><td>f</td><td>o</td><td>r</td><td>e</td><td>s</td><td>t</td><td></td><td>S</td><td>c</td><td>o</td><td>o</td><td><font color=blue>5</font></td><td nowrap><font color=red>28</font></td><td>u</td><td>p</td><td><font color=blue>6</font></td><td nowrap><font color=red>23</font></td><td>i</td></tr>
+<tr><td>e</td><td>l</td><td>d</td><td ></td><td>m</td><td>i</td><td>c</td><td>e</td><td></td><td>A</td><td>n</td><td>d</td><td ></td><td>b</td><td><font color=blue>9</font></td><td nowrap><font color=red>58</font></td><td>e</td><td>m</td><td ></td><td>o</td></tr>
+<tr><td>n</td><td><font color=blue>5</font></td><td nowrap><font color=red>35</font></td><td>h</td><td>e</td><td>a</td><td>d</td><td ></td><td>D</td><td>o</td><td>w</td><td>n</td><td ></td><td>c</td><td>a</td><td>m</td><td>e</td><td><font color=blue>5</font></td><td nowrap><font color=red>19</font></td><td>G</td></tr>
+<tr><td>o</td><td>o</td><td>d</td><td ></td><td>F</td><td>a</td><td>i</td><td>r</td><td>y</td><td>,</td><td ></td><td>a</td><td><font color=blue>3</font></td><td nowrap><font color=red>55</font></td><td>s</td><td><font color=blue>3</font></td><td nowrap><font color=red>20</font></td><td>s</td><td>a</td><td>i</td></tr>
+<tr><td>d</td><td ></td><td>"</td><td>L</td><td nowrap><font color=blue>20</font></td><td nowrap><font color=red>149</font></td><td>I</td><td ></td><td>d</td><td>o</td><td>n</td><td>'</td><td>t</td><td ></td><td>w</td><td>a</td><td><font color=blue>3</font></td><td nowrap><font color=red>157</font></td><td>t</td><td>o</td></tr>
+<tr><td></td><td>s</td><td>e</td><td>e</td><td ></td><td>y</td><td>o</td><td>u</td><td nowrap><font color=blue>56</font></td><td nowrap><font color=red>141</font></td><td>.</td><td>&quot;</td></tr>
+</tbody></table>
+<p>DEFLATE managed to reduce the original text from 251 characters, to just 152 tokens! Those tokens are later compressed further by Huffman encoding, which is the second stage.</p>
+<p>How long and devotedly the algorithm searches for a string before it stops is defined by the compression level. For example with compression level 4 the algorithm will be happy to find a match of 16 bytes, whereas with level 9 it will attempt to look for the maximal 258 byte match. If a match was not found the algorithm outputs the input as is, uncompressed.</p>
+<p>Clearly at the beginning of the input, there can be no references to previous strings, and it is always uncompressed. Similarly the first occurrence of any string in the input will never be compressed. For example almost all HTML files start with the string &quot;&lt;!doctype html&gt;&lt;html &quot;, however in this string only the second HTML will be replaced with a match, and the rest of the string will remain uncompressed.</p>
+<p>To solve this problem the deflate dictionary effectively acts as an initial back reference for possible matches. So if we add the aforementioned string &quot;&lt;!doctype html&gt;&lt;html &quot; to the dictionary, the algorithm will be able to match it from the start, improving the compression ratio. And there are many more such strings that are used in any HTML page, which we can put in the dictionary to improve compression ratio. In fact the SPDY protocol uses this technique for HTTP header compression.</p>
+<p>To illustrate, lets compress the children’s song with the help of a 42 byte dictionary, containing the following: Little bunny Foo hopping forest Good Fairy. The compressed output will then be:</p>
+<table class="centered" border="1" align="center" width="100%" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td nowrap><font color=blue>17</font></td><td nowrap><font color=red>42</font></td><td><font color=blue>4</font></td><td><font color=red>4</font></td><td>W</td><td>e</td><td>n</td><td>t</td><td><font color=blue>9</font></td><td nowrap><font color=red>51</font></td><td>t</td><td>h</td><td></td><td>o</td><td>u</td><td>g</td><td>h</td><td><font color=blue>3</td><td><font color=red>8</td><td>e</td></tr>
+<tr>
+<td><font color=blue>8</font></td><td nowrap><font color=red>63</font></td><td>S</td><td>c</td><td>o</td><td>o</td><td><font color=blue>5</font></td><td nowrap><font color=red>28</font></td><td>u</td><td>p</td><td><font color=blue>6</font></td><td nowrap><font color=red>23</font></td><td>i</td><td>e</td><td>l</td><td>d</td><td ></td><td>m</td><td>i</td><td>c</td></tr>
+<tr>
+<td>e</td><td ></td><td>A</td><td>n</td><td>d</td><td ></td><td>b</td><td><font color=blue>9</font></td><td nowrap><font color=red>58</font></td><td>e</td><td>m</td><td ></td><td>o</td><td>n</td><td><font color=blue>5</font></td><td nowrap><font color=red>35</font></td><td>h</td><td>e</td><td>a</td><td>d</td></tr>
+<tr>
+<td ></td><td>D</td><td>o</td><td>w</td><td>n</td><td ></td><td>c</td><td>a</td><td>m</td><td>e</td><td><font color=blue>5</font></td><td nowrap><font color=red>19</font></td><td nowrap><font color=blue>10</font></td><td nowrap><font color=red>133</font></td><td>,</td><td>a</td><td><font color=blue>3</font></td><td nowrap><font color=red>55</font></td><td>s</td><td><font color=blue>3</font></td></tr>
+<tr>
+<td nowrap><font color=red>20</font></td><td>s</td><td>a</td><td>i</td><td>d</td><td ></td><td>&quot;</td><td nowrap><font color=blue>21</font></td><td nowrap><font color=red>149</font></td><td>I</td><td ></td><td>d</td><td>o</td><td>n</td><td>'</td><td>t</td><td ></td><td>w</td><td>a</td><td><font color=blue>3</font></td></tr>
+<tr>
+<td nowrap><font color=red>157</font></td><td>t</td><td>o</td><td ></td><td>s</td><td>e</td><td>e</td><td ></td><td>y</td><td>o</td><td>u</td><td nowrap><font color=blue>56</font></td><td nowrap><font color=red>141</font></td><td>.</td><td>&quot;</td><td ></td><td ></td><td ></td><td ></td><td></td></tr>
+</tbody>
+</table>
+<p>Now, even strings at the very beginning of the input are compressed and strings that only appear once in the file are compressed as well. With the help of the dictionary we are down to 115 tokens. That means roughly 25% better compression rate.</p>
+<h2 id="anexperiment">An experiment</h2>
+<p>We wanted to see if we could make a dictionary that would benefit ALL the HTML pages we serve, and not just a specific domain. To that end we scanned over 20,000 publicly available random HTML pages that passed through our servers on a random sunny day, we took the first 16KB of each page, and used them to prepare two dictionaries, one of 16KB and the other of 32KB. Using a larger dictionary is useless, because then it would be larger than the LZ77 window used by deflate.</p>
+<p>To build a dictionary, I made a little go program that takes a set of files and performs &quot;pseudo&quot; LZ77 over them, finding strings that DEFLATE would not compress in the first 16KB of each input file. It then performs a frequency count of the individual strings, and scores them according to their length and frequency. In the end the highest scoring strings are saved into the dictionary file.</p>
+<p>Our benchmark consists of another set of pages obtained in similar manner. The number of benchmarked files was about 19,000 with total size of 563MB.</p>
+<table class="centered" border="1" align="center" cellspacing="0" cellpadding="0" width="100%"> 
+<tbody>
+<tr>
+<td></td>
+<td>deflate -4</td>
+<td>deflate -9</td>
+<td>deflate -4 + 16K dict</td>
+<td>deflate -9 + 16K dict</td>
+<td>deflate -4 + 32K dict</td>
+<td>deflate -9 + 32K dict</td>
+</tr>
+<tr>
+<td>Size (KB)</td>
+<td>169,176</td>
+<td>166,012</td>
+<td>161,896</td>
+<td>158,352</td>
+<td>161,212</td>
+<td>157,444</td>
+</tr>
+<tr>
+<td>Time (sec)</td>
+<td>6.90</td>
+<td>11.56</td>
+<td>7.15</td>
+<td>11.80</td>
+<td>7.88</td>
+<td>11.82</td>
+</tr>
+</tbody>
+</table>
+<p>We can see from the results that the compression we gain for level 4 is almost 5% better than without the dictionary, which is even greater than the compression gained by using level 9 compression, while being substantially faster. For level 9, the gain is greater than 5% without a significant performance hit.</p>
+<p>The results highly depend on the dataset used for the dictionary and on the compressed pages. For example when making a dicitonary aimed at a specific web site, the compression rate for that site increased by up to 30%.</p>
+<p>For very small pages, such as error pages, with size less than 1KB, a DEFLATE dictionary was able to gain compression rates of up to 50% smaller than DEFLATE alone.</p>
+<p>Of course different dictionaries may be used for different file types. In fact we think that it would make sense to create a standard set of dictionaries that could be used accross the web.</p>
+<p>The utility to make a dictionary for deflate can be found at <a href="https://github.com/vkrasnov/dictator">https://github.com/vkrasnov/dictator</a>.<br>
+The optimized version of zlib used by CloudFlare can be found at <a href="https://github.com/cloudflare/zlib">https://github.com/cloudflare/zlib</a></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/google/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Google</a>
+        <a href="/tag/optimization/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Optimization</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/compression/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Compression</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-09-19T14:04:00+01:00">September 19, 2017 2:04PM</p>
+        <a href="/cloudflare-and-google-offer-app-developers-100k/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare and Google Offer App Developers $100,000 in Cloud Platform Credits</h2>
+        </a>
+
+        <p class="gray1 lh-copy">When Cloudflare started, our company needed two things: an initial group of users, and the finances to fund our development....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alonso-bustamante/" class="fw5 f2 black no-underline">Alonso Bustamante</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/google/" class="no-underline f1 fw2 blue3 underline-hover">Google</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cloudflare-apps/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Apps</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-03-08T00:44:00Z">March 08, 2017 12:44AM</p>
+        <a href="/cloudflare-at-google-next-2017/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare at Google NEXT 2017</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The Cloudflare team is headed to Google NEXT 2017 from March 8th - 10th at Moscone Center in San Francisco, CA. We’re excited to meet with customers, partners, and new friends....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/brady-gentile/" class="fw5 f2 black no-underline">Brady Gentile</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/google/" class="no-underline f1 fw2 blue3 underline-hover">Google</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/events/" class="no-underline f1 fw2 blue3 underline-hover">Events</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/life-at-cloudflare/" class="no-underline f1 fw2 blue3 underline-hover">Life @ Cloudflare</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/growth/" class="no-underline f1 fw2 blue3 underline-hover">Growth</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-02-16T21:52:49Z">February 16, 2017 9:52PM</p>
+        <a href="/you-can-now-use-google-authenticator/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">You can now use Google Authenticator and any TOTP app for Two-Factor Authentication</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Since the very beginning, Cloudflare has offered two-factor authentication with Authy, and starting today we are expanding your options to keep your account safe with Google Authenticator and any Time-based One Time Password (TOTP) app of your choice....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/evan-johnson/" class="fw5 f2 black no-underline">Evan Johnson</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/google/" class="no-underline f1 fw2 blue3 underline-hover">Google</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/2fa/" class="no-underline f1 fw2 blue3 underline-hover">2FA</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/authy/" class="no-underline f1 fw2 blue3 underline-hover">Authy</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-05-08T11:02:55+01:00">May 08, 2015 11:02AM</p>
+        <a href="/google-pagespeed-service-customers-migrate-to-cloudflare-for-acceleration/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Google PageSpeed Service customers: migrate to CloudFlare for acceleration</h2>
+        </a>
+
+        <p class="gray1 lh-copy">This week, Google announced that its hosted PageSpeed Service will be shut down. Everyone using the hosted service needs to move their site elsewhere before August 3 2015 to avoid breaking their website....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-roberts/" class="fw5 f2 black no-underline">John Roberts</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/google/" class="no-underline f1 fw2 blue3 underline-hover">Google</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed/" class="no-underline f1 fw2 blue3 underline-hover">Speed</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

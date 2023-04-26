@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Diving into /proc/[pid]/mem</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="A few months ago, after reading about Cloudflare doubling its intern class, I quickly dusted off my CV and applied for an internship. Long story short: now, a couple of months later, I found myself staring at Linux kernel code and adding a pretty cool feature to gVisor." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/diving-into-proc-pid-mem/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Diving into /proc/[pid]/mem" />
+    <meta property="og:description" content="A few months ago, after reading about Cloudflare doubling its intern class, I quickly dusted off my CV and applied for an internship. Long story short: now, a couple of months later, I found myself staring at Linux kernel code and adding a pretty cool feature to gVisor." />
+    <meta property="og:url" content="https://blog.cloudflare.com/diving-into-proc-pid-mem/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/10/image2-27.png" />
+    <meta property="article:published_time" content="2020-10-27T12:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-10-27T12:25:46.000Z" />
+    <meta property="article:tag" content="Deep Dive" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Linux" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Diving into /proc/[pid]/mem" />
+    <meta name="twitter:description" content="A few months ago, after reading about Cloudflare doubling its intern class, I quickly dusted off my CV and applied for an internship. Long story short: now, a couple of months later, I found myself staring at Linux kernel code and adding a pretty cool feature to gVisor." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/diving-into-proc-pid-mem/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/10/image2-27.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Lennart Espe" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Deep Dive, Programming, Linux" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Lennart Espe",
+        "image": "https://blog.cloudflare.com/content/images/2020/10/PHOTO-2019-11-09-21-17-57-copy.jpg",
+        "url": "https://blog.cloudflare.com/author/lennart/",
+        "sameAs": []
+    },
+    "headline": "Diving into /proc/[pid]/mem",
+    "url": "https://blog.cloudflare.com/diving-into-proc-pid-mem/",
+    "datePublished": "2020-10-27T12:00:00.000Z",
+    "dateModified": "2020-10-27T12:25:46.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/10/image2-27.png",
+    "keywords": "Deep Dive, Programming, Linux",
+    "description": "A few months ago, after reading about Cloudflare doubling its intern class, I quickly dusted off my CV and applied for an internship. Long story short: now, a couple of months later, I found myself staring at Linux kernel code and adding a pretty cool feature to gVisor.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-deep-dive tag-programming tag-linux sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-deep-dive tag-programming tag-linux ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Diving into /proc/[pid]/mem</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-10-27T12:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">October 27, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/lennart/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2020/10/PHOTO-2019-11-09-21-17-57-copy.jpg" alt="Lennart Espe" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/lennart" class="fw5 f3 no-underline black mr3">Lennart Espe</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/10/image3-25.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>A few months ago, after reading about <a href="https://blog.cloudflare.com/cloudflare-doubling-size-of-2020-summer-intern-class/">Cloudflare doubling its intern class size</a>, I quickly dusted off my CV and applied for an internship. Long story short: now, a couple of months later, I found myself staring into Linux kernel code and adding a pretty cool feature <a href="https://gvisor.dev/">to gVisor, a Linux container runtime</a>.</p>
+<p>My internship was under the Emerging Technologies and Incubation group on a project involving gVisor. A co-worker contacted my team about not being able to read the debug symbols of stack traces inside the sandbox. For example, when the isolated process crashed, this is what we saw in the logs:</p>
+<pre><code>*** Check failure stack trace: ***
+    @     0x7ff5f69e50bd  (unknown)
+    @     0x7ff5f69e9c9c  (unknown)
+    @     0x7ff5f69e4dbd  (unknown)
+    @     0x7ff5f69e55a9  (unknown)
+    @     0x5564b27912da  (unknown)
+    @     0x7ff5f650ecca  (unknown)
+    @     0x5564b27910fa  (unknown)
+</code></pre>
+<p>Obviously, this wasn't very useful. I eagerly volunteered to fix this stack unwinding code - how hard could it be?</p>
+<p>After some debugging, we found that the logging library used in the project opened <code>/proc/self/mem</code> to look for ELF headers at the start of each memory-mapped region. This was necessary to calculate an offset to find the correct addresses for debug symbols.</p>
+<p>It turns out this mechanism is rather common. The stack unwinding code is often run in weird contexts - like a SIGSEGV handler - so it would not be appropriate to dig over real memory addresses back and forth to read the ELF. This could trigger another SIGSEGV. And SIGSEGV inside a SIGSEGV handler means either termination via the default handler for a segfault or recursing into the same handler again and again (if one sets <code>SA_NODEFER</code>) leading to a stack overflow.</p>
+<p>However, inside gVisor, each call of <code>open()</code> on <code>/proc/self/mem</code> resulted in <code>ENOENT</code>, because the entire <code>/proc/self/mem</code> file was missing. In order to provide a robust sandbox, gVisor has to carefully reimplement the Linux kernel interfaces. This particular <code>/proc</code> file was simply unimplemented in the virtual file system of Sentry, one of gVisor's sandboxing components.<br>
+<a href="https://blog.cloudflare.com/author/marek-majkowski/">Marek</a> asked the devs on the project chat and got confirmation - they would be happy to accept a patch implementing this file.<br>
+<img src="https://blog.cloudflare.com/content/images/2020/10/image1-39.png" alt="image1-39"></p>
+<p>The easy way out would have been to make a small, local patch to the unwinder behavior, yet I found myself diving into the Linux kernel trying to figure how the <code>mem</code> file worked in an attempt to implement it in Sentry's VFS.</p>
+<h2 id="whatdoesprocpidmemdo">What does <code>/proc/[pid]/mem</code> do?</h2>
+<p>The file itself is quite powerful, because it allows raw access to the virtual address space of a process. <a href="https://man7.org/linux/man-pages/man5/proc.5.html">According to manpages</a>, the documented file operations are <code>open()</code>, <code>read()</code> and <code>lseek()</code>. Typical use cases are debugging tasks or dumping process memory.</p>
+<h2 id="openingthefile">Opening the file</h2>
+<p>When a process wants to open the file, the kernel does the file permissions check, looks up the associated operations for <code>mem</code> and invokes a method called <code>proc_mem_open</code>. It retrieves the associated task and <a href="https://elixir.bootlin.com/linux/v5.9/source/include/linux/sched/mm.h#L119">calls a method named <code>mm_access</code></a>.</p>
+<pre><code class="language-C">/*
+ * Grab a reference to a task's mm, if it is not already going away
+ * and ptrace_may_access with the mode parameter passed to it
+ * succeeds.
+ */
+</code></pre>
+<p>Seems relatively straightforward, right? The special thing about <code>mm_access</code> is that it verifies the permissions the current task has regarding the task to which the memory belongs. If the current task and target task do not share the same memory manager, the kernel <a href="https://elixir.bootlin.com/linux/v5.9/source/kernel/ptrace.c#L293">invokes a method named <code>__ptrace_may_access</code></a>.</p>
+<pre><code class="language-C">/*
+ * May we inspect the given task?
+ * This check is used both for attaching with ptrace
+ * and for allowing access to sensitive information in /proc.
+ *
+ * ptrace_attach denies several cases that /proc allows
+ * because setting up the necessary parent/child relationship
+ * or halting the specified task is impossible.
+ *
+ */
+</code></pre>
+<p><a href="https://man7.org/linux/man-pages/man5/proc.5.html">According to the manpages</a>, a process which would like to read from an unrelated <code>/proc/[pid]/mem</code> file should have access mode <a href="https://man7.org/linux/man-pages/man2/ptrace.2.html"><code>PTRACE_MODE_ATTACH_FSCREDS</code></a>. This check does not verify that a process is attached via <code>PTRACE_ATTACH</code>, but rather if it has the permission to attach with the specified credentials mode.</p>
+<h2 id="accesschecks">Access checks</h2>
+<p>After skimming through the function, you will see that a process is allowed access if the current task belongs to the same thread group as the target task, or denied access (depending on whether <code>PTRACE_MODE_FSCREDS</code> or <code>PTRACE_MODE_REALCREDS</code> is set, we will use either the file-system UID / GID, which is typically the same as the effective UID/GID, or the real UID / GID) if none of the following conditions are met:</p>
+<ul>
+<li>the current task's credentials (UID, GID) match up with the credentials (real, effective and saved set-UID/GID) of the target process</li>
+<li>the current task has <code>CAP_SYS_PTRACE</code> inside the user namespace of the target process</li>
+</ul>
+<p>In the next check, access is denied if the current task has neither <code>CAP_SYS_PTRACE</code> inside the user namespace of the target task, nor the target's dumpable attribute is set to <code>SUID_DUMP_USER</code>. <a href="https://man7.org/linux/man-pages/man2/prctl.2.html">The dumpable attribute</a> is typically required to allow producing core dumps.</p>
+<p>After these three checks, we also go through the commoncap Linux Security Module (and other LSMs) to verify our access mode is fine. LSMs you may know are SELinux and AppArmor. The commoncap LSM performs the checks on the basis of effective or permitted process capabilities (depending on the mode being <code>FSCREDS</code> or <code>REALCREDS</code>), allowing access if</p>
+<ul>
+<li>the capabilities of the current task are a superset of the capabilities of the target task, or</li>
+<li>the current task has <code>CAP_SYS_PTRACE</code> in the target task's user namespace</li>
+</ul>
+<p>In conclusion, one has access (with only commoncap LSM checks active) if:</p>
+<ul>
+<li>the current task is in the same task group as the target task, or</li>
+<li>the current task has <code>CAP_SYS_PTRACE</code> in the target task's user namespace, or</li>
+<li>the credentials of the current and target task match up in the given credentials mode, the target task is dumpable, they run in the same user namespace and the target task's capabilities are a subset of the current task's capabilities</li>
+</ul>
+<p>I highly recommend reading through the <a href="https://www.man7.org/linux/man-pages/man2/ptrace.2.html">ptrace manpages</a> to dig deeper into the different modes, options and checks.</p>
+<h2 id="readingfromthefile">Reading from the file</h2>
+<p>Since all the access checks occur when opening the file, reading from it is quite straightforward. When one invokes <code>read()</code> on a <code>mem</code> file, <a href="https://elixir.bootlin.com/linux/v5.9/source/fs/proc/base.c#L835">it calls up <code>mem_rw</code></a> (which actually can do both reading and writing).</p>
+<p>To avoid using lots of memory, <code>mem_rw</code> performs the copy in a loop and buffers the data in an intermediate page. <code>mem_rw</code> has a hidden superpower, that is, it uses <code>FOLL_FORCE</code> to avoid permission checks on user-owned pages (handling pages marked as non-readable/non-writable readable and writable).</p>
+<p><code>mem_rw</code> has other specialties, such as its error handling. Some interesting cases are:</p>
+<ul>
+<li>if the target task has exited after opening the file descriptor, performing <code>read()</code> will always succeed with reading 0 bytes</li>
+<li>if the initial copy from the target task's memory to the intermediate page fails, it does not always return an error but only if no data has been read</li>
+</ul>
+<p>You can also perform <code>lseek</code> on the file excluding <code>SEEK_END</code>.</p>
+<h2 id="howitworksingvisor">How it works in gVisor</h2>
+<p>Luckily, gVisor already implemented <code>ptrace_may_access</code> as <code>kernel.task.CanTrace</code>, so one can avoid reimplementing all the ptrace access logic. However, <a href="https://cs.opensource.google/gvisor/gvisor/+/master:pkg/sentry/kernel/ptrace.go;l=105;bpv=0;bpt=1">the implementation in gVisor</a> is less complicated due to the lack of support for <code>PTRACE_MODE_FSCREDS</code> (which is <a href="https://gvisor.dev/issue/260">still an open issue</a>).</p>
+<p>When a new file descriptor is <code>open()</code>ed, the <code>GetFile</code> method of the virtual Inode is invoked, therefore this is where the access check naturally happens. After a successful access check, the <a href="https://pkg.go.dev/gvisor.dev/gvisor/pkg/sentry/fs#File">method returns a <code>fs.File</code></a>. The <code>fs.File</code> implements all the file operations you would expect such as <code>Read()</code> and <code>Write()</code>. gVisor also provides tons of primitives for quickly building a working file structure so that one does not have to reimplement a generic <code>lseek()</code> for example.</p>
+<p>In case a task invokes a <code>Read()</code> call onto the <code>fs.File</code>, the <code>Read</code> method retrieves the memory manager of the file’s Task.<br>
+<a href="https://pkg.go.dev/gvisor.dev/gvisor/pkg/sentry/mm#MemoryManager">Accessing the task's memory manager</a> is a breeze with comfortable <code>CopyIn</code> and <code>CopyOut</code> methods, with interfaces similar to <code>io.Writer</code> and <code>io.Reader</code>.</p>
+<p>After implementing all of this, we finally got a useful stack trace.</p>
+<pre><code>*** Check failure stack trace: ***
+    @     0x7f190c9e70bd  google::LogMessage::Fail()
+    @     0x7f190c9ebc9c  google::LogMessage::SendToLog()
+    @     0x7f190c9e6dbd  google::LogMessage::Flush()
+    @     0x7f190c9e75a9  google::LogMessageFatal::~LogMessageFatal()
+    @     0x55d6f718c2da  main
+    @     0x7f190c510cca  __libc_start_main
+    @     0x55d6f718c0fa  _start
+</code></pre>
+<h2 id="conclusion">Conclusion</h2>
+<p>A comprehensive victory! The <code>/proc/&lt;pid&gt;/mem</code> file is an important mechanism that gives insight into contents of process memory. It is essential to stack unwinders to do their work in case of complicated and unforeseeable failures. Because the process memory contains highly-sensitive information, data access to the file is determined by a complex set of poorly documented rules. With a bit of effort, you can emulate <code>/proc/[PID]/mem</code> inside gVisor’s sandbox, where the process only has access to the subset of procfs that has been implemented by the gVisor authors and, as a result, you can have access to an easily readable stack trace in case of a crash.</p>
+<p><a href="https://github.com/google/gvisor/pull/4060">Now I can't wait to get the PR merged into gVisor.</a></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/deep-dive/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Deep Dive</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-09T12:00:00+01:00">September 09, 2020 12:00PM</p>
+        <a href="/unimog-cloudflares-edge-load-balancer/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Unimog - Cloudflare’s edge load balancer</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Unimog is the Layer 4 Load Balancer for Cloudflare’s edge data centers.  This post explains the problems it solves and how it works....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/david-wragg/" class="fw5 f2 black no-underline">David Wragg</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/loadbalancing/" class="no-underline f1 fw2 blue3 underline-hover">Load Balancing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/edge/" class="no-underline f1 fw2 blue3 underline-hover">Edge</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/availability/" class="no-underline f1 fw2 blue3 underline-hover">Availability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-06-18T12:56:33+01:00">June 18, 2020 12:56PM</p>
+        <a href="/why-is-there-a-v-in-sigsegv-segmentation-fault/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Why is there a &quot;V&quot; in SIGSEGV Segmentation Fault?</h2>
+        </a>
+
+        <p class="gray1 lh-copy">My program received a SIGSEGV signal and crashed with "Segmentation Fault" message. Where does the "V" come from?  Did I read it wrong? Was there a "Segmentation *V*ault?"? Or did Linux authors make a mistake? Shouldn't the signal be named SIGSEGF?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/david-wragg/" class="fw5 f2 black no-underline">David Wragg</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/unix/" class="no-underline f1 fw2 blue3 underline-hover">UNIX</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-05-06T12:00:00+01:00">May 06, 2020 12:00PM</p>
+        <a href="/cloudflare-bot-management-machine-learning-and-more/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare Bot Management: machine learning and more</h2>
+        </a>
+
+        <p class="gray1 lh-copy">This is the ongoing story of Bot Management at Cloudflare and also an introduction to a series of blog posts about the detection mechanisms powering it...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-bocharov/" class="fw5 f2 black no-underline">Alex Bocharov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/bot-management/" class="no-underline f1 fw2 blue3 underline-hover">Bot Management</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/bots/" class="no-underline f1 fw2 blue3 underline-hover">Bots</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/machine-learning/" class="no-underline f1 fw2 blue3 underline-hover">Machine Learning</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-03-05T13:00:00Z">March 05, 2020 1:00PM</p>
+        <a href="/the-history-of-the-url/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The History of the URL</h2>
+        </a>
+
+        <p class="gray1 lh-copy">On the 11th of January 1982 twenty-two computer scientists met to discuss an issue with ‘computer mail’ (now known as email). Attendees included the guy who would create Sun Microsystems, the guy who made Zork, the NTP guy, and the guy who convinced the government to pay for Unix....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/zack-bloom/" class="fw5 f2 black no-underline">Zack Bloom</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/history/" class="no-underline f1 fw2 blue3 underline-hover">History</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

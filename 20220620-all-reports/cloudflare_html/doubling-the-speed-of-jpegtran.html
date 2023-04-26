@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Doubling the speed of jpegtran with SIMD</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/doubling-the-speed-of-jpegtran/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Doubling the speed of jpegtran with SIMD" />
+    <meta property="og:description" content="It is no secret that at CloudFlare we put a great effort into accelerating our customers&#x27; websites. One way to do it is to reduce the size of the images on the website. This is what our Polish product is for." />
+    <meta property="og:url" content="https://blog.cloudflare.com/doubling-the-speed-of-jpegtran/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2017/10/print_poster_0025.jpg" />
+    <meta property="article:published_time" content="2015-10-08T10:10:41.000Z" />
+    <meta property="article:modified_time" content="2018-08-24T20:59:57.000Z" />
+    <meta property="article:tag" content="Speed" />
+    <meta property="article:tag" content="Polish" />
+    <meta property="article:tag" content="Open Source" />
+    <meta property="article:tag" content="Optimization" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Doubling the speed of jpegtran with SIMD" />
+    <meta name="twitter:description" content="It is no secret that at CloudFlare we put a great effort into accelerating our customers&#x27; websites. One way to do it is to reduce the size of the images on the website. This is what our Polish product is for." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/doubling-the-speed-of-jpegtran/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2017/10/print_poster_0025.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Vlad Krasnov" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Speed, Polish, Open Source, Optimization, Speed &amp; Reliability, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Vlad Krasnov",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/165e069.jpg",
+        "url": "https://blog.cloudflare.com/author/vlad-krasnov/",
+        "sameAs": []
+    },
+    "headline": "Doubling the speed of jpegtran with SIMD",
+    "url": "https://blog.cloudflare.com/doubling-the-speed-of-jpegtran/",
+    "datePublished": "2015-10-08T10:10:41.000Z",
+    "dateModified": "2018-08-24T20:59:57.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2017/10/print_poster_0025.jpg",
+    "keywords": "Speed, Polish, Open Source, Optimization, Speed & Reliability, Programming",
+    "description": "It is no secret that at CloudFlare we put a great effort into accelerating our customers&#x27; websites. One way to do it is to reduce the size of the images on the website. This is what our Polish product is for. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-speed tag-polish tag-open-source tag-optimization tag-speed-and-reliability tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-speed tag-polish tag-open-source tag-optimization tag-speed-and-reliability tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Doubling the speed of jpegtran with SIMD</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2015-10-08T11:10:41+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">October 08, 2015 11:10AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/vlad-krasnov/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/165e069.jpg" alt="Vlad Krasnov" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/vlad-krasnov" class="fw5 f3 no-underline black mr3">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>It is no secret that at CloudFlare we put a great effort into accelerating our customers' websites. One way to do it is to reduce the size of the images on the website. This is what our <a href="https://blog.cloudflare.com/introducing-polish-automatic-image-optimizati/">Polish</a> product is for. It takes various images and makes them smaller using open source tools, such as jpegtran, gifsicle and pngcrush.</p>
+<p>However those tools are computationally expensive, and making them go faster, makes our servers go faster, and subsequently our customers' websites as well.</p>
+<p>Recently, I noticed that we spent ten times as much time &quot;polishing&quot; jpeg images as we do when polishing pngs.</p>
+<p>We already improved the performance of <a href="https://github.com/cloudflare/pngcrush">pngcrush</a> by using our supercharged version of <a href="https://blog.cloudflare.com/cloudflare-fights-cancer/">zlib</a>. So it was time to look what can be done for jpegtran (part of the <a href="http://www.ijg.org/">libjpeg</a> distribution).</p>
+<h3 id="quickprofiling">Quick profiling</h3>
+<p>To get fast results I usually use the Linux perf utility. It gives a nice, if simple, view of the hotspots in the code. I used this image for my benchmark.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/10/print_poster_0025.jpg" alt=""><small><a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> <a href="http://www.eso.org/public/products/print_posters/print_poster_0025/">image</a> by <a href="http://www.eso.org/">ESO</a></small></p>
+<p><code>perf record ./jpegtran -outfile /dev/null -progressive -optimise -copy none test.jpeg </code></p>
+<p>And we get:</p>
+<p><code>perf report </code><br>
+<code>54.90%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_refine </code><br>
+<code>28.58%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_first </code></p>
+<p>Wow. That is 83.5% of the time spent in just two functions! A quick look suggested that both functions deal with Huffman coding of the jpeg image. That is a fairly simple compression technique where frequently occurring characters are replaced with short encodings, and rare characters get longer encodings.</p>
+<p>The time elapsed for the tested file was 6 seconds.</p>
+<h3 id="wheretostart">Where to start?</h3>
+<p>First let's look at the most used function, <em>encode_mcu_AC_refine</em>. It is the heaviest function, and therefore optimizing it would benefit us the most.</p>
+<p>The function has two loops. The first loop:</p>
+<pre><code>for (k = cinfo-&gt;Ss; k &lt;= Se; k++) {
+    temp = (*block)[natural_order[k]];
+    if (temp &lt; 0)
+      temp = -temp;      /* temp is abs value of input */
+    temp &gt;&gt;= Al;         /* apply the point transform */
+    absvalues[k] = temp; /* save abs value for main pass */
+    if (temp == 1)
+      EOB = k;           /* EOB = index of last newly-nonzero coef */
+  }
+</code></pre>
+<p>This loop iterates over one array (<em>natural_order</em>), reads indices that it uses to read from *<em>block</em> into <em>temp</em>, computes the absolute value of <em>temp</em>, and shifts it to the right by some value. In addition it keeps the <em>EOB</em> variable pointing to the last value of the index for which <em>temp</em> was <em>1</em>.</p>
+<p>Generally looping over an array is the schoolbook exercise for SIMD (Single Instruction Multiple Data) instructions, however in this case we have two problems: 1) Indirect indices are hard for SIMD 2) Keeping the <em>EOB</em> value updated.</p>
+<h3 id="optimizing">Optimizing</h3>
+<p>The first problem can not be solved on the function level. While Haswell introduced the new Gather instructions, that allow loading data using indices, those instructions are still slow, and more importantly they operate only on 32-bit and 64-bit values. We are dealing with 16-bit values here.</p>
+<p>Our only option is therefore to load all the values sequentially. One SIMD XMM register is 128-bits wide and can hold eight 16-bit integers, therefore we will load eight values each iteration of the loop. (Note: we could also choose to use 256-bit wide YMM registers here, but that would only work on the newest CPUs, while gaining little performance).</p>
+<pre><code>    __m128i x1 = _mm_setzero_si128(); // Load 8 16-bit values sequentially
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+0]], 0);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+1]], 1);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+2]], 2);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+3]], 3);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+4]], 4);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+5]], 5);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+6]], 6);
+    x1 = _mm_insert_epi16(x1, (*block)[natural_order[k+7]], 7);
+</code></pre>
+<p>What you see above are intrinsic functions. Such intrinsics usually map to a specific CPU instruction. By using intrinsics we can integrate high performance code inside a C function, without writing assembly code. Usually they give more than enough flexibility and performance. The <em>__m128i</em> type corresponds to a 128-bit XMM register.</p>
+<p>Performing the transformation is straightforward:</p>
+<pre><code>    x1 = _mm_abs_epi16(x1);        // Get absolute value of 16-bit integers
+    x1 = _mm_srli_epi16(x1, Al);   // &gt;&gt; 16-bit integers by Al bits
+    _mm_storeu_si128((__m128i*)&amp;absvalues[k], x1); // Store
+</code></pre>
+<p>As you can see we only need two instructions to perform the simple transformation on eight values, and no branch is required as a bonus.</p>
+<p>The next tricky part is to update <em>EOB</em>, so it points to the last nonzero index. For that we need to find the index of the highest nonzero value inside <em>x1</em>, and if there is one update <em>EOB</em> accordingly.</p>
+<p>We can easily compare all the values inside x1 to one:</p>
+<pre><code>    x1 = _mm_cmpeq_epi16(x1, _mm_set1_epi16(1));  // Compare to 1
+</code></pre>
+<p>The result of this operation is a mask. For all equal values all bits are set to 1 and for all non-equal values all bits are cleared to 0. However, how do we find the highest index whose bits are all ones? Well, there is an instruction that extracts the top bit of each byte inside an <em>__m128i</em> value, and puts it into a regular integer. From there we can find the index by finding the top set bit in that integer:</p>
+<pre><code>    unsigned int idx = _mm_movemask_epi8(x1);        // Extract byte mask
+    EOB = idx? k + 16 - __builtin_clz(idx)/2 : EOB;  // Compute index
+</code></pre>
+<p>That is it. EOB will be updated correctly.</p>
+<p>What does that simple optimization give us? Running jpegtran again shows that the same image now takes 5.2 seconds! That is a 1.15x speedup right there. But no reason to stop now.</p>
+<h3 id="keepgoing">Keep going</h3>
+<p>Next the loop iterates over the array we just prepared (<em>absvalues</em>). At the beginning of the loop we see:</p>
+<pre><code>  if ((temp = absvalues[k]) == 0) {
+      r++;
+      continue;
+    }
+</code></pre>
+<p>So it simply skips all the 0 values in the array, until it finds a nonzero value. Is it worth optimizing? Running a quick test, I found out that it is common to have long sequences of zero values. And iterating over them individually can be expensive. Let's try our previous method of finding the top nonzero element in an array here:</p>
+<pre><code>    __m128i t = _mm_loadu_si128((__m128i*)&amp;absvalues[k]);
+    t = _mm_cmpeq_epi16(t, _mm_setzero_si128()); // Compare to 0
+    int idx = _mm_movemask_epi8(t);              // Extract byte mask
+    if (idx == 0xffff) {                         // If all the values are zero skip them all
+      r += 8;
+      k += 8;
+      continue;
+    } else {             // If some are nonzero, skip up to the first nonzero
+      int skip = __builtin_ctz(~idx)/2;
+      r += skip;
+      k += skip;
+      if (k&gt;Se) break;   // Stop if gone too far
+    }
+    temp = absvalues[k]; // Load the first nonzero value
+</code></pre>
+<p>What do we get now? Our test image now takes only 3.7 seconds. We are already at 1.62x speedup.</p>
+<p>And what does perf show?</p>
+<p><code>45.94%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_first </code><br>
+<code>28.73%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_refine </code></p>
+<p>We can see that the tables have turned. Now <em>encode_mcu_AC_first</em> is the slower function of the two, and takes almost 50% of the time.</p>
+<h3 id="moaroptimizations">Moar optimizations!</h3>
+<p>Looking at <em>encode_mcu_AC_first</em> we see one loop, that performs similar operations as the function we already optimized. Why not reuse the optimizations we already know are good?</p>
+<p>We shall split the one big loop into two smaller loops, one would perform the required transformations, and store them into auxiliary arrays, the other would read those values skipping the zero entries.</p>
+<p>Note that transformations are a little different now:</p>
+<pre><code>  if (temp &lt; 0) {
+      temp = -temp;
+      temp &gt;&gt;= Al;
+      temp2 = ~temp;
+    } else {
+      temp &gt;&gt;= Al;
+      temp2 = temp;
+    }
+</code></pre>
+<p>The equivalent for SIMD would be:</p>
+<pre><code>    __m128i neg = _mm_cmpgt_epi16(_mm_setzero_si128(), x1);// Negative mask
+    x1 = _mm_abs_epi16(x1);                                // Absolute value
+    x1 = _mm_srli_epi16(x1, Al);                           // &gt;&gt;
+    __m128i x2 = _mm_andnot_si128(x1, neg);                // Invert x1, and apply negative mask
+    x2 = _mm_xor_si128(x2, _mm_andnot_si128(neg, x1));     // Apply non-negative mask
+</code></pre>
+<p>And skipping zero values is performed in the same manner as before.</p>
+<p>Measuring the performance now gives as 2.65 seconds for the test image! And that is 2.25X faster than the original jpegtran.</p>
+<h3 id="conclusions">Conclusions</h3>
+<p>Let's take a final look at the perf output:</p>
+<p><code>40.78%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_refine </code><br>
+<code>26.01%  lt-jpegtran  libjpeg.so.9.1.0   [.] encode_mcu_AC_first </code></p>
+<p>We can see that the two functions we optimized still take a significant portion of the execution. But now it is just 67% of the entire program. If you are asking yourself how we got 2.25X speedup with those functions going from 83.5% to 67%, read about the <a href="https://en.wikipedia.org/wiki/Potato_paradox">Potato Paradox</a>.</p>
+<p>It is definitely worth making further optimizations here. But it might be better looking outside the functions into how the data is arranged and passed around.</p>
+<p>The bottom line is: optimizing code is fun, and using SIMD instructions can give you significant boost. Such as in this case.</p>
+<p>We at CloudFlare make sure that our servers run at top notch performance, so our customers' websites do as well!.</p>
+<p>You can find the final code on our GitHub repository: <a href="https://github.com/cloudflare/jpegtran">https://github.com/cloudflare/jpegtran</a></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/speed/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed</a>
+        <a href="/tag/polish/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Polish</a>
+        <a href="/tag/open-source/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Open Source</a>
+        <a href="/tag/optimization/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Optimization</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

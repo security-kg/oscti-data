@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Squeezing the firehose: getting the most from Kafka compression</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="How Cloudflare was able to save hundreds of gigabits of network bandwidth and terabytes of storage from Kafka." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/squeezing-the-firehose/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Squeezing the firehose: getting the most from Kafka compression" />
+    <meta property="og:description" content="How Cloudflare was able to save hundreds of gigabits of network bandwidth and terabytes of storage from Kafka." />
+    <meta property="og:url" content="https://blog.cloudflare.com/squeezing-the-firehose/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/03/20498505113_edb59b7408_z.jpg" />
+    <meta property="article:published_time" content="2018-03-05T16:17:03.000Z" />
+    <meta property="article:modified_time" content="2020-08-14T16:08:03.000Z" />
+    <meta property="article:tag" content="Compression" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Kafka" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Squeezing the firehose: getting the most from Kafka compression" />
+    <meta name="twitter:description" content="How Cloudflare was able to save hundreds of gigabits of network bandwidth and terabytes of storage from Kafka." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/squeezing-the-firehose/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/03/20498505113_edb59b7408_z.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ivan Babrou" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Compression, Speed &amp; Reliability, Kafka" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ivan Babrou",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/ivan/",
+        "sameAs": []
+    },
+    "headline": "Squeezing the firehose: getting the most from Kafka compression",
+    "url": "https://blog.cloudflare.com/squeezing-the-firehose/",
+    "datePublished": "2018-03-05T16:17:03.000Z",
+    "dateModified": "2020-08-14T16:08:03.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/03/20498505113_edb59b7408_z.jpg",
+    "keywords": "Compression, Speed & Reliability, Kafka",
+    "description": "How Cloudflare was able to save hundreds of gigabits of network bandwidth and terabytes of storage from Kafka.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-compression tag-speed-and-reliability tag-kafka sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-compression tag-speed-and-reliability tag-kafka ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Squeezing the firehose: getting the most from Kafka compression</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-03-05T16:17:03Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 05, 2018 4:17PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Ivan Babrou" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ivan" class="fw5 f3 no-underline black mr3">Ivan Babrou</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>We at Cloudflare are long time <a href="https://kafka.apache.org/">Kafka</a> users, first mentions of it date back to beginning of 2014 when the most recent version was 0.8.0. We use Kafka as a log to power analytics (both HTTP and DNS), DDOS mitigation, logging and metrics.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-05-at-12.09.12-PM.png" alt="Screen-Shot-2018-03-05-at-12.09.12-PM"><small>Firehose <a href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</a> <a href="https://flic.kr/p/xeocpX">image</a> by <a href="https://www.flickr.com/photos/134584268@N04/">RSLab</a></small></p>
+<p>While the idea of unifying abstraction of the log remained the same since then (<a href="https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying">read this classic blog post</a> from Jay Kreps if you haven't), Kafka evolved in other areas since then. One of these improved areas was compression support. Back in the old days we've tried enabling it a few times and ultimately gave up on the idea because of <a href="https://github.com/Shopify/sarama/issues/805">unresolved</a> <a href="https://issues.apache.org/jira/browse/KAFKA-1718">issues</a> in the protocol.</p>
+<h3 id="kafkacompressionoverview">Kafka compression overview</h3>
+<p>Just last year Kafka 0.11.0 came out with the new improved protocol and log format.</p>
+<p>The naive approach to compression would be to compress messages in the log individually:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-05-at-12.10.00-PM.png" alt="Screen-Shot-2018-03-05-at-12.10.00-PM"></p>
+<p>Edit: originally we said this is how Kafka worked before 0.11.0, but that appears to be false.</p>
+<p>Compression algorithms work best if they have more data, so in the new log format messages (now called records) are packed back to back and compressed in batches. In the previous log format messages recursive (compressed set of messages is a message), new format makes things more straightforward: compressed batch of records is just a batch.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-05-at-12.10.13-PM.png" alt="Screen-Shot-2018-03-05-at-12.10.13-PM"></p>
+<p>Now compression has a lot more space to do its job. There's a high chance that records in the same Kafka topic share common parts, which means they can be compressed better. On the scale of thousands of messages difference becomes enormous. The downside here is that if you want to read record3 in the example above, you have to fetch records 1 and 2 as well, whether the batch is compressed or not. In practice this doesn't matter too much, because consumers usually read all records sequentially batch after batch.</p>
+<p>The beauty of compression in Kafka is that it lets you trade off CPU vs disk and network usage. The protocol itself is designed to minimize overheads as well, by requiring decompression only in a few places:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-05-at-12.10.19-PM.png" alt="Screen-Shot-2018-03-05-at-12.10.19-PM"></p>
+<p>On the receiving side of the log only consumers need to decompress messages:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-05-at-12.10.25-PM.png" alt="Screen-Shot-2018-03-05-at-12.10.25-PM"></p>
+<p>In reality, if you don't use encryption, data can be copied between NIC and disks with <a href="https://www.ibm.com/developerworks/linux/library/j-zerocopy/">zero copies to user space</a>, lowering the cost to some degree.</p>
+<h3 id="kafkabottlenecksatcloudflare">Kafka bottlenecks at Cloudflare</h3>
+<p>Having less network and disk usage was a big selling point for us. Back in 2014 we started with spinning disks under Kafka and never had issues with disk space. However, at some point we started having issues with random io. Most of the time consumers and replicas (which are just another type of consumer) read from the very tip of the log, and that data resides in page cache meaning you don't need to read from disks at all:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-01-at-13.59.06.png" alt="Screen-Shot-2018-03-01-at-13.59.06"></p>
+<p>In this case the only time you touch the disk is during writes, and sequential writes are cheap. However, things start to fall apart when you have multiple lagging consumers:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/Screen-Shot-2018-03-01-at-13.59.29.png" alt="Screen-Shot-2018-03-01-at-13.59.29"></p>
+<p>Each consumer wants to read different part of the log from the physical disk, which means seeking back and forth. One lagging consumer was okay to have, but multiple of them would start fighting for disk io and just increase lag for all of them. To work around this problem we upgraded to SSDs.</p>
+<p>Consumers were no longer fighting for disk time, but it felt terribly wasteful most of the time when consumers are not lagging and there's zero read io. We were not bored for too long, as other problems emerged:</p>
+<ul>
+<li>Disk space became a problem. SSDs are much more expensive and usable disk space reduced by a lot.</li>
+<li>As we grew, we started saturating network. We used 2x10Gbit NICs and imperfect balance meant that we sometimes saturated network links.</li>
+</ul>
+<p>Compression promised to solve both of these problems, so we were eager to try again with improved support from Kafka.</p>
+<h3 id="performancetesting">Performance testing</h3>
+<p>At Cloudflare we use Go extensively, which means that a lot of our Kafka consumers and producers are in Go. This means we can't just take off-the-shelf Java client provided by Kafka team with every server release and start enjoying the benefits of compression. We had to get support from our Kafka client library first (we use <a href="https://github.com/Shopify/sarama">sarama from Shopify</a>). Luckily, support was added at the end of 2017. With more fixes from our side we were able get the test setup working.</p>
+<p>Kafka supports 4 compression codecs: <code>none</code>, <code>gzip</code>, <code>lz4</code> and <code>snappy</code>. We had to figure out how these would work for our topics, so we wrote a simple producer that copied data from existing topic into destination topic. With four destination topics for each compression type we were able to get the following numbers.</p>
+<p>Each destination topic was getting roughly the same amount of messages:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/1.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/1.png"/></a><br>
+Ingress bandwidth was different for different topics, which is expected:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/2.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/2.png"/></a><br>
+And the average size of messages was proportional to ingress bandwidth difference:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/3.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/3.png"/></a></p>
+<p>To make it even more obvious, this was the disk usage of these topics:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/4.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/4.png"/></a></p>
+<p>This looked amazing, but it was rather low throughput nginx errors topic, containing literally string error messages from nginx. Our main target was <code>requests</code> HTTP log topic with <a href="https://capnproto.org/">capnp</a> encoded messages that are much harder to compress. Naturally, we moved on to try out one <code>partition</code> of requests topic. First results were insanely good:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/5.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/5.png"/></a></p>
+<p>They were so good, because they were lies. If with nginx error logs we were pushing under 20Mbps of uncompressed logs, here we jumped 30x to 600Mbps and compression wasn't able to keep up. Still, as a starting point, this experiment gave us some expectations in terms of compression ratios for the main target.</p>
+<table>
+<thead>
+<tr>
+<th>Compression</th>
+<th>Messages consumed</th>
+<th>Disk usage</th>
+<th>Average message size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td>30.18M</td>
+<td>48106MB</td>
+<td>1594B</td>
+</tr>
+<tr>
+<td>Gzip</td>
+<td>3.17M</td>
+<td>1443MB</td>
+<td>455B</td>
+</tr>
+<tr>
+<td>Snappy</td>
+<td>20.99M</td>
+<td>14807MB</td>
+<td>705B</td>
+</tr>
+<tr>
+<td>LZ4</td>
+<td>20.93M</td>
+<td>14731MB</td>
+<td>703B</td>
+</tr>
+</tbody>
+</table>
+<p>Gzip sounded too expensive from the beginning (especially in Go), but Snappy should have been able to keep up. We profiled our producer and it was spending just 2.4% of CPU time in Snappy compression, never saturating a single core:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/6.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/6.png"/></a><br>
+Even gzip was spending just 20%, and it also did not saturate CPU:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/7.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/7.png"/></a><br>
+It seemed that Kafka was doing something that was slowing us down. In theory, it should only decompress messages to do smoke testing, but it also has a failsafe that recompresses messages if they have invalid offsets.</p>
+<p>For Snappy we were able to get the following thread stacktrace from Kafka with <code>jstack</code>:</p>
+<pre><code>&quot;kafka-request-handler-3&quot; #87 daemon prio=5 os_prio=0 tid=0x00007f80d2e97800 nid=0x1194 runnable [0x00007f7ee1adc000]
+   java.lang.Thread.State: RUNNABLE
+    at org.xerial.snappy.SnappyNative.rawCompress(Native Method)
+    at org.xerial.snappy.Snappy.rawCompress(Snappy.java:446)
+    at org.xerial.snappy.Snappy.compress(Snappy.java:119)
+    at org.xerial.snappy.SnappyOutputStream.compressInput(SnappyOutputStream.java:376)
+    at org.xerial.snappy.SnappyOutputStream.write(SnappyOutputStream.java:130)
+    at java.io.DataOutputStream.write(DataOutputStream.java:107)
+    - locked &lt;0x00000007a74cc8f0&gt; (a java.io.DataOutputStream)
+    at org.apache.kafka.common.utils.Utils.writeTo(Utils.java:861)
+    at org.apache.kafka.common.record.DefaultRecord.writeTo(DefaultRecord.java:203)
+    at org.apache.kafka.common.record.MemoryRecordsBuilder.appendDefaultRecord(MemoryRecordsBuilder.java:622)
+    at org.apache.kafka.common.record.MemoryRecordsBuilder.appendWithOffset(MemoryRecordsBuilder.java:409)
+    at org.apache.kafka.common.record.MemoryRecordsBuilder.appendWithOffset(MemoryRecordsBuilder.java:442)
+    at org.apache.kafka.common.record.MemoryRecordsBuilder.appendWithOffset(MemoryRecordsBuilder.java:595)
+    at kafka.log.LogValidator$.$anonfun$buildRecordsAndAssignOffsets$1(LogValidator.scala:336)
+    at kafka.log.LogValidator$.$anonfun$buildRecordsAndAssignOffsets$1$adapted(LogValidator.scala:335)
+    at kafka.log.LogValidator$$$Lambda$675/1035377790.apply(Unknown Source)
+    at scala.collection.mutable.ResizableArray.foreach(ResizableArray.scala:59)
+    at scala.collection.mutable.ResizableArray.foreach$(ResizableArray.scala:52)
+    at scala.collection.mutable.ArrayBuffer.foreach(ArrayBuffer.scala:48)
+    at kafka.log.LogValidator$.buildRecordsAndAssignOffsets(LogValidator.scala:335)
+    at kafka.log.LogValidator$.validateMessagesAndAssignOffsetsCompressed(LogValidator.scala:288)
+    at kafka.log.LogValidator$.validateMessagesAndAssignOffsets(LogValidator.scala:71)
+    at kafka.log.Log.liftedTree1$1(Log.scala:654)
+    at kafka.log.Log.$anonfun$append$2(Log.scala:642)
+    - locked &lt;0x0000000640068e88&gt; (a java.lang.Object)
+    at kafka.log.Log$$Lambda$627/239353060.apply(Unknown Source)
+    at kafka.log.Log.maybeHandleIOException(Log.scala:1669)
+    at kafka.log.Log.append(Log.scala:624)
+    at kafka.log.Log.appendAsLeader(Log.scala:597)
+    at kafka.cluster.Partition.$anonfun$appendRecordsToLeader$1(Partition.scala:499)
+    at kafka.cluster.Partition$$Lambda$625/1001513143.apply(Unknown Source)
+    at kafka.utils.CoreUtils$.inLock(CoreUtils.scala:217)
+    at kafka.utils.CoreUtils$.inReadLock(CoreUtils.scala:223)
+    at kafka.cluster.Partition.appendRecordsToLeader(Partition.scala:487)
+    at kafka.server.ReplicaManager.$anonfun$appendToLocalLog$2(ReplicaManager.scala:724)
+    at kafka.server.ReplicaManager$$Lambda$624/2052953875.apply(Unknown Source)
+    at scala.collection.TraversableLike.$anonfun$map$1(TraversableLike.scala:234)
+    at scala.collection.TraversableLike$$Lambda$12/187472540.apply(Unknown Source)
+    at scala.collection.mutable.HashMap.$anonfun$foreach$1(HashMap.scala:138)
+    at scala.collection.mutable.HashMap$$Lambda$25/1864869682.apply(Unknown Source)
+    at scala.collection.mutable.HashTable.foreachEntry(HashTable.scala:236)
+    at scala.collection.mutable.HashTable.foreachEntry$(HashTable.scala:229)
+    at scala.collection.mutable.HashMap.foreachEntry(HashMap.scala:40)
+    at scala.collection.mutable.HashMap.foreach(HashMap.scala:138)
+    at scala.collection.TraversableLike.map(TraversableLike.scala:234)
+    at scala.collection.TraversableLike.map$(TraversableLike.scala:227)
+    at scala.collection.AbstractTraversable.map(Traversable.scala:104)
+    at kafka.server.ReplicaManager.appendToLocalLog(ReplicaManager.scala:708)
+    at kafka.server.ReplicaManager.appendRecords(ReplicaManager.scala:459)
+    at kafka.server.KafkaApis.handleProduceRequest(KafkaApis.scala:466)
+    at kafka.server.KafkaApis.handle(KafkaApis.scala:99)
+    at kafka.server.KafkaRequestHandler.run(KafkaRequestHandler.scala:65)
+    at java.lang.Thread.run(Thread.java:748)
+</code></pre>
+<p>This pointed us to <a href="https://github.com/apache/kafka/blob/1.0.0/core/src/main/scala/kafka/log/LogValidator.scala#L70-L71">this piece of code</a> in Kafka repository.</p>
+<p>There wasn't enough logging to figure out why Kafka was recompressing, but we were able to get this information out with a patched Kafka broker:</p>
+<pre><code class="language-diff">diff --git a/core/src/main/scala/kafka/log/LogValidator.scala b/core/src/main/scala/kafka/log/LogValidator.scala
+index 15750e9cd..5197d0885 100644
+--- a/core/src/main/scala/kafka/log/LogValidator.scala
++++ b/core/src/main/scala/kafka/log/LogValidator.scala
+@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
+ import kafka.common.LongRef
+ import kafka.message.{CompressionCodec, NoCompressionCodec}
+ import kafka.utils.Logging
++import org.apache.log4j.Logger
+ import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
+ import org.apache.kafka.common.record._
+ import org.apache.kafka.common.utils.Time
+@@ -236,6 +237,7 @@ private[kafka] object LogValidator extends Logging {
+   
+       // No in place assignment situation 1 and 2
+       var inPlaceAssignment = sourceCodec == targetCodec &amp;&amp; toMagic &gt; RecordBatch.MAGIC_VALUE_V0
++      logger.info(&quot;inPlaceAssignment = &quot; + inPlaceAssignment + &quot;, condition: sourceCodec (&quot; + sourceCodec + &quot;) == targetCodec (&quot; + targetCodec + &quot;) &amp;&amp; toMagic (&quot; + toMagic + &quot;) &gt; RecordBatch.MAGIC_VALUE_V0 (&quot; + RecordBatch.MAGIC_VALUE_V0 + &quot;)&quot;)
+   
+       var maxTimestamp = RecordBatch.NO_TIMESTAMP
+       val expectedInnerOffset = new LongRef(0)
+@@ -250,6 +252,7 @@ private[kafka] object LogValidator extends Logging {
+         // Do not compress control records unless they are written compressed
+         if (sourceCodec == NoCompressionCodec &amp;&amp; batch.isControlBatch)
+           inPlaceAssignment = true
++          logger.info(&quot;inPlaceAssignment = &quot; + inPlaceAssignment + &quot;, condition: sourceCodec (&quot; + sourceCodec + &quot;) == NoCompressionCodec (&quot; + NoCompressionCodec + &quot;) &amp;&amp; batch.isControlBatch (&quot; + batch.isControlBatch + &quot;)&quot;)
+   
+         for (record &lt;- batch.asScala) {
+           validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+@@ -261,21 +264,26 @@ private[kafka] object LogValidator extends Logging {
+           if (batch.magic &gt; RecordBatch.MAGIC_VALUE_V0 &amp;&amp; toMagic &gt; RecordBatch.MAGIC_VALUE_V0) {
+             // Check if we need to overwrite offset
+             // No in place assignment situation 3
+-            if (record.offset != expectedInnerOffset.getAndIncrement())
++            val off = expectedInnerOffset.getAndIncrement()
++            if (record.offset != off)
+               inPlaceAssignment = false
++              logger.info(&quot;inPlaceAssignment = &quot; + inPlaceAssignment + &quot;, condition: record.offset (&quot; + record.offset + &quot;) != expectedInnerOffset.getAndIncrement() (&quot; + off + &quot;)&quot;)
+             if (record.timestamp &gt; maxTimestamp)
+               maxTimestamp = record.timestamp
+           }
+   
+           // No in place assignment situation 4
+-          if (!record.hasMagic(toMagic))
++          if (!record.hasMagic(toMagic)) {
++            logger.info(&quot;inPlaceAssignment = &quot; + inPlaceAssignment + &quot;, condition: !record.hasMagic(toMagic) (&quot; + !record.hasMagic(toMagic) + &quot;)&quot;)
+             inPlaceAssignment = false
++          }
+   
+           validatedRecords += record
+         }
+       }
+   
+       if (!inPlaceAssignment) {
++        logger.info(&quot;inPlaceAssignment = &quot; + inPlaceAssignment + &quot;; recompressing&quot;)
+         val (producerId, producerEpoch, sequence, isTransactional) = {
+           // note that we only reassign offsets for requests coming straight from a producer. For records with magic V2,
+           // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
+</code></pre>
+<p>And the output was:</p>
+<pre><code>Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = true, condition: sourceCodec (SnappyCompressionCodec) == targetCodec (SnappyCompressionCodec) &amp;&amp; toMagic (2) &gt; RecordBatch.MAGIC_VALUE_V0 (0) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = true, condition: sourceCodec (SnappyCompressionCodec) == NoCompressionCodec (NoCompressionCodec) &amp;&amp; batch.isControlBatch (false) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = true, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (0) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (1) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (2) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (3) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (4) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (5) (kafka.log.LogValidator$)
+Dec 29 23:18:59 mybroker kafka[33461]: INFO inPlaceAssignment = false, condition: record.offset (0) != expectedInnerOffset.getAndIncrement() (6) (kafka.log.LogValidator$)
+</code></pre>
+<p>We promptly <a href="https://github.com/Shopify/sarama/pull/1015">fixed the issue</a> and resumed the testing. These were the results:</p>
+<table>
+<thead>
+<tr>
+<th>Compression</th>
+<th>User time</th>
+<th>Messages</th>
+<th>Time per 1m</th>
+<th>CPU ratio</th>
+<th>Disk usage</th>
+<th>Avg message size</th>
+<th>Compression ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td>209.67s</td>
+<td>26.00M</td>
+<td>8.06s</td>
+<td>1x</td>
+<td>41448MB</td>
+<td>1594B</td>
+<td>1x</td>
+</tr>
+<tr>
+<td>Gzip</td>
+<td>570.56s</td>
+<td>6.98M</td>
+<td>81.74s</td>
+<td>10.14x</td>
+<td>3111MB</td>
+<td>445B</td>
+<td>3.58x</td>
+</tr>
+<tr>
+<td>Snappy</td>
+<td>337.55s</td>
+<td>26.02M</td>
+<td>12.97s</td>
+<td>1.61x</td>
+<td>17675MB</td>
+<td>679B</td>
+<td>2.35x</td>
+</tr>
+<tr>
+<td>LZ4</td>
+<td>525.82s</td>
+<td>26.01M</td>
+<td>20.22s</td>
+<td>2.51x</td>
+<td>22922MB</td>
+<td>881B</td>
+<td>1.81x</td>
+</tr>
+</tbody>
+</table>
+<p>Now we were able to keep up with both Snappy and LZ4. Gzip was still out of the question and LZ4 had incompatibility issues between Kafka versions and our Go client, which left us with Snappy. This was a winner in terms of compression ratio and speed too, so we were not very disappointed by the lack of choice.</p>
+<h3 id="deployingintoproduction">Deploying into production</h3>
+<p>In production we started small with Java based consumers and producers. Our first production topic was just 1Mbps and 600rps of nginx error logs. Messages there were very repetitive and we were able to get whopping 8x decrease in size with batching records for just 1 second across 2 partitions.</p>
+<p>This gave us some confidence to move onto next topic with <code>journald</code> logs encoded with JSON. Here we were able to reduce ingress from 300Mbps to just 50Mbps (yellow line on the graph):</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/8.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/8.png"/></a><br>
+At that point we were switched to our own Go consumers and decreased <code>metrics</code> Kafka topic from 800Mbps to just 170Mpbs, lowering average message size 5x from 150B to just 30B.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/9.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/9.png"/></a><br>
+<a href="https://blog.cloudflare.com/content/images/2018/03/10.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/10.png"/></a><br>
+Next stop was DNS logs with 3.5Gbps and 1.5Mrps baseline (attacks can make it go 3x that). Here wins were a lot smaller: just 2.6x lower average message size.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/11.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/11.png"/></a><br>
+While it sounds not as exciting as previous size reductions, keep in mind that these are capnp messages, which means there's not much repetition in field names, only in values. As an added bonus, Kafka broker CPU and GC also went down in DNS cluster:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/12.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/12.png"/></a></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/13.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/13.png"/></a></p>
+<p>With all major topics in DNS cluster switched to Snappy we saw even better picture in terms of broker CPU usage:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/14.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/14.png"/></a></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/15.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/15.png"/></a></p>
+<p>On the next graph you can see Kafka CPU usage as the purple line and producer CPU usage as the green line:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/16.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/16.png"/></a></p>
+<p>CPU usage of the producer did not go up substantially, which means most of the work is spend in non compression related tasks. Consumers did not see any increase in CPU usage either, which means we've got our 2.6x decrease in size practically for free.</p>
+<p>It was time to hunt the biggest beast of all: <code>requests</code> topic with HTTP access logs. There we were doing up to 100Gbps and 7.5Mrps of ingress at peak (a lot more when big attacks are happening, but this was a quiet week):</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/17.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/17.png"/></a>**</p>
+<p>With many smaller topics switched to Snappy already, we did not need to do anything special here. This is how it went:</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/18.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/18.png"/></a></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/19.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/19.png"/></a></p>
+<p>That's a 2.25x decrease in ingress bandwidth and average message size. We have multiple replicas and consumers, which means egress is a multiple of ingress. We were able to reduce in-DC traffic by hundreds of gigabits of internal traffic and save terabytes of flash storage. With network and disks being bottlenecks, this meant we'd need less than a half of hardware we had. Kafka was one the the main hardware hogs in this datacenter, so this was a large scale win.</p>
+<p>Yet, 2.25x seemed a bit on the low side.</p>
+<h3 id="lookingformore">Looking for more</h3>
+<p>We wanted to see if we can do better. To do that, we extracted one batch of records from Kafka and ran some benchmarks on it. All batches are around 1MB uncompressed, 600 records in each on average.</p>
+<p>To run the benchmarks we used <a href="https://github.com/inikep/lzbench">lzbench</a>, which runs lots of different compression algorithms and provides a summary. Here's what we saw with results sorted by compression ratio (heavily filtered list):</p>
+<pre><code>lzbench 1.7.3 (64-bit MacOS)   Assembled by P.Skibinski
+Compressor name         Compress. Decompress. Compr. size  Ratio Filename
+memcpy                  33587 MB/s 33595 MB/s      984156 100.00
+...
+lz4 1.8.0                 594 MB/s  2428 MB/s      400577  40.70
+...
+snappy 1.1.4              446 MB/s  1344 MB/s      425564  43.24
+...
+zstd 1.3.3 -1             409 MB/s   844 MB/s      259438  26.36
+zstd 1.3.3 -2             303 MB/s   889 MB/s      244650  24.86
+zstd 1.3.3 -3             242 MB/s   899 MB/s      232057  23.58
+zstd 1.3.3 -4             240 MB/s   910 MB/s      230936  23.47
+zstd 1.3.3 -5             154 MB/s   891 MB/s      226798  23.04
+</code></pre>
+<p>This looked too good to be true. <a href="https://facebook.github.io/zstd/">Zstandard</a> is a fairly new (released 1.5 years ago) compression algorithm from Facebook. In benchmarks on the project's home page you can see this:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2018/03/zstd.png" alt="zstd"></p>
+<p>In our case we were getting this:</p>
+<table>
+<thead>
+<tr>
+<th>Compressor name</th>
+<th>Ratio</th>
+<th>Compression</th>
+<th>Decompression</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>zstd</td>
+<td>3.794</td>
+<td>409 MB/s</td>
+<td>844 MB/s</td>
+</tr>
+<tr>
+<td>lz4</td>
+<td>2.475</td>
+<td>594 MB/s</td>
+<td>2428 MB/s</td>
+</tr>
+<tr>
+<td>snappy</td>
+<td>2.313</td>
+<td>446 MB/s</td>
+<td>1344 MB/s</td>
+</tr>
+</tbody>
+</table>
+<p>Clearly, results are very dependent on the kind of data you are trying to compress. For our data zstd was giving amazing results even on the lowest compression level. Compression ratio was better than even gzip at maximum compression level, while throughput was a lot higher. For posterity, this is how DNS logs compressed (HTTP logs compressed similarly):</p>
+<pre><code>$ ./lzbench -ezstd/zlib rrdns.recordbatch
+lzbench 1.7.3 (64-bit MacOS)   Assembled by P.Skibinski
+Compressor name         Compress. Decompress. Compr. size  Ratio Filename
+memcpy                  33235 MB/s 33502 MB/s      927048 100.00 rrdns.recordbatch
+zstd 1.3.3 -1             430 MB/s   909 MB/s      226298  24.41 rrdns.recordbatch
+zstd 1.3.3 -2             322 MB/s   878 MB/s      227271  24.52 rrdns.recordbatch
+zstd 1.3.3 -3             255 MB/s   883 MB/s      217730  23.49 rrdns.recordbatch
+zstd 1.3.3 -4             253 MB/s   883 MB/s      217141  23.42 rrdns.recordbatch
+zstd 1.3.3 -5             169 MB/s   869 MB/s      216119  23.31 rrdns.recordbatch
+zstd 1.3.3 -6             102 MB/s   939 MB/s      211092  22.77 rrdns.recordbatch
+zstd 1.3.3 -7              78 MB/s   968 MB/s      208710  22.51 rrdns.recordbatch
+zstd 1.3.3 -8              65 MB/s  1005 MB/s      204370  22.05 rrdns.recordbatch
+zstd 1.3.3 -9              59 MB/s  1008 MB/s      204071  22.01 rrdns.recordbatch
+zstd 1.3.3 -10             44 MB/s  1029 MB/s      202587  21.85 rrdns.recordbatch
+zstd 1.3.3 -11             43 MB/s  1054 MB/s      202447  21.84 rrdns.recordbatch
+zstd 1.3.3 -12             32 MB/s  1051 MB/s      201190  21.70 rrdns.recordbatch
+zstd 1.3.3 -13             31 MB/s  1050 MB/s      201190  21.70 rrdns.recordbatch
+zstd 1.3.3 -14             13 MB/s  1074 MB/s      200228  21.60 rrdns.recordbatch
+zstd 1.3.3 -15           8.15 MB/s  1171 MB/s      197114  21.26 rrdns.recordbatch
+zstd 1.3.3 -16           5.96 MB/s  1051 MB/s      190683  20.57 rrdns.recordbatch
+zstd 1.3.3 -17           5.64 MB/s  1057 MB/s      191227  20.63 rrdns.recordbatch
+zstd 1.3.3 -18           4.45 MB/s  1166 MB/s      187967  20.28 rrdns.recordbatch
+zstd 1.3.3 -19           4.40 MB/s  1108 MB/s      186770  20.15 rrdns.recordbatch
+zstd 1.3.3 -20           3.19 MB/s  1124 MB/s      186721  20.14 rrdns.recordbatch
+zstd 1.3.3 -21           3.06 MB/s  1125 MB/s      186710  20.14 rrdns.recordbatch
+zstd 1.3.3 -22           3.01 MB/s  1125 MB/s      186710  20.14 rrdns.recordbatch
+zlib 1.2.11 -1             97 MB/s   301 MB/s      305992  33.01 rrdns.recordbatch
+zlib 1.2.11 -2             93 MB/s   327 MB/s      284784  30.72 rrdns.recordbatch
+zlib 1.2.11 -3             74 MB/s   364 MB/s      265415  28.63 rrdns.recordbatch
+zlib 1.2.11 -4             68 MB/s   342 MB/s      269831  29.11 rrdns.recordbatch
+zlib 1.2.11 -5             48 MB/s   367 MB/s      258558  27.89 rrdns.recordbatch
+zlib 1.2.11 -6             32 MB/s   376 MB/s      247560  26.70 rrdns.recordbatch
+zlib 1.2.11 -7             24 MB/s   409 MB/s      244623  26.39 rrdns.recordbatch
+zlib 1.2.11 -8           9.67 MB/s   429 MB/s      239659  25.85 rrdns.recordbatch
+zlib 1.2.11 -9           3.63 MB/s   446 MB/s      235604  25.41 rrdns.recordbatch
+</code></pre>
+<p>For our purposes we picked level 6 as the compromise between compression ratio and CPU cost. It is possible to be even more aggressive as real world usage proved later.</p>
+<p>One great property of zstd is more or less the same decompression speed between levels, which means you only have one knob that connects CPU cost of compression to compression ratio.</p>
+<p>Armed with this knowledge, we dug up <a href="https://issues.apache.org/jira/browse/KAFKA-4514">forgotten Kafka ticket</a> to add zstd, along with <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-110%3A+Add+Codec+for+ZStandard+Compression">KIP</a> (Kafka Improvement Proposal) and even <a href="https://github.com/apache/kafka/pull/2267">PR on Github</a>. Sadly, these did not get traction back in the day, but this work saved us a lot of time.</p>
+<p>We <a href="https://github.com/bobrik/kafka/commit/8b17836efda64dba1ebdc080e30ee2945793aef3">ported</a> the patch to Kafka 1.0.0 release and pushed it in production. After another round of smaller scale testing and with <a href="https://github.com/bobrik/sarama/commit/c36187fbafab5afe5c152d2012b05b9306196cdb">patched</a> clients we pushed Zstd into production for requests topic.</p>
+<p>Graphs below include switch from no compression (before 2/9) to Snappy (2/9 to 2/17) to Zstandard (after 2/17):</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/20.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/20.png"/></a></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/03/21.png" target="_blank"><img src="https://blog.cloudflare.com/content/images/2018/03/21.png"/></a></p>
+<p>The decrease in size was <strong>4.5x</strong> compared to no compression at all. On next generation hardware with 2.4x more storage and 2.5x higher network throughput we suddenly made our bottleneck more than 10x wider and shifted it from storage and network to CPU cost. We even got to cancel pending hardware order for Kafka expansion because of this.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>Zstandard is a great modern compression algorighm, promising high compression ratio and throughput, tunable in small increments. Whenever you consider using compression, you should check zstd. If you don't consider compression, then it's worth seeing if you can get benefits from it. Run benchmarks with your data in either case.</p>
+<p>Testing in real world scenario showed how benchmarks, even coming from zstd itself, can be misleading. Going beyond codecs built into Kafka allowed us to improve compression ratio 2x at very low cost.</p>
+<p>We hope that the data we gathered can be a catalyst to making Zstandard an official compression codec in Kafka to benefit other people. There are 3 bits allocated for codec type and only 2 are used so far, which means there are 4 more vacant places.</p>
+<p>If you were skeptical of compression benefits in Kafka because of old flaws in Kafka protocol, this may be the time to reconsider.</p>
+<hr>
+<p>If you enjoy benchmarking, profiling and optimizing large scale services, come <a href="https://www.cloudflare.com/careers/">join us</a>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/compression/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Compression</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/kafka/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Kafka</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-11T16:32:39Z">November 11, 2020 4:32PM</p>
+        <a href="/brotli-compression-using-a-reduced-dictionary/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">My internship: Brotli compression using a reduced dictionary</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Using the brotli dictionary to improve compression of web content without sacrificing performance....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/felix/" class="fw5 f2 black no-underline">Felix Hanau</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/compression/" class="no-underline f1 fw2 blue3 underline-hover">Compression</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/optimization/" class="no-underline f1 fw2 blue3 underline-hover">Optimization</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/careers/" class="no-underline f1 fw2 blue3 underline-hover">Careers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-10-23T15:24:50+01:00">October 23, 2015 3:24PM</p>
+        <a href="/results-experimenting-brotli/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Results of experimenting with Brotli for dynamic web content</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Compression is one of the most important tools CloudFlare has to accelerate website performance. Compressed content takes less time to transfer, and consequently reduces load times....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vlad-krasnov/" class="fw5 f2 black no-underline">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/compression/" class="no-underline f1 fw2 blue3 underline-hover">Compression</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tech-talks/" class="no-underline f1 fw2 blue3 underline-hover">Tech Talks</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/optimization/" class="no-underline f1 fw2 blue3 underline-hover">Optimization</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

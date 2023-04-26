@@ -1,0 +1,906 @@
+
+<!doctype html>
+<html >
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-16x16.png">
+	<link rel="manifest" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/site.webmanifest">
+	<link rel="mask-icon" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/safari-pinned-tab.svg" color="#000000">
+	<meta name="msapplication-TileColor" content="#000000">
+	<meta name="theme-color" content="#000">
+  <title>Analysis of Smoke Loader in New Tsunami Campaign</title>
+<link rel="alternate" hreflang="en" href="https://unit42.paloaltonetworks.com/analysis-of-smoke-loader-in-new-tsunami-campaign/" />
+<link rel="alternate" hreflang="ja" href="https://unit42.paloaltonetworks.jp/analysis-of-smoke-loader-in-new-tsunami-campaign/" />
+
+<!-- This site is optimized with the Yoast SEO plugin v12.6.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<meta name="description" content="Unit 42&#039;s research on Smoke Loader, a malware that encrypts network traffic and files with various keys to avoid analysis"/>
+<meta name="robots" content="max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<link rel="canonical" href="https://unit42.paloaltonetworks.com/analysis-of-smoke-loader-in-new-tsunami-campaign/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Analysis of Smoke Loader in New Tsunami Campaign" />
+<meta property="og:description" content="Unit 42&#039;s research on Smoke Loader, a malware that encrypts network traffic and files with various keys to avoid analysis" />
+<meta property="og:url" content="https://unit42.paloaltonetworks.com/analysis-of-smoke-loader-in-new-tsunami-campaign/" />
+<meta property="og:site_name" content="Unit42" />
+<meta property="article:tag" content="Azorult" />
+<meta property="article:tag" content="Japan" />
+<meta property="article:tag" content="Marcher" />
+<meta property="article:tag" content="Smoke Loader" />
+<meta property="article:section" content="Unit 42" />
+<meta property="article:published_time" content="2018-12-20T04:12:18+00:00" />
+<meta property="og:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1.png" />
+<meta property="og:image:secure_url" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:description" content="Unit 42&#039;s research on Smoke Loader, a malware that encrypts network traffic and files with various keys to avoid analysis" />
+<meta name="twitter:title" content="Analysis of Smoke Loader in New Tsunami Campaign" />
+<meta name="twitter:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1.png" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel='dns-prefetch' href='//www.google.com' />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel="alternate" type="application/rss+xml" title="Unit42 &raquo; Analysis of Smoke Loader in New Tsunami Campaign Comments Feed" href="https://unit42.paloaltonetworks.com/analysis-of-smoke-loader-in-new-tsunami-campaign/feed/" />
+<meta property="og:likes" content="1"/>
+<meta property="og:readtime" content="8"/>
+<meta property="og:views" content="17,707"/>
+<meta property="og:date_created" content="December 19, 2018 at 8:12 PM"/>
+<meta property="og:post_length" content="2458"/>
+<meta property="og:category" content="Unit 42"/>
+<meta property="og:category_link" content="https://unit42.paloaltonetworks.com/category/unit-42/"/>
+<meta property="og:author" content="Kaoru Hayashi"/>
+<meta property="og:authorlink" content="https://unit42.paloaltonetworks.com/author/khayashi/"/>
+<meta property="og:author_image_link" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/11/unit-news-meta.svg"/>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"BlogPosting","headline":"Analysis of Smoke Loader in New Tsunami Campaign","name":"Analysis of Smoke Loader in New Tsunami Campaign","description":"Unit 42's research on Smoke Loader, a malware that encrypts network traffic and files with various keys to avoid analysis","url":"https:\/\/unit42.paloaltonetworks.com\/analysis-of-smoke-loader-in-new-tsunami-campaign\/","mainEntityOfPage":"https:\/\/unit42.paloaltonetworks.com\/analysis-of-smoke-loader-in-new-tsunami-campaign\/","datePublished":"December 19, 2018","articleBody":"On November 8th, the Japanese Meteorological Agency issued an alert about a fake tsunami warning email masquerading as coming from the agency. According to the alert, the email was written in Japanese and asked recipients to click the link to confirm their evacuation area from a tsunami after an earthquake. The link in the email is not critical information to save your life but malware to steal crucial information from you. The malware is Smoke Loader, infamous commodity malware used by various cybercriminals since 2011.\r\n\r\nSmoke Loader is a modular loader where attackers can select any payload to be installed on the victim by Smoke Loader. Thus, the final payload can vary between attacks. For example, we previously reported on the Retefe Banking Trojan being distributed by Smoke Loader in Sweden, and Japan. We have also seen backdoors, ransomware, cryptominers, password stealers, Point-of-Sale (PoS) malware, and banking Trojans installed by Smoke Loader.\r\n\r\nThis attack seems to be aiming to steal credentials from unidentified targets in Japan and took a similar approach to normal targeted attacks. The attacker registered the fake Japanese government agency domain and ensured the file path to the malware on the server is close to the legitimate agency web site. They wrote the lure email in fluent Japanese and did not distribute it broadly. In late November, the attacker started using another commodity malware known as AzoRult. Figure 1 shows the timeline of this attack.\r\n\r\n\r\nFigure 1 Time line of the attack\r\n&nbsp;\r\nSmoke Loader Analysis\r\nThough it\u2019s been seven years since Smoke Loader first appeared, the author keeps updating the code. Malwarebytes published an excellent analysis of Smoke Loader in 2016. The samples we looked at added the following techniques to avoid detection or analysis.\r\n\r\n \tCode obfuscation by junk jump\r\n \tDecrypts subroutines and encrypts them after execution\r\n \tEmploys PROPagate trick to inject second stage code into an explorer.exe process\r\n \tChanges the algorithm of generating the unique ID\r\n \tEncrypts network traffics and payload file\r\n\r\nSome of these techniques were already reported by FireEye and Talos this year. We will focus on the unique ID, C2 communication, and the payload in this blog.\r\n\r\n&nbsp;\r\nGenerating a unique ID\r\nInitially, the threat generates a unique ID for the compromised machine from the computer name, the hardcoded static number(0B0D0406), and the volume serial number of the system drive. Smoke Loader uses the unique ID for three purposes:\r\n\r\n \tTracking the compromised machine at C2.\r\n \tEncrypting payload by the ID.\r\n \tCreating random file names for persistence.\r\n\r\nHere\u2019s how to create the unique ID. If the computer name is \u201cTest_PC\u201d and the volume serial number is \u201c12345678\u201d, the threat appends the three values like the following:\r\n\r\n\"Test_PC\" + \"0B0D0406\" + \"12345678\" = \"Test_PC0B0D040612345678\"\r\n\r\nand it calculates the MD5 hash value of the string,\r\n\r\nMD5(\"Test_PC0B0D040612345678\") = 41EE612602833345FC5BD2B98103811C\r\n\r\nIt then appends the volume serial to the hash value and gets the 40 characters unique ID.\r\n\r\n\"41EE612602833345FC5BD2B98103811C\" + \"12345678\" = \"41EE612602833345FC5BD2B98103811C12345678\"\r\n\r\nNext, Smoke Loader generates two strings based on the first eight characters and the last eight characters of the ID. Following is the algorithm written in Python.\r\n# the unique ID\r\nid = \"41EE612602833345FC5BD2B98103811C12345678\"\r\n\r\ndef makeStrings(_s):\r\n\u00a0\u00a0\u00a0 results = \"\"\r\n\r\n\u00a0\u00a0\u00a0 for n in _s:\r\n\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0 results += chr((ord(n) - 0x30) + ord('a'))\r\n\r\n\u00a0\u00a0\u00a0 return results\r\n\r\nstringA = makeStrings(id[:8]) # \"ebvvgbcg\"\r\nstringB = makeStrings(id[-8:]) # \"bcdefghi\"\r\n&nbsp;\r\n\r\nSmoke Loader uses these strings for the file name. It copies itself as follows.\r\n\r\n%APPDATA%\\Microsoft\\Windows\\[stringA\\[stringB].exe\r\n\r\nand it creates following shortcut file to execute the threat when the computer starts.\r\n\r\n%StartUp%\\[stringA].lnk\r\n\r\nThese two strings look random. However, the attacker always generates two identical strings to the compromised machine since it is based on the static values of the environment.\r\n\r\n&nbsp;\r\nC2 Communication\r\nSmoke Loader contains the following hardcoded C2 address.\r\n\r\njma-go[.]jp\/js\/metrology\/jma.php\r\n\r\nAn outline of initial C2 communication follows.\r\n\r\n \tSmoke Loader sends the encrypted data to C2 by HTTP POST method.\r\n \tC2 server replies HTTP 404 response (Not Found) with encrypted data.\r\n \tSmoke Loader extracts the plugin from C2, encrypts it by using the unique ID, and saves it local disk.\r\n \tSmoke Loader extracts the payload modules from the encrypted plugin file and injects them into an Explorer.exe process.\r\n\r\n\r\nFigure 2 Initial communication\r\n\r\n\r\n&nbsp;\r\nMaking initial POST data\r\nSmoke Loader creates the data to send C2. At offset 0, there is a marker \u2018E207\u2019 followed by the unique ID (Figure 3). The marker is \u2018072E\u2019 in little-endian form and \u20182018\u2019 in decimal. Smoke Loader uses the marker every time communicating with C2.\r\n\r\n\r\nFigure 3 POST data\r\n&nbsp;\r\n\r\nSmoke Loader finally encrypts the data with RC4 cipher by using the static key 0x161A9A0C and send it to the C2 by HTTP POST method.\r\n\r\n&nbsp;\r\nPlugin from C2\r\nThe C2 server responds the plugin data contains the final payload with HTTP 404 status code. Smoke Loader obtains the encrypted header size from the first DWORD value of the plugin and decrypts the following bytes with RC4 cipher by the different static key 0x1D17D70A. Figure 4 shows the plugin data after decryption. It then verifies the marker \u2018E207\u2019 and gets the plugin size which is defined in the \"plugin_size\u2019 variable.\r\n\r\n\r\nFigure 4 Reply data from C2\r\nAfter checking the plugin size, Smoke Loader encrypts plugin data with an RC4 cipher using the unique ID and saves it as the following path with the generated string from the ID. Since the file is encrypted with the distinct value to the machine, the file hash is always different on each computer even if the plugin is identical.\r\n\r\n%APPDATA%\\Microsoft\\Windows\\[stringA]\\[stringA]\r\n\r\nThen Smoke Loader decrypts the saved plugin data. The plugin data has thirteen-byte length header and consists from following values.\r\n\r\n\r\n\r\nOffset\r\nSize\r\nValue\r\n\r\n\r\n0x00\r\nDWORD\r\nPlugin size\r\n\r\n\r\n0x04\r\nDWORD\r\nPlugin marker, 0xD5A08DD8\r\n\r\n\r\n0x08\r\nDWORD\r\nUnknown, possible plugin identifier\r\n\r\n\r\n0x0C\r\nBYTE\r\nNumber of modules in the plugin\r\n\r\n\r\n\r\nTable 1 Plugin header\r\n&nbsp;\r\n\r\nThe plugin can contain multiple modules. In the case of this tsunami campaign, the payload contains six modules. Each module has a header that includes its size and RC4 key to decrypt.\r\n\r\n\r\nFigure 5 Plugin header and module header\r\nSmoke Loader decrypts a module with RC4 cipher by the specified key. After verifying architecture flag (64 bit or 32 bit) in the module, the threat executes Explorer.exe process and injects the module into the process. Since the threat repeats this the number of modules times, there should be multiple Explorer.exe processes on the compromised machine.\r\n\r\n&nbsp;\r\nPayload Modules\r\nTable 2 shows the list of modules in this campaign. There are three types of functions in two architectures.\r\n\r\n\r\n\r\nModule\r\nArchitecture\r\nFunction\r\n\r\n\r\n1\r\n32 bit\r\nStealing stored credential from browsers and email programs\r\n\r\n\r\n2\r\n64 bit\r\nIncomplete porting of Module 1\r\n\r\n\r\n3\r\n32 bit\r\nStealing data sending from Browsers\r\n\r\n\r\n4\r\n64 bit\r\nSame with Module 3\r\n\r\n\r\n5\r\n32 bit\r\nStealing login credential from email protocols\r\n\r\n\r\n6\r\n64 bit\r\nSame with Module 5\r\n\r\n\r\n\r\nTable 2 Module list\r\nWhen injecting modules, Smoke Loader passes the configuration data including the following values to the modules for C2 communication. Each module has exact same C2 communication code with the loader.\r\n\r\n \tRC4 encryption key for HTTP POST\r\n \tThe unique ID\r\n \tC2 URL\r\n\r\nModule 1\r\nThis module aims to steal stored credentials in following programs.\r\n\r\n \tInternet Explorer\r\n \tFirefox\r\n \tChrome\r\n \tOpera\r\n \tChromium\r\n \tYandex\r\n \tAmigo\r\n \tQQBrowser\r\n \tOutlook\r\n \tThunderbird\r\n \tWinSCP\r\n\r\nModule 2 contains a partial code of Module 1 but appears to be in the under development phase.\r\nModules 3 and 4\r\nThese modules hook APIs and steals all data being sent data from following browsers.\r\n\r\n \tFirefox\r\n \tInternet Explorer\r\n \tEdge\r\n \tChrome\r\n \tOpera\r\n\r\nModules 5 and 6\r\nThese modules hook APIs and steals user id, password, and their associated remote ftp and email server addresses on following protocols.\r\n\r\n \tFTP on port 21\r\n \tSMTP on port 25, 587, 2525\r\n \tPOP3 on port 110\r\n \tIMAP on port 143\r\n\r\n&nbsp;\r\nInfrastructures and another tools\r\nA person registered the domain name jma-go[.]jp on Oct 30, 2018. The domain does not have a second level domain name, such as .co.jp nor .ne.jp. It is defined as General-use JP domain name by JPNIC. In the definition, JPNIC described the registration requirements of the general-use JP domain name as following.\r\n\r\n\u2018In the general-use JP domain name system, we have established what we call a \"local presence\" prerequisite, which asks for a connection or relationship with Japan.\u2018\r\n\r\nAccording to the Whois information of the domain, the domain was owned by a person who has a postal address in Russia and uses a Gmail address. The registrant may change the postal address after registration or could prove a connection or relationship with Japan.\r\n\r\nThe same person also registered another eight domains with the same Gmail address. We found that the three of the domains were used in attacks involving the Android banking trojan\/password stealing malware, Marcher from Feb to March in 2018. We haven\u2019t identified the targets of the mobile malware yet. Following is the sample list.\r\n\r\n&nbsp;\r\n\r\n\r\n\r\nDomain\r\nMarcher SHA256\r\n\r\n\r\nSungmap[.]at\r\n254925e47fbfff4786eada6cbcb0805ed79d9bd417955c016236143eb2ecd827\r\n\r\n\r\nMountainhigh[.]at\r\n75edaae605622e056a40c2d8a16b86654d7ddc772f12c4fc64292a32a96fde7a\r\n\r\n\r\nRacemodel[.]at\r\n55ae2b00234674d82dcc401a0daa97e7b3921057a07970347815d9c50dddbda8\r\n\r\n\r\n\r\nTable 3 Domains and Marcher hashes\r\n&nbsp;\r\n\r\nOn November 25, we confirmed that another malware, AzoRult, was served from the same URL previously serving Smoke Loader. AzoRult is also a commodity malware that steals credentials, cookies, and cryptocurrencies. This AzoRult accesses the following C2 address, which is a different path on the same C2 server with the Smoke Loader.\r\n\r\nwww.jma-go[.]jp\/java\/java9356\/index.php\r\n\r\nWe observed three AzoRult samples using the same C2 at the time of writing this blog. The attacker distributes those files from following URLs.\r\n\r\n \tthunderbolt-price[.]com\/Art-and-Jakes\/Coupon.scr\r\n \tbite-me.wz[.]cz\/1.exe\r\n\r\nthunderbolt-price[.]com was registered in 2012 in Japan, and the Privacy Protection Service protects its registrant information. The website of the domain does not host content at the top page as of today. According to the Google search, the domain appears in shopping related pages from 2014 to 2015. Interestingly, those web pages are low-quality and mostly hosted on hacked web servers. These web pages are likely created for malicious Search Engine Optimization (SEO) backlinks which gain scores for better page rank in the search engine results. Figure 6 is a ladies\u2019 shoes shopping web page hosted on the website of a construction and building materials company in Turkey.\r\n\r\n\r\nFigure 6 SEO backlinks on hacked site\r\n&nbsp;\r\n\r\nThe domain may have been used for a shopping or affiliate site previously, but the owner does not use it for that purpose anymore. It looks like the attacker compromised the website, which had not been used for few years, and is using it for distributing AzoRult. However, we don\u2019t know the connection between the attacker and the current owner of the thunderbolt-price[.]com.\r\n\r\nTable 4 shows the timetable of infrastructure changes and timestamp of malware.\r\n\r\n\r\n\r\nDate\r\nActivities\r\n\r\n\r\nOct 30, 2018\r\nRegisters jma-go[.]jp domain\r\n\r\n\r\nNov 5, 2018\r\nSmoke Loader\r\n\r\n3d75eabb8460450a49e2fb68053d9f591efe5aefd379205e5cc3af574bb9f415\r\n\r\n\r\nNov 6, 2018\r\nSmoke Loader\r\n\r\n8a1aab36c3940e4dd83f489432fa710fba582e254c3a52459c52826d6a822f2d\r\n\r\n0db3fd1394b15b98f4e112102cdec6cc569062cdb199b66c5838c54cbc286277\r\n\r\nbe3817b9f14df3e0af82ae47b0904ac38d022e2b2d7bb7f8f9800b534b60183c\r\n\r\n\r\nNov 8, 2018\r\nSmoke Loader\r\n\r\n27aa9cdf60f1fbff84ede0d77bd49677ec346af050ffd90a43b8dcd528c9633b\r\n\r\n\r\nNov 9, 2018\r\nSmoke Loader\r\n\r\n42fdaffdbacfdf85945bd0e8bfaadb765dde622a0a7268f8aa70cd18c91a0e85\r\n\r\n\r\nNov 15, 2018\r\nSmoke Loader\r\n\r\nfb3def9c23ba81f85aae0f563f4156ba9453c2e928728283de4abdfb5b5f426f\r\n\r\n\r\nNov 24, 2018\r\nAzoRult\r\n\r\n70900b5777ea48f4c635f78b597605e9bdbbee469b3052f1bd0088a1d18f85d3\r\n\r\n\r\nNov 25, 2018\r\nSmoke Loadera\r\n\r\n1ce72ec2f2fe6139eb6bb35b8a4fb40aca2d90bc19872d6517a6ebb66b6b139\r\n\r\n\r\nNov 27, 2018\r\nAzoRult\r\n\r\n7337143e5fb7ecbdf1911e248d73c930a81100206e8813ad3a90d4dd69ee53c7\r\n\r\n\r\nNov 30, 2018\r\nChanges the IP address associates with jma-go[.]jp\r\n\r\nfrom 47.74.255[.]111 to 149.129.135[.]53\r\n\r\n\r\nDec 3, 2018\r\nAzoRult7\r\n\r\n48c94bfdb94b322c876114fcf55a6043f1cd612766e8af1635218a747f45fb9\r\n\r\n\r\n\r\nTable 4 Timetable\r\n&nbsp;\r\nConclusion\r\nCommodity malware is widely used by cyber criminals these days. The authors of malware keep updating the code to expand the capabilities and trying to gain more customers. As we detailed in this article, Smoke Loader encrypts network traffic and files with various keys to avoid analysis. We recently published a report of a new variant of AzoRult that introduces a new advanced obfuscation technique to evade detection by security products. Attackers, like those in this tsunami campaign, can pick up malware fitting for their purpose from online threat marketplaces.\r\n\r\nPalo Alto Networks customers are protected from this threat in the following ways:\r\n\r\n \tAutoFocus customers can track these samples with the Smoke Loader, AzoRult and Marcher.\r\n \tWildFire detects all files mentioned in this report with malicious verdicts.\r\n \tTraps blocks all of the files described in this article.\r\n\r\n&nbsp;\r\nIoC\r\nSmoke Loader Samples\r\n3d75eabb8460450a49e2fb68053d9f591efe5aefd379205e5cc3af574bb9f415\r\n8a1aab36c3940e4dd83f489432fa710fba582e254c3a52459c52826d6a822f2d\r\n0db3fd1394b15b98f4e112102cdec6cc569062cdb199b66c5838c54cbc286277\r\nbe3817b9f14df3e0af82ae47b0904ac38d022e2b2d7bb7f8f9800b534b60183c\r\n27aa9cdf60f1fbff84ede0d77bd49677ec346af050ffd90a43b8dcd528c9633b\r\n42fdaffdbacfdf85945bd0e8bfaadb765dde622a0a7268f8aa70cd18c91a0e85\r\nfb3def9c23ba81f85aae0f563f4156ba9453c2e928728283de4abdfb5b5f426f\r\na1ce72ec2f2fe6139eb6bb35b8a4fb40aca2d90bc19872d6517a6ebb66b6b139\r\nAzoRult Samples\r\n70900b5777ea48f4c635f78b597605e9bdbbee469b3052f1bd0088a1d18f85d3\u00a0\r\n7337143e5fb7ecbdf1911e248d73c930a81100206e8813ad3a90d4dd69ee53c7 \r\n748c94bfdb94b322c876114fcf55a6043f1cd612766e8af1635218a747f45fb9\r\nMarcher Samples\r\n55ae2b00234674d82dcc401a0daa97e7b3921057a07970347815d9c50dddbda8\u00a0\r\n75edaae605622e056a40c2d8a16b86654d7ddc772f12c4fc64292a32a96fde7a\r\n254925e47fbfff4786eada6cbcb0805ed79d9bd417955c016236143eb2ecd827\r\nInfrastructures\r\nhttp:\/\/jma-go[.]jp\/js\/metrology\/jma.php\r\nhttp:\/\/www.jma-go[.]jp\/java\/java9356\/index.php\r\nhttp:\/\/jma-go[.]jp\/jma\/tsunami\/tsunami_regions.scr\r\nhttp:\/\/thunderbolt-price[.]com\/Art-and-Jakes\/Coupon.scr\r\nhttp:\/\/bite-me.wz[.]cz\/1.exe\r\nhttps:\/\/racemodel[.]at\r\nhttps:\/\/mountainhigh[.]at\r\nhttps:\/\/sungmap[.]at\r\n\r\n&nbsp;\r\nAppendix\r\n.bits domain support\r\nSmoke Loader supports .bit Top Level Domains (TLD). Author of the threat includes the following hard-coded DNS servers to resolve .bit domains. Though we haven\u2019t seen any .bit domain in Tsunami campaign, we listed the IP addresses just in case for another attack by the threat.\r\n\r\n192.71.245[.]208\r\n58.251.121[.]110\r\n101.226.79[.]205\r\n188.165.200[.]156\r\n185.121.177[.]177\r\n185.121.177[.]53\r\n144.76.133[.]38\r\n169.239.202[.]202\r\n5.135.183[.]146\r\n193.183.98[.]66\r\n51.254.25[.]115\r\n51.255.48[.]78","publisher":{"@type":"Organization","@id":"#panworg"},"image":{"@type":"ImageObject","url":"","width":"","height":""},"author":[{"@type":"Person","name":"Kaoru Hayashi"}]}</script><link rel='stylesheet' id='crayon-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/css/min/crayon.min.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-theme-classic-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/themes/classic/classic.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-font-monaco-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/fonts/monaco.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='wp-block-library-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dist/block-library/style.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='dashicons-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dashicons.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='post-views-counter-frontend-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/post-views-counter/css/frontend.css?ver=1.3.1' type='text/css' media='all' />
+<link rel='stylesheet' id='bodhi-svgs-attachment-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/svg-support/css/svgs-attachment.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-horizontal-list-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-list-horizontal/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-post-translations-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-post-translations/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wordpress-popular-posts-css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/css/wpp.css?ver=5.0.1' type='text/css' media='all' />
+<link rel='stylesheet' id='unit42/css-css'  href='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/styles/main.css' type='text/css' media='all' />
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery.js?ver=1.12.4-wp'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery-migrate.min.js?ver=1.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","ajaxurl":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":""};
+var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/js/min/crayon.min.js?ver=_2.7.2_beta'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpp_params = {"sampling_active":"0","sampling_rate":"100","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-json\/wordpress-popular-posts\/v1\/popular-posts","ID":"95997","token":"b09d8c8c9d","debug":""};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/js/wpp-5.0.0.min.js?ver=5.0.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpml_xdomain_data = {"css_selector":"wpml-ls-item","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","current_lang":"en"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/res/js/xdomain-data.js?ver=4.3.5'></script>
+<link rel='https://api.w.org/' href='https://unit42.paloaltonetworks.com/wp-json/' />
+<link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://unit42.paloaltonetworks.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://unit42.paloaltonetworks.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.4.1" />
+<link rel='shortlink' href='https://unit42.paloaltonetworks.com/?p=95997' />
+<link rel="alternate" type="application/json+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fanalysis-of-smoke-loader-in-new-tsunami-campaign%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fanalysis-of-smoke-loader-in-new-tsunami-campaign%2F&#038;format=xml" />
+<meta name="generator" content="WPML ver:4.3.5 stt:1,28;" />
+<meta name="google-site-verification" content="zHZtYOWm9hm4SZgsH7wqiYcOwmsAsxDUDU4UD1QxB40" /><style>#wpdevart_lb_overlay{background-color:#000000;} #wpdevart_lb_overlay.wpdevart_opacity{opacity:0.8 !important;} #wpdevart_lb_main_desc{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;} #wpdevart_lb_information_content{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;}
+		#wpdevart_lb_information_content{
+			width:100%;	
+		}
+		#wpdevart_info_counter_of_imgs{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_caption{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_title{
+			    display: inline-block;
+				padding-left:5px;
+				padding-right:5px;
+				font-size:15px;
+				color:#000000;
+		}
+		@-webkit-keyframes rotate {
+			to   {-webkit-transform: rotate(360deg);}
+			from  {-webkit-transform: rotate(0deg);}
+		}
+		@keyframes rotate {
+			to   {transform: rotate(360deg);}
+			from  {transform: rotate(0deg);}
+		}
+		#wpdevart_lb_loading_img,#wpdevart_lb_loading_img_first{
+			-webkit-animation: rotate 2s linear  infinite;
+    		animation: rotate 2s linear infinite;
+		}
+	  </style>        <script>var $ = jQuery;</script>
+  
+  
+<script type="text/javascript">
+;(function(win, doc, style, timeout) {
+var STYLE_ID = 'at-body-style';
+function getParent() {
+return doc.getElementsByTagName('head')[0];
+}
+function addStyle(parent, id, def) {
+if (!parent) {
+return;
+}
+var style = doc.createElement('style');
+style.id = id;
+style.innerHTML = def;
+parent.appendChild(style);
+}
+function removeStyle(parent, id) {
+if (!parent) {
+return;
+}
+var style = doc.getElementById(id);
+if (!style) {
+return;
+}
+parent.removeChild(style);
+}
+addStyle(getParent(), STYLE_ID, style);
+setTimeout(function() {
+removeStyle(getParent(), STYLE_ID);
+}, timeout);
+}(window, document, "body {visibility:hidden !important}", 3000));
+</script>
+
+<script src="//assets.adobedtm.com/9273d4aedcd2/0d76ae0322d7/launch-425c423d843b.min.js" async></script>
+<script type="text/javascript" src="https://www.paloaltonetworks.com/content/dam/pan/en_US/includes/attribution.js"></script>
+  </head>
+  <body class="post-template-default single single-post postid-95997 single-format-standard">
+    <!--[if IE]>
+      <div class="alert alert-warning">
+        You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.      </div>
+    <![endif]-->
+    <header class="haeder py-15 position-relative z-index-2">
+  <div class="container px-sm-30 px-35">
+    <div class="row">
+      <div class="first-logo col-sm-auto col-6 mb-sm-0 mb-40 text-sm-center order-1">
+                  <a href="https://www.paloaltonetworks.com/">
+<!--<img src="/wp-content/uploads/2019/07/paloaltonetwork.svg" class="attachment-full size-full" alt="" height="43" width="124" />-->
+<svg width="140" height="26" viewBox="0 0 140 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M59.4802 4.69592C57.6721 4.69592 55.7937 5.18876 53.469 6.43377L54.7605 9.62741C56.7794 8.50019 58.447 8.00735 59.6682 8.00735C61.0538 8.00735 61.6644 8.52395 61.6644 9.20483V9.25133C61.6644 9.72143 61.2883 9.97974 60.3729 10.0738L58.7766 10.238C54.7843 10.6606 53.1404 12.3985 53.1404 14.7934V14.9577C53.1404 17.2359 55.0188 19.0203 57.6721 19.0203C59.4192 19.0203 60.937 18.2826 61.8597 16.9807L62.1572 18.7857H65.7734V10.5904C65.7734 6.71584 63.5428 4.69592 59.4802 4.69592ZM59.1279 15.8969C57.7899 15.8969 57.1555 15.3803 57.1555 14.5816V14.5351C57.1555 13.8305 57.5543 13.3139 59.0101 13.1031L59.6445 13.0091C60.5713 12.8799 61.1406 12.7095 61.6644 12.3923V13.4317C61.6644 15.0052 60.6777 15.8969 59.1279 15.8969Z" fill="white"/>
+<path d="M25.4785 4.78994L20.8528 0.164276L16.2271 4.78994L18.5281 7.09192L6.92828 18.6917L11.5539 23.3174L16.1796 18.6917L13.8787 16.3908L25.4785 4.78994Z" fill="white"/>
+<path d="M11.6001 0.164048L0 11.7642L4.62603 16.3902L16.2262 4.79008L11.6001 0.164048Z" fill="white"/>
+<path d="M27.7794 7.09215L16.1793 18.6923L20.8053 23.3183L32.4054 11.7182L27.7794 7.09215Z" fill="white"/>
+<path d="M72.231 0H68.1219V18.7857H72.231V0Z" fill="white"/>
+<path d="M46.2366 4.69592C44.3685 4.69592 42.8683 5.52249 42.0428 6.81709L41.7287 4.93046H38.1125V23.4806H42.2215V17.051C43.0037 18.2567 44.4832 19.0193 46.2366 19.0193C49.5242 19.0193 52.2013 16.1077 52.2013 12.0916V11.6215C52.2013 7.60853 49.5242 4.69592 46.2366 4.69592ZM47.9744 11.9759C47.9744 14.0888 46.871 15.6159 45.0391 15.6159C43.2072 15.6159 42.1038 14.0898 42.1038 11.9759V11.7414C42.1038 9.62741 43.2072 8.10137 45.0391 8.10137C46.871 8.10137 47.9744 9.62741 47.9744 11.7414V11.9759Z" fill="white"/>
+<path d="M127.672 4.69592C123.469 4.69592 120.51 7.6075 120.51 11.6236V12.0937C120.51 16.1087 123.469 19.0213 127.672 19.0213C131.875 19.0213 134.834 16.1097 134.834 12.0937V11.6236C134.834 7.60853 131.875 4.69592 127.672 4.69592ZM130.607 11.9759C130.607 14.0888 129.504 15.6159 127.672 15.6159C125.84 15.6159 124.736 14.0898 124.736 11.9759V11.7414C124.736 9.62741 125.84 8.10137 127.672 8.10137C129.504 8.10137 130.607 9.62741 130.607 11.7414V11.9759Z" fill="white"/>
+<path d="M138.708 5.54211V5.47185C138.708 5.07304 138.404 4.79097 137.863 4.79097H136.924V6.9514H137.37V6.22299H137.866L138.239 6.9514H138.732L138.274 6.09694C138.552 6.01119 138.708 5.80248 138.708 5.54211ZM137.369 5.18979H137.862C138.144 5.18979 138.261 5.28381 138.261 5.49562V5.51938C138.261 5.70742 138.143 5.82418 137.862 5.82418H137.369V5.18979Z" fill="white"/>
+<path d="M137.769 3.63998C136.502 3.63998 135.539 4.60293 135.539 5.87067C135.539 7.13842 136.502 8.10137 137.769 8.10137C139.037 8.10137 140 7.13842 140 5.87067C140 4.60293 139.037 3.63998 137.769 3.63998ZM137.769 7.79554C136.666 7.79554 135.867 6.99687 135.867 5.86964C135.867 4.74241 136.666 3.94375 137.769 3.94375C138.873 3.94375 139.671 4.74241 139.671 5.86964C139.671 6.99687 138.873 7.79554 137.769 7.79554Z" fill="white"/>
+<path d="M108.416 0H104.307V18.7857H108.416V0Z" fill="white"/>
+<path d="M116.518 15.6159C115.321 15.6159 114.874 15.029 114.874 13.7613V8.10137H119.712V4.93149H114.874V1.76058L110.765 2.37121V14.159C110.765 17.3765 112.409 19.0203 115.697 19.0203C117.153 19.0203 118.867 18.5739 120.276 17.7753L119.102 14.8637C118.279 15.31 117.129 15.6159 116.518 15.6159Z" fill="white"/>
+<path d="M95.6662 4.69592C93.8581 4.69592 91.9797 5.18876 89.655 6.43377L90.9465 9.62741C92.9654 8.50019 94.633 8.00735 95.8542 8.00735C97.2397 8.00735 97.8504 8.52395 97.8504 9.20483V9.25133C97.8504 9.72143 97.4743 9.97974 96.5589 10.0738L94.9626 10.238C90.9702 10.6606 89.3264 12.3985 89.3264 14.7934V14.9577C89.3264 17.2359 91.2048 19.0203 93.8581 19.0203C95.6042 19.0203 97.123 18.2826 98.0456 16.9807L98.3432 18.7857H101.959V10.5904C101.959 6.71584 99.7287 4.69592 95.6662 4.69592ZM95.3138 15.8969C93.9748 15.8969 93.3415 15.3803 93.3415 14.5816V14.5351C93.3415 13.8305 93.7403 13.3139 95.1961 13.1031L95.8304 13.0091C96.7572 12.8799 97.3265 12.7095 97.8493 12.3923V13.4317C97.8493 15.0052 96.8637 15.8969 95.3138 15.8969Z" fill="white"/>
+<path d="M81.225 4.69592C77.022 4.69592 74.0629 7.6075 74.0629 11.6236V12.0937C74.0629 16.1087 77.022 19.0213 81.225 19.0213C85.4281 19.0213 88.3872 16.1097 88.3872 12.0937V11.6236C88.3862 7.60853 85.4281 4.69592 81.225 4.69592ZM84.1593 11.9759C84.1593 14.0888 83.0559 15.6159 81.224 15.6159C79.3921 15.6159 78.2887 14.0898 78.2887 11.9759V11.7414C78.2887 9.62741 79.3921 8.10137 81.224 8.10137C83.0559 8.10137 84.1593 9.62741 84.1593 11.7414V11.9759Z" fill="white"/>
+<path d="M98.0446 22.1168H99.0975L100.551 24.0334H100.566V22.1168H101.532V25.4964H100.513L99.0251 23.5313H99.0107V25.4964H98.0446V22.1168Z" fill="white"/>
+<path d="M102.816 22.1168H105.771L105.81 22.9372H103.825V23.4011H105.385V24.1491H103.825V24.676H105.868L105.829 25.4964H102.816V22.1168Z" fill="white"/>
+<path d="M107.925 22.9857H106.742L106.78 22.1168H110.088L110.127 22.9857H108.944V25.4964H107.925V22.9857Z" fill="white"/>
+<path d="M110.943 22.1168H112.024L112.575 24.4632H112.628L113.342 22.1168H114.333L115.033 24.4632H115.086L115.627 22.1168H116.66L115.771 25.4964H114.444L113.826 23.4589H113.797L113.169 25.4964H111.836L110.943 22.1168Z" fill="white"/>
+<path d="M117.404 23.8071C117.404 22.7057 118.152 22.0155 119.335 22.0155C120.518 22.0155 121.267 22.7057 121.267 23.8071C121.267 24.9085 120.519 25.5987 119.335 25.5987C118.152 25.5987 117.404 24.9075 117.404 23.8071ZM120.257 23.8071C120.257 23.2234 119.92 22.8752 119.335 22.8752C118.75 22.8752 118.412 23.2234 118.412 23.8071C118.412 24.3919 118.75 24.7391 119.33 24.7391C119.914 24.7391 120.257 24.3909 120.257 23.8071Z" fill="white"/>
+<path d="M122.363 22.1168H124.334C125.231 22.1168 125.672 22.5414 125.672 23.3287C125.672 23.8691 125.449 24.2369 125.014 24.4105L125.816 25.4974H124.667L124.044 24.6089H123.378V25.4974H122.363V22.1168ZM124.202 23.8164C124.54 23.8164 124.661 23.6284 124.661 23.3721C124.661 23.1159 124.54 22.933 124.202 22.933H123.377V23.8164H124.202Z" fill="white"/>
+<path d="M126.989 22.1168H128.002V23.3628H128.418L129.408 22.1168H130.547L130.552 22.1209L129.259 23.7389L130.625 25.4923L130.62 25.4964H129.437L128.414 24.1977H128.002V25.4964H126.989V22.1168Z" fill="white"/>
+<path d="M131.402 25.2743V24.3475H131.407C131.972 24.6327 132.523 24.7721 133 24.7721C133.363 24.7721 133.546 24.6853 133.546 24.5159C133.546 24.3465 133.425 24.3031 132.7 24.1873C131.909 24.0623 131.382 23.8247 131.382 23.1438C131.382 22.5115 131.938 22.0238 133.024 22.0238C133.459 22.0238 133.912 22.1158 134.333 22.2945V23.212L134.328 23.2172C133.927 22.9857 133.386 22.84 132.951 22.84C132.565 22.84 132.411 22.932 132.411 23.0859C132.411 23.2843 132.648 23.3029 133.242 23.4052C134.033 23.5406 134.56 23.7627 134.56 24.4777C134.56 25.0325 134.145 25.5884 132.952 25.5884C132.364 25.5884 131.894 25.4675 131.402 25.2743Z" fill="white"/>
+</svg>
+
+</a>
+
+      </div>
+
+      <div class="col-sm-auto col-6 text-sm-center order-sm-2 order-4 second-logo-unit">
+        <a href="https://unit42.paloaltonetworks.com/"><img src="/wp-content/uploads/2019/07/unit42.svg" class="attachment-full size-full" alt="" height="35" width="105" /></a>
+      </div>
+
+      <div class="col-auto d-sm-none ml-auto mb-40 order-2">
+        <button class="btn__search" data-toggle="collapse" data-target="#search"><i class="ui ui-1"></i></button>
+      </div>
+
+      <div id="search" class="collapse d-sm-block col-sm-auto col-12 ml-auto order-3">
+        <div class="pt-sm-0 pt-20 pb-sm-0 pb-40 mt-sm-0 mt-n30">
+                      <input type="search" placeholder="Search Unit 42" id="innerSearch" class="header__search" value="" required>
+                  </div>
+      </div>
+
+      <div class="col-auto d-sm-none d-flex ml-auto align-items-center order-5">
+        <button class="btn__menu rounded" data-toggle="collapse" data-target="#navigation">Menu</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="navigation" class="site-nav collapse d-sm-block pb-20 mt-sm-10">
+  <div class="container px-sm-30">
+    <ul id="menu-primary-navigation" class="main-menu d-sm-flex font-weight-medium"><li id="menu-item-97290" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-97290"><a href="https://unit42.paloaltonetworks.com/tools/">Tools</a></li>
+<li id="menu-item-41" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-41"><a href="https://unit42.paloaltonetworks.com/atoms/">ATOMs</a></li>
+<li id="menu-item-98931" class="menu-item menu-item-type-post_type_archive menu-item-object-events menu-item-98931"><a href="https://unit42.paloaltonetworks.com/events/">Speaking Events</a></li>
+<li id="menu-item-81229" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-81229"><a href="https://unit42.paloaltonetworks.com/about-unit-42/">About Us</a></li>
+</ul>  </div>
+</nav>
+
+  <article class="article overflow-hidden">
+    
+<header class="article__header py-sm-25 pt-40 pb-25 bg-gray-700">
+  <div class="container">
+    
+    <h1 class="article__header__title mb-sm-30 mb-40">Analysis of Smoke Loader in New Tsunami Campaign</h1>
+
+    <ul class="article__entry-meta d-flex flex-wrap align-items-center text-black">
+      <li class="mr-10 mb-10 px-20 rounded-pill d-flex bg-gray-200"><div class="post-views post-95997 entry-meta">
+			
+			
+			<span class="post-views-count">17,707</span>
+			</div> <span class="ml-5">people reacted</span></li>
+      <li class="d-sm-none col-12 p-0"></li>
+      <li class="mr-10 mb-10 px-20 rounded-pill bg-gray-200"><span class="ldc-ul_cont idc_ul_cont_not_liked_inner" onclick="alter_ul_post_values(this,'95997','like')"><i class="ui ui-2"></i><span class="ml-5">1</span></span></li>
+      <li class="mb-10 px-20 rounded-pill bg-gray-200"><span class="span-reading-time rt-reading-time"><span class="rt-label rt-prefix"></span> <span class="rt-time"> 8</span> <span class="rt-label rt-postfix"></span></span> min. read</li>
+    </ul>
+
+    <div class="article__share position-relative">
+      <div class="dropdown dropdown-right">
+        <button type="button" class="px-25 text-black bg-white text-uppercase rounded-pill" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Share <i class="ui ui-6 ml-10 align-text-top"></i>
+        </button>
+        <div class="dropdown-menu rounded-pill" role="toolbar">
+          <div class="share-dropdown px-20 py-10 text-black font-size-sm">
+            <div class="row align-items-center flex-nowrap">
+              <div class="col">
+                <div class="d-flex align-items-center">
+                  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Funit42.paloaltonetworks.com%2Fanalysis-of-smoke-loader-in-new-tsunami-campaign%2F" target="_blank"><i class="ui ui-7"></i></a>
+                  <a href="https://twitter.com/home?status=https%3A%2F%2Funit42.paloaltonetworks.com%2Fanalysis-of-smoke-loader-in-new-tsunami-campaign%2F+-+Analysis+of+Smoke+Loader+in+New+Tsunami+Campaign" target="_blank"><i class="ui ui-8"></i></a>
+                  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fanalysis-of-smoke-loader-in-new-tsunami-campaign%2F&title=Analysis+of+Smoke+Loader+in+New+Tsunami+Campaign&summary=&source=" target="_blank"><i class="ui ui-9"></i></a>
+                  <a href="//www.reddit.com/submit?url=https://unit42.paloaltonetworks.com/analysis-of-smoke-loader-in-new-tsunami-campaign/" target="_blank"><i class="ui ui-10"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>    <div class="article__summary py-25 text-gray-500 font-size-sm">
+  <div class="container">
+    <div class="row align-items-center no-gutters">
+      <div class="col-sm-auto col-12 mb-sm-0 mb-35">
+        <i class="ui ui-11 text-gray-700 mr-sm-20"></i>
+      </div>
+  
+      <div class="col-sm col-12">
+        <p>
+          By <a href="https://unit42.paloaltonetworks.com/author/khayashi/" title="Posts by Kaoru Hayashi" class="author url fn" rel="author">Kaoru Hayashi</a>        </p>
+        <p><time datetime="2018-12-20T04:12:18+00:00">December 19, 2018 at 8:12 PM</time></p>
+        <p>Category: <a href="https://unit42.paloaltonetworks.com/category/unit-42/" rel="category tag">Unit 42</a></p>
+        <p>Tags: <a href="https://unit42.paloaltonetworks.com/tag/azorult/" rel="tag">Azorult</a>, <a href="https://unit42.paloaltonetworks.com/tag/japan/" rel="tag">Japan</a>, <a href="https://unit42.paloaltonetworks.com/tag/marcher/" rel="tag">Marcher</a>, <a href="https://unit42.paloaltonetworks.com/tag/smoke-loader/" rel="tag">Smoke Loader</a></p>
+      </div>
+    </div>
+  </div>
+</div>    <div class="py-30 bg-white">
+      <div class="container">
+        <div class="article__content pb-30">
+                    <p class="wpml-ls-statics-post_translations wpml-ls">This post is also available in: 
+    <span class="wpml-ls-slot-post_translations wpml-ls-item wpml-ls-item-ja wpml-ls-first-item wpml-ls-last-item wpml-ls-item-legacy-post-translations"><a href="https://unit42.paloaltonetworks.jp/analysis-of-smoke-loader-in-new-tsunami-campaign/" class="wpml-ls-link"><span class="wpml-ls-native" lang="ja">日本語</span><span class="wpml-ls-display"><span class="wpml-ls-bracket"> (</span>Japanese<span class="wpml-ls-bracket">)</span></span></a></span></p><p>On November 8th, the Japanese Meteorological Agency issued an <a href="https://www.jma.go.jp/jma/press/1811/08c/WARNmail_20181108.pdf">alert</a> about a fake tsunami warning email masquerading as coming from the agency. According to the alert, the email was written in Japanese and asked recipients to click the link to confirm their evacuation area from a tsunami after an earthquake. The link in the email is not critical information to save your life but malware to steal crucial information from you. The malware is <a href="http://cyb3rsleuth.blogspot.com/2011/08/smoke-loader.html">Smoke Loader</a>, infamous commodity malware used by <a href="https://isc.sans.edu/forums/diary/Resumethemed+malspam+pushing+Smoke+Loader/23054/">various cybercriminals since 2011</a>.</p>
+<p>Smoke Loader is a modular loader where attackers can select any payload to be installed on the victim by Smoke Loader. Thus, the final payload can vary between attacks. For example, we previously reported on the <a href="https://researchcenter.paloaltonetworks.com/2015/08/retefe-banking-trojan-targets-sweden-switzerland-and-japan/">Retefe Banking Trojan being distributed by Smoke Loader in Sweden, and Japan</a>. We have also seen backdoors, ransomware, cryptominers, password stealers, Point-of-Sale (PoS) malware, and banking Trojans installed by Smoke Loader.</p>
+<p>This attack seems to be aiming to steal credentials from unidentified targets in Japan and took a similar approach to normal targeted attacks. The attacker registered the fake Japanese government agency domain and ensured the file path to the malware on the server is close to the legitimate agency web site. They wrote the lure email in fluent Japanese and did not distribute it broadly. In late November, the attacker started using another commodity malware known as AzoRult. Figure 1 shows the timeline of this attack.</p>
+<p><img class="aligncenter size-full wp-image-96006" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1.png" alt="" width="800" height="1131" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1.png 800w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1-212x300.png 212w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1-768x1086.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1-724x1024.png 724w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader1-370x523.png 370w" sizes="(max-width: 800px) 100vw, 800px" /></p>
+<p style="text-align: center;"><em>Figure 1 Time line of the attack</em></p>
+<p>&nbsp;</p>
+<h1>Smoke Loader Analysis</h1>
+<p>Though it’s been seven years since Smoke Loader first appeared, the author keeps updating the code. <a href="https://blog.malwarebytes.com/threat-analysis/2016/08/smoke-loader-downloader-with-a-smokescreen-still-alive/">Malwarebytes</a> published an excellent analysis of Smoke Loader in 2016. The samples we looked at added the following techniques to avoid detection or analysis.</p>
+<ul>
+<li>Code obfuscation by junk jump</li>
+<li>Decrypts subroutines and encrypts them after execution</li>
+<li>Employs <a href="http://www.hexacorn.com/blog/2017/10/26/propagate-a-new-code-injection-trick/">PROPagate</a> trick to inject second stage code into an explorer.exe process</li>
+<li>Changes the algorithm of generating the unique ID</li>
+<li>Encrypts network traffics and payload file</li>
+</ul>
+<p>Some of these techniques were already reported by <a href="https://www.fireeye.com/blog/threat-research/2018/06/rig-ek-delivering-monero-miner-via-propagate-injection-technique.html">FireEye</a> and <a href="https://blog.talosintelligence.com/2018/07/smoking-guns-smoke-loader-learned-new.html">Talos</a> this year. We will focus on the unique ID, C2 communication, and the payload in this blog.</p>
+<p>&nbsp;</p>
+<h2>Generating a unique ID</h2>
+<p>Initially, the threat generates a unique ID for the compromised machine from the computer name, the hardcoded static number(0B0D0406), and the volume serial number of the system drive. Smoke Loader uses the unique ID for three purposes:</p>
+<ul>
+<li>Tracking the compromised machine at C2.</li>
+<li>Encrypting payload by the ID.</li>
+<li>Creating random file names for persistence.</li>
+</ul>
+<p>Here’s how to create the unique ID. If the computer name is “Test_PC” and the volume serial number is “12345678”, the threat appends the three values like the following:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">&#8220;Test_PC&#8221; + &#8220;0B0D0406&#8221; + &#8220;12345678&#8221; = &#8220;Test_PC0B0D040612345678&#8221;</span></p>
+<p>and it calculates the MD5 hash value of the string,</p>
+<p><span style="font-family: 'courier new', courier, monospace;">MD5(&#8220;Test_PC0B0D040612345678&#8221;) = 41EE612602833345FC5BD2B98103811C</span></p>
+<p>It then appends the volume serial to the hash value and gets the 40 characters unique ID.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">&#8220;41EE612602833345FC5BD2B98103811C&#8221; + &#8220;12345678&#8221; = &#8220;41EE612602833345FC5BD2B98103811C12345678&#8221;</span></p>
+<p>Next, Smoke Loader generates two strings based on the first eight characters and the last eight characters of the ID. Following is the algorithm written in Python.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f69288f21ca8217727465" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+# the unique ID
+id = "41EE612602833345FC5BD2B98103811C12345678"
+
+def makeStrings(_s):
+    results = ""
+
+    for n in _s:
+        results += chr((ord(n) - 0x30) + ord('a'))
+
+    return results
+
+stringA = makeStrings(id[:8]) # "ebvvgbcg"
+stringB = makeStrings(id[-8:]) # "bcdefghi"</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-2">2</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-4">4</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-6">6</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-8">8</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-10">10</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f69288f21ca8217727465-12">12</div><div class="crayon-num" data-line="crayon-5f69288f21ca8217727465-13">13</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f69288f21ca8217727465-1"><span class="crayon-p"># the unique ID</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-2"><span class="crayon-v">id</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"41EE612602833345FC5BD2B98103811C12345678"</span></div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-3">&nbsp;</div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-4"><span class="crayon-e">def </span><span class="crayon-e">makeStrings</span><span class="crayon-sy">(</span><span class="crayon-v">_s</span><span class="crayon-sy">)</span><span class="crayon-o">:</span></div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-5">   <span class="crayon-h"> </span><span class="crayon-v">results</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">""</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-6">&nbsp;</div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-7">   <span class="crayon-h"> </span><span class="crayon-st">for</span><span class="crayon-h"> </span><span class="crayon-i">n</span><span class="crayon-h"> </span><span class="crayon-st">in</span><span class="crayon-h"> </span><span class="crayon-v">_s</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-8">       <span class="crayon-h"> </span><span class="crayon-v">results</span><span class="crayon-h"> </span><span class="crayon-o">+=</span><span class="crayon-h"> </span><span class="crayon-e">chr</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-e">ord</span><span class="crayon-sy">(</span><span class="crayon-v">n</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-h"> </span><span class="crayon-cn">0x30</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-e">ord</span><span class="crayon-sy">(</span><span class="crayon-s">'a'</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-9">&nbsp;</div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-10">   <span class="crayon-h"> </span><span class="crayon-st">return</span><span class="crayon-h"> </span><span class="crayon-e">results</span></div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-11">&nbsp;</div><div class="crayon-line crayon-striped-line" id="crayon-5f69288f21ca8217727465-12"><span class="crayon-v">stringA</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">makeStrings</span><span class="crayon-sy">(</span><span class="crayon-v">id</span><span class="crayon-sy">[</span><span class="crayon-o">:</span><span class="crayon-cn">8</span><span class="crayon-sy">]</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-p"># "ebvvgbcg"</span></div><div class="crayon-line" id="crayon-5f69288f21ca8217727465-13"><span class="crayon-v">stringB</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-e">makeStrings</span><span class="crayon-sy">(</span><span class="crayon-v">id</span><span class="crayon-sy">[</span><span class="crayon-o">-</span><span class="crayon-cn">8</span><span class="crayon-o">:</span><span class="crayon-sy">]</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-p"># "bcdefghi"</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0011 seconds] -->
+<p>&nbsp;</p>
+<p>Smoke Loader uses these strings for the file name. It copies itself as follows.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">%APPDATA%\Microsoft\Windows\[stringA\[stringB].exe</span></p>
+<p>and it creates following shortcut file to execute the threat when the computer starts.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">%StartUp%\[stringA].lnk</span></p>
+<p>These two strings look random. However, the attacker always generates two identical strings to the compromised machine since it is based on the static values of the environment.</p>
+<p>&nbsp;</p>
+<h2>C2 Communication</h2>
+<p>Smoke Loader contains the following hardcoded C2 address.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">jma-go[.]jp/js/metrology/jma.php</span></p>
+<p>An outline of initial C2 communication follows.</p>
+<ol>
+<li>Smoke Loader sends the encrypted data to C2 by HTTP POST method.</li>
+<li>C2 server replies HTTP 404 response (Not Found) with encrypted data.</li>
+<li>Smoke Loader extracts the plugin from C2, encrypts it by using the unique ID, and saves it local disk.</li>
+<li>Smoke Loader extracts the payload modules from the encrypted plugin file and injects them into an Explorer.exe process.</li>
+</ol>
+<p><img class="aligncenter size-full wp-image-96007" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader2.png" alt="" width="874" height="531" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader2.png 874w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader2-300x182.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader2-768x467.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader2-370x225.png 370w" sizes="(max-width: 874px) 100vw, 874px" /></p>
+<p style="text-align: center;"><em>Figure 2 Initial communication</em></p>
+<h2></h2>
+<p>&nbsp;</p>
+<h2>Making initial POST data</h2>
+<p>Smoke Loader creates the data to send C2. At offset 0, there is a marker ‘E207’ followed by the unique ID (Figure 3). The marker is ‘072E’ in <a href="https://en.wikipedia.org/wiki/Endianness">little-endian form</a> and ‘2018’ in decimal. Smoke Loader uses the marker every time communicating with C2.</p>
+<p><img class="aligncenter size-full wp-image-96008" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader3.png" alt="" width="874" height="118" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader3.png 874w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader3-300x41.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader3-768x104.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader3-370x50.png 370w" sizes="(max-width: 874px) 100vw, 874px" /></p>
+<p style="text-align: center;"><em>Figure 3 POST data</em></p>
+<p>&nbsp;</p>
+<p>Smoke Loader finally encrypts the data with RC4 cipher by using the static key 0x161A9A0C and send it to the C2 by HTTP POST method.</p>
+<p>&nbsp;</p>
+<h2>Plugin from C2</h2>
+<p>The C2 server responds the plugin data contains the final payload with HTTP 404 status code. Smoke Loader obtains the encrypted header size from the first DWORD value of the plugin and decrypts the following bytes with RC4 cipher by the different static key 0x1D17D70A. Figure 4 shows the plugin data after decryption. It then verifies the marker ‘E207’ and gets the plugin size which is defined in the &#8220;plugin_size’ variable.</p>
+<p><img class="aligncenter size-full wp-image-96009" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader4.png" alt="" width="874" height="162" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader4.png 874w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader4-300x56.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader4-768x142.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader4-370x69.png 370w" sizes="(max-width: 874px) 100vw, 874px" /></p>
+<p style="text-align: center;"><em>Figure 4 Reply data from C2</em></p>
+<p>After checking the plugin size, Smoke Loader encrypts plugin data with an RC4 cipher using the unique ID and saves it as the following path with the generated string from the ID. Since the file is encrypted with the distinct value to the machine, the file hash is always different on each computer even if the plugin is identical.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">%APPDATA%\Microsoft\Windows\[stringA]\[stringA]</span></p>
+<p>Then Smoke Loader decrypts the saved plugin data. The plugin data has thirteen-byte length header and consists from following values.</p>
+<table class=" aligncenter" style="width: 459px;" width="459">
+<tbody>
+<tr>
+<td width="75"><strong>Offset</strong></td>
+<td width="113"><strong>Size</strong></td>
+<td width="271"><strong>Value</strong></td>
+</tr>
+<tr>
+<td width="75">0x00</td>
+<td width="113">DWORD</td>
+<td width="271">Plugin size</td>
+</tr>
+<tr>
+<td width="75">0x04</td>
+<td width="113">DWORD</td>
+<td width="271">Plugin marker, 0xD5A08DD8</td>
+</tr>
+<tr>
+<td width="75">0x08</td>
+<td width="113">DWORD</td>
+<td width="271">Unknown, possible plugin identifier</td>
+</tr>
+<tr>
+<td width="75">0x0C</td>
+<td width="113">BYTE</td>
+<td width="271">Number of modules in the plugin</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align: center;"><em>Table 1 Plugin header</em></p>
+<p>&nbsp;</p>
+<p>The plugin can contain multiple modules. In the case of this tsunami campaign, the payload contains six modules. Each module has a header that includes its size and RC4 key to decrypt.</p>
+<p><img class="aligncenter size-full wp-image-96010" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader5.png" alt="" width="874" height="439" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader5.png 874w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader5-300x151.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader5-768x386.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader5-370x186.png 370w" sizes="(max-width: 874px) 100vw, 874px" /></p>
+<p style="text-align: center;"><em>Figure 5 Plugin header and module header</em></p>
+<p>Smoke Loader decrypts a module with RC4 cipher by the specified key. After verifying architecture flag (64 bit or 32 bit) in the module, the threat executes Explorer.exe process and injects the module into the process. Since the threat repeats this the number of modules times, there should be multiple Explorer.exe processes on the compromised machine.</p>
+<p>&nbsp;</p>
+<h2>Payload Modules</h2>
+<p>Table 2 shows the list of modules in this campaign. There are three types of functions in two architectures.</p>
+<table width="661" align="center">
+<tbody>
+<tr>
+<td style="width: 73px;"><strong>Module</strong></td>
+<td style="width: 113px;"><strong>Architecture</strong></td>
+<td style="width: 453px;"><strong>Function</strong></td>
+</tr>
+<tr>
+<td style="width: 73px;">1</td>
+<td style="width: 113px;">32 bit</td>
+<td style="width: 453px;">Stealing stored credential from browsers and email programs</td>
+</tr>
+<tr>
+<td style="width: 73px;">2</td>
+<td style="width: 113px;">64 bit</td>
+<td style="width: 453px;">Incomplete porting of Module 1</td>
+</tr>
+<tr>
+<td style="width: 73px;">3</td>
+<td style="width: 113px;">32 bit</td>
+<td style="width: 453px;">Stealing data sending from Browsers</td>
+</tr>
+<tr>
+<td style="width: 73px;">4</td>
+<td style="width: 113px;">64 bit</td>
+<td style="width: 453px;">Same with Module 3</td>
+</tr>
+<tr>
+<td style="width: 73px;">5</td>
+<td style="width: 113px;">32 bit</td>
+<td style="width: 453px;">Stealing login credential from email protocols</td>
+</tr>
+<tr>
+<td style="width: 73px;">6</td>
+<td style="width: 113px;">64 bit</td>
+<td style="width: 453px;">Same with Module 5</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align: center;"><em>Table 2 Module list</em></p>
+<p>When injecting modules, Smoke Loader passes the configuration data including the following values to the modules for C2 communication. Each module has exact same C2 communication code with the loader.</p>
+<ul>
+<li>RC4 encryption key for HTTP POST</li>
+<li>The unique ID</li>
+<li>C2 URL</li>
+</ul>
+<h4>Module 1</h4>
+<p>This module aims to steal stored credentials in following programs.</p>
+<ul>
+<li>Internet Explorer</li>
+<li>Firefox</li>
+<li>Chrome</li>
+<li>Opera</li>
+<li>Chromium</li>
+<li>Yandex</li>
+<li>Amigo</li>
+<li>QQBrowser</li>
+<li>Outlook</li>
+<li>Thunderbird</li>
+<li>WinSCP</li>
+</ul>
+<p>Module 2 contains a partial code of Module 1 but appears to be in the under development phase.</p>
+<h4>Modules 3 and 4</h4>
+<p>These modules hook APIs and steals all data being sent data from following browsers.</p>
+<ul>
+<li>Firefox</li>
+<li>Internet Explorer</li>
+<li>Edge</li>
+<li>Chrome</li>
+<li>Opera</li>
+</ul>
+<h4>Modules 5 and 6</h4>
+<p>These modules hook APIs and steals user id, password, and their associated remote ftp and email server addresses on following protocols.</p>
+<ul>
+<li>FTP on port 21</li>
+<li>SMTP on port 25, 587, 2525</li>
+<li>POP3 on port 110</li>
+<li>IMAP on port 143</li>
+</ul>
+<p>&nbsp;</p>
+<h2>Infrastructures and another tools</h2>
+<p>A person registered the domain name<span style="font-family: 'courier new', courier, monospace;"> jma-go[.]jp</span> on Oct 30, 2018. The domain does not have a second level domain name, such as .co.jp nor .ne.jp. It is defined as <a href="https://www.nic.ad.jp/en/newsletter/no18/sec0301.html">General-use JP domain name</a> by JPNIC. In the definition, JPNIC described the registration requirements of the general-use JP domain name as following.</p>
+<p><em>‘In the general-use JP domain name system, we have established what we call a &#8220;local presence&#8221; prerequisite, which asks for a connection or relationship with Japan.‘</em></p>
+<p>According to the Whois information of the domain, the domain was owned by a person who has a postal address in Russia and uses a Gmail address. The registrant may change the postal address after registration or could prove a connection or relationship with Japan.</p>
+<p>The same person also registered another eight domains with the same Gmail address. We found that the three of the domains were used in attacks involving the Android banking trojan/password stealing malware, <a href="https://info.phishlabs.com/blog/analyzing-android.trojan.marcher">Marcher</a> from Feb to March in 2018. We haven’t identified the targets of the mobile malware yet. Following is the sample list.</p>
+<p>&nbsp;</p>
+<table class=" aligncenter" style="width: 678px;" width="678">
+<tbody>
+<tr>
+<td style="width: 132px;"><strong>Domain</strong></td>
+<td style="width: 557px;"><strong>Marcher SHA256</strong></td>
+</tr>
+<tr>
+<td style="width: 132px;">Sungmap[.]at</td>
+<td style="width: 557px;">254925e47fbfff4786eada6cbcb0805ed79d9bd417955c016236143eb2ecd827</td>
+</tr>
+<tr>
+<td style="width: 132px;">Mountainhigh[.]at</td>
+<td style="width: 557px;">75edaae605622e056a40c2d8a16b86654d7ddc772f12c4fc64292a32a96fde7a</td>
+</tr>
+<tr>
+<td style="width: 132px;">Racemodel[.]at</td>
+<td style="width: 557px;">55ae2b00234674d82dcc401a0daa97e7b3921057a07970347815d9c50dddbda8</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align: center;"><em>Table 3 Domains and Marcher hashes</em></p>
+<p>&nbsp;</p>
+<p>On November 25, we confirmed that another malware, AzoRult, was served from the same URL previously serving Smoke Loader. <a href="https://www.vkremez.com/2017/07/lets-learn-reversing-credential-and.html">AzoRult</a> is also a commodity malware that steals credentials, cookies, and cryptocurrencies. This AzoRult accesses the following C2 address, which is a different path on the same C2 server with the Smoke Loader.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">www.jma-go[.]jp/java/java9356/index.php</span></p>
+<p>We observed three AzoRult samples using the same C2 at the time of writing this blog. The attacker distributes those files from following URLs.</p>
+<ul>
+<li><span style="font-family: 'courier new', courier, monospace;">thunderbolt-price[.]com/Art-and-Jakes/Coupon.scr</span></li>
+<li><span style="font-family: 'courier new', courier, monospace;">bite-me.wz[.]cz/1.exe</span></li>
+</ul>
+<p><span style="font-family: 'courier new', courier, monospace;">thunderbolt-price[.]com</span> was registered in 2012 in Japan, and the Privacy Protection Service protects its registrant information. The website of the domain does not host content at the top page as of today. According to the Google search, the domain appears in shopping related pages from 2014 to 2015. Interestingly, those web pages are low-quality and mostly hosted on hacked web servers. These web pages are likely created for malicious Search Engine Optimization (SEO) backlinks which gain scores for better page rank in the search engine results. Figure 6 is a ladies’ shoes shopping web page hosted on the website of a construction and building materials company in Turkey.</p>
+<p><img class="aligncenter size-full wp-image-96011" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6.png" alt="" width="874" height="1031" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6.png 874w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6-254x300.png 254w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6-768x906.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6-868x1024.png 868w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/12/SmokeLoader6-370x436.png 370w" sizes="(max-width: 874px) 100vw, 874px" /></p>
+<p style="text-align: center;"><em>Figure 6 SEO backlinks on hacked site</em></p>
+<p>&nbsp;</p>
+<p>The domain may have been used for a shopping or affiliate site previously, but the owner does not use it for that purpose anymore. It looks like the attacker compromised the website, which had not been used for few years, and is using it for distributing AzoRult. However, we don’t know the connection between the attacker and the current owner of the <span style="font-family: 'courier new', courier, monospace;">thunderbolt-price[.]com</span>.</p>
+<p>Table 4 shows the timetable of infrastructure changes and timestamp of malware.</p>
+<table class=" aligncenter" style="width: 709px;" width="709">
+<tbody>
+<tr>
+<td width="113"><strong>Date</strong></td>
+<td width="595"><strong>Activities</strong></td>
+</tr>
+<tr>
+<td width="113">Oct 30, 2018</td>
+<td width="595">Registers jma-go[.]jp domain</td>
+</tr>
+<tr>
+<td width="113">Nov 5, 2018</td>
+<td width="595">Smoke Loader</p>
+<p>3d75eabb8460450a49e2fb68053d9f591efe5aefd379205e5cc3af574bb9f415</td>
+</tr>
+<tr>
+<td width="113">Nov 6, 2018</td>
+<td width="595">Smoke Loader</p>
+<p>8a1aab36c3940e4dd83f489432fa710fba582e254c3a52459c52826d6a822f2d</p>
+<p>0db3fd1394b15b98f4e112102cdec6cc569062cdb199b66c5838c54cbc286277</p>
+<p>be3817b9f14df3e0af82ae47b0904ac38d022e2b2d7bb7f8f9800b534b60183c</td>
+</tr>
+<tr>
+<td width="113">Nov 8, 2018</td>
+<td width="595">Smoke Loader</p>
+<p>27aa9cdf60f1fbff84ede0d77bd49677ec346af050ffd90a43b8dcd528c9633b</td>
+</tr>
+<tr>
+<td width="113">Nov 9, 2018</td>
+<td width="595">Smoke Loader</p>
+<p>42fdaffdbacfdf85945bd0e8bfaadb765dde622a0a7268f8aa70cd18c91a0e85</td>
+</tr>
+<tr>
+<td width="113">Nov 15, 2018</td>
+<td width="595">Smoke Loader</p>
+<p>fb3def9c23ba81f85aae0f563f4156ba9453c2e928728283de4abdfb5b5f426f</td>
+</tr>
+<tr>
+<td width="113">Nov 24, 2018</td>
+<td width="595">AzoRult</p>
+<p>70900b5777ea48f4c635f78b597605e9bdbbee469b3052f1bd0088a1d18f85d3</td>
+</tr>
+<tr>
+<td width="113">Nov 25, 2018</td>
+<td width="595">Smoke Loadera</p>
+<p>1ce72ec2f2fe6139eb6bb35b8a4fb40aca2d90bc19872d6517a6ebb66b6b139</td>
+</tr>
+<tr>
+<td width="113">Nov 27, 2018</td>
+<td width="595">AzoRult</p>
+<p>7337143e5fb7ecbdf1911e248d73c930a81100206e8813ad3a90d4dd69ee53c7</td>
+</tr>
+<tr>
+<td width="113">Nov 30, 2018</td>
+<td width="595">Changes the IP address associates with jma-go[.]jp</p>
+<p>from 47.74.255[.]111 to 149.129.135[.]53</td>
+</tr>
+<tr>
+<td width="113">Dec 3, 2018</td>
+<td width="595">AzoRult7</p>
+<p>48c94bfdb94b322c876114fcf55a6043f1cd612766e8af1635218a747f45fb9</td>
+</tr>
+</tbody>
+</table>
+<p style="text-align: center;"><em>Table 4 Timetable</em></p>
+<p>&nbsp;</p>
+<h1>Conclusion</h1>
+<p>Commodity malware is widely used by cyber criminals these days. The authors of malware keep updating the code to expand the capabilities and trying to gain more customers. As we detailed in this article, Smoke Loader encrypts network traffic and files with various keys to avoid analysis. We recently published a report of <a href="https://researchcenter.paloaltonetworks.com/2018/11/unit42-new-wine-old-bottle-new-azorult-variant-found-findmyname-campaign-using-fallout-exploit-kit/">a new variant of AzoRult</a> that introduces a new advanced obfuscation technique to evade detection by security products. Attackers, like those in this tsunami campaign, can pick up malware fitting for their purpose from online threat marketplaces.</p>
+<p>Palo Alto Networks customers are protected from this threat in the following ways:</p>
+<ul>
+<li>AutoFocus customers can track these samples with the <a href="https://autofocus.paloaltonetworks.com/#/tag/Unit42.SmokeLoader">Smoke Loader</a>, <a href="https://autofocus.paloaltonetworks.com/#/tag/Unit42.AzoRult">AzoRult</a> and <a href="https://autofocus.paloaltonetworks.com/#/tag/Commodity.Marcher">Marcher</a>.</li>
+<li>WildFire detects all files mentioned in this report with malicious verdicts.</li>
+<li>Traps blocks all of the files described in this article.</li>
+</ul>
+<p>&nbsp;</p>
+<h1>IoC</h1>
+<h2>Smoke Loader Samples</h2>
+<p><span style="font-family: 'courier new', courier, monospace;">3d75eabb8460450a49e2fb68053d9f591efe5aefd379205e5cc3af574bb9f415<br />
+</span><span style="font-family: 'courier new', courier, monospace;">8a1aab36c3940e4dd83f489432fa710fba582e254c3a52459c52826d6a822f2d<br />
+0db3fd1394b15b98f4e112102cdec6cc569062cdb199b66c5838c54cbc286277<br />
+be3817b9f14df3e0af82ae47b0904ac38d022e2b2d7bb7f8f9800b534b60183c<br />
+27aa9cdf60f1fbff84ede0d77bd49677ec346af050ffd90a43b8dcd528c9633b<br />
+42fdaffdbacfdf85945bd0e8bfaadb765dde622a0a7268f8aa70cd18c91a0e85<br />
+fb3def9c23ba81f85aae0f563f4156ba9453c2e928728283de4abdfb5b5f426f<br />
+a1ce72ec2f2fe6139eb6bb35b8a4fb40aca2d90bc19872d6517a6ebb66b6b139</span></p>
+<h2>AzoRult Samples</h2>
+<p><span style="font-family: 'courier new', courier, monospace;">70900b5777ea48f4c635f78b597605e9bdbbee469b3052f1bd0088a1d18f85d3 </span><br />
+<span style="font-family: 'courier new', courier, monospace;">7337143e5fb7ecbdf1911e248d73c930a81100206e8813ad3a90d4dd69ee53c7 </span><br />
+<span style="font-family: 'courier new', courier, monospace;">748c94bfdb94b322c876114fcf55a6043f1cd612766e8af1635218a747f45fb9</span></p>
+<h2>Marcher Samples</h2>
+<p><span style="font-family: 'courier new', courier, monospace;">55ae2b00234674d82dcc401a0daa97e7b3921057a07970347815d9c50dddbda8 </span><br />
+<span style="font-family: 'courier new', courier, monospace;">75edaae605622e056a40c2d8a16b86654d7ddc772f12c4fc64292a32a96fde7a</span><br />
+<span style="font-family: 'courier new', courier, monospace;">254925e47fbfff4786eada6cbcb0805ed79d9bd417955c016236143eb2ecd827</span></p>
+<h2>Infrastructures</h2>
+<p><span style="font-family: 'courier new', courier, monospace;">http://jma-go[.]jp/js/metrology/jma.php</span><br />
+<span style="font-family: 'courier new', courier, monospace;">http://www.jma-go[.]jp/java/java9356/index.php</span><br />
+<span style="font-family: 'courier new', courier, monospace;">http://jma-go[.]jp/jma/tsunami/tsunami_regions.scr</span><br />
+<span style="font-family: 'courier new', courier, monospace;">http://thunderbolt-price[.]com/Art-and-Jakes/Coupon.scr</span><br />
+<span style="font-family: 'courier new', courier, monospace;">http://bite-me.wz[.]cz/1.exe</span><br />
+<span style="font-family: 'courier new', courier, monospace;">https://racemodel[.]at</span><br />
+<span style="font-family: 'courier new', courier, monospace;">https://mountainhigh[.]at</span><br />
+<span style="font-family: 'courier new', courier, monospace;">https://sungmap[.]at</span></p>
+<p>&nbsp;</p>
+<h1>Appendix</h1>
+<h2>.bits domain support</h2>
+<p>Smoke Loader supports .bit Top Level Domains (TLD). Author of the threat includes the following hard-coded DNS servers to resolve .bit domains. Though we haven’t seen any .bit domain in Tsunami campaign, we listed the IP addresses just in case for another attack by the threat.</p>
+<p><span style="font-family: 'courier new', courier, monospace;">192.71.245[.]208</span><br />
+<span style="font-family: 'courier new', courier, monospace;">58.251.121[.]110</span><br />
+<span style="font-family: 'courier new', courier, monospace;">101.226.79[.]205</span><br />
+<span style="font-family: 'courier new', courier, monospace;">188.165.200[.]156</span><br />
+<span style="font-family: 'courier new', courier, monospace;">185.121.177[.]177</span><br />
+<span style="font-family: 'courier new', courier, monospace;">185.121.177[.]53</span><br />
+<span style="font-family: 'courier new', courier, monospace;">144.76.133[.]38</span><br />
+<span style="font-family: 'courier new', courier, monospace;">169.239.202[.]202</span><br />
+<span style="font-family: 'courier new', courier, monospace;">5.135.183[.]146</span><br />
+<span style="font-family: 'courier new', courier, monospace;">193.183.98[.]66</span><br />
+<span style="font-family: 'courier new', courier, monospace;">51.254.25[.]115</span><br />
+<span style="font-family: 'courier new', courier, monospace;">51.255.48[.]78</span></p>
+          <div class="article__subscribe mb-40 text-gray-400 bg-gray-200 rounded-lg">
+  <h4 class="h3 mb-10 text-black">Get updates from <br class="d-sm-none"> Palo Alto<br class="d-sm-none"> Networks!</h4>
+  <p>Sign up to receive the latest news, cyber threat intelligence and research from us</p>
+  <!-- <form action="https://app-guse4001.marketo.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe"> -->
+  <form action="https://start.paloaltonetworks.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe">
+    <input type="hidden" value="1086" name="formid">
+    <!-- <input type="hidden" value="818-CZC-273" name="munchkinId"> -->
+    <input type="hidden" value="531-OCS-018" name="munchkinId">
+    <input type="hidden" value="2141" name="lpId">
+    <input type="hidden" value="1086" name="formVid">
+    <input type="hidden" name="mkto_optinunit42" value="true">
+    <input type="hidden" name="mkto_opt-in" value="true">
+    <div class="row">
+      <div class="col-sm col-12 mb-sm-0 mb-15">
+        <input type="email" name="Email" placeholder="Email address" class="subscribe-field d-block w-100 px-sm-25 px-15 bg-white">
+        <p class="error-mail d-none mt-15 text-danger" style="color: #dc3545">Please enter your email address!</p>
+      </div>
+      <div class="col-sm-auto col-12">
+          <input type="submit" value="Subscribe" class="btn btn--black btn--sm w-100" disabled="disabled">
+      </div>
+    </div>
+
+    <div class="google-recapth mt-15">
+      <div class="g-recaptcha" data-expired-callback="captchaExpires" data-callback="captchaComplete" data-sitekey="6LfKOrwUAAAAAOwgjxrEcx-pcfwe8OquUw6ommTK"></div>
+      <p class="error-recaptcha d-none mt-15 text-danger" style="color: #dc3545">Please mark, I'm not a robot!</p>
+    </div>
+  </form>
+
+  <div class="font-size-ex-sm col-sm-7 p-0">
+    <p>By submitting this form, you agree to our <a href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a> and acknowledge our <a href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy Statement</a>.</p>
+  </div>
+</div>
+
+<script type="text/javascript" src="https://researchcenter.paloaltonetworks.com/wp-content/plugins/google-analyticator/external-tracking.min.js?ver=6.4.9"></script>
+        </div>
+      </div>
+    </div>
+  </article>
+<footer class="site-footer px-sm-0 px-15">
+  <div class="pt-40">
+    <div class="container pt-sm-30">
+      <div class="row justify-content-lg-center">
+        <div class="col-lg-11 col-12">
+          <div class="row">
+            <div class="col-lg-4 col-sm-3 col-12 order-sm-2">
+              <nav class="footer-socials mb-sm-0 mb-25 text-white text-sm-right">
+                                                <a href="https://twitter.com/Unit42_Intel" target="_blank"><span class="ui ui-4"></span></a>
+                <a href="https://github.com/pan-unit42" target="_blank"><span class="ui ui-5"></span></a>
+              </nav>
+            </div>
+
+            <div class="col-lg-8 col-sm-9 col-12 order-sm-1">
+              <div class="row">
+                <div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Popular Resources</h4><div class="menu-footer-company-phase-container"><ul id="menu-footer-company-phase" class="menu"><li id="menu-item-97096" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97096"><a target="_blank" href="https://www.paloaltonetworks.com/resources">Resource Center</a></li>
+<li id="menu-item-97097" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97097"><a target="_blank" href="https://researchcenter.paloaltonetworks.com/">Blog</a></li>
+<li id="menu-item-97098" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97098"><a target="_blank" href="https://www.paloaltonetworks.com/communities">Communities</a></li>
+<li id="menu-item-97099" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97099"><a target="_blank" href="https://docs.paloaltonetworks.com/">Tech Docs</a></li>
+<li id="menu-item-97100" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-home menu-item-97100"><a href="https://unit42.paloaltonetworks.com/">Unit 42</a></li>
+<li id="menu-item-97101" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97101"><a target="_blank" href="https://www.paloaltonetworks.com/sitemap">Sitemap</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Legal Notices</h4><div class="menu-footer-legal-notices-phase-container"><ul id="menu-footer-legal-notices-phase" class="menu"><li id="menu-item-97093" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97093"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy</a></li>
+<li id="menu-item-97094" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97094"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a></li>
+<li id="menu-item-97095" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97095"><a target="_blank" href="https://www.paloaltonetworks.com/legal">Documents</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Account</h4><div class="menu-footer-trending-topics-phase-container"><ul id="menu-footer-trending-topics-phase" class="menu"><li id="menu-item-97102" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97102"><a href="https://start.paloaltonetworks.com/preference-center">Manage Subscriptions</a></li>
+<li id="menu-item-97103" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97103"><a href="#">&nbsp;</a></li>
+<li id="menu-item-97104" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97104"><a href="https://www.paloaltonetworks.com/security-disclosure">Report a Vulnerability</a></li>
+</ul></div></div>              </div>
+            </div>
+          </div>
+
+          
+            <div class="copyrights py-25 mt-40">
+               <p>© 2020 Palo Alto Networks, Inc. All rights reserved.</p>
+            </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+    <script type="text/javascript">
+	var isProcessing = false; 
+    function alter_ul_post_values(obj,post_id,ul_type){
+	
+		if (isProcessing)    
+		return;  
+		isProcessing = true;   
+		
+		jQuery(obj).find("span").html("..");
+                jQuery.ajax({
+                    type: "POST",
+                    url: "https://unit42.paloaltonetworks.com/wp-content/plugins/like-dislike-counter-for-posts-pages-and-comments/ajax_counter.php",
+                    data: "post_id="+post_id+"&up_type="+ul_type,
+                    success: function(msg){
+                            jQuery(obj).find("span").html(msg);
+                            isProcessing = false; 
+                            jQuery(obj).find('svg').children('path').attr('stroke','#0050FF');
+                            jQuery(obj).removeClass('idc_ul_cont_not_liked idc_ul_cont_not_liked_inner');
+                    }
+ 		});
+	}
+	</script>
+            <script type="text/javascript">
+            (function(){
+                document.addEventListener('DOMContentLoaded', function(){
+                    let wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                    if ( wpp_widgets ) {
+                        for (let i = 0; i < wpp_widgets.length; i++) {
+                            let wpp_widget = wpp_widgets[i];
+                            WordPressPopularPosts.theme(wpp_widget);
+                        }
+                    }
+                });
+            })();
+        </script>
+                <script>
+            var WPPImageObserver = null;
+
+            function wpp_load_img(img) {
+                if ( ! 'imgSrc' in img.dataset || ! img.dataset.imgSrc )
+                    return;
+
+                img.src = img.dataset.imgSrc;
+
+                if ( 'imgSrcset' in img.dataset ) {
+                    img.srcset = img.dataset.imgSrcset;
+                    img.removeAttribute('data-img-srcset');
+                }
+
+                img.classList.remove('wpp-lazyload');
+                img.removeAttribute('data-img-src');
+                img.classList.add('wpp-lazyloaded');
+            }
+
+            function wpp_observe_imgs(){
+                let wpp_images = document.querySelectorAll('img.wpp-lazyload'),
+                    wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                if ( wpp_images.length || wpp_widgets.length ) {
+                    if ( 'IntersectionObserver' in window ) {
+                        WPPImageObserver = new IntersectionObserver(function(entries, observer) {
+                            entries.forEach(function(entry) {
+                                if (entry.isIntersecting) {
+                                    let img = entry.target;
+                                    wpp_load_img(img);
+                                    WPPImageObserver.unobserve(img);
+                                }
+                            });
+                        });
+
+                        if ( wpp_images.length ) {
+                            wpp_images.forEach(function(image) {
+                                WPPImageObserver.observe(image);
+                            });
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var i = 0; i < wpp_widgets.length; i++) {
+                                let wpp_widget_images = wpp_widgets[i].querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widgets[i].shadowRoot ) {
+                                    wpp_widget_images = wpp_widgets[i].shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    wpp_widget_images.forEach(function(image) {
+                                        WPPImageObserver.observe(image);
+                                    });
+                                }
+                            }
+                        }
+                    } /** Fallback for older browsers */
+                    else {
+                        if ( wpp_images.length ) {
+                            for (var i = 0; i < wpp_images.length; i++) {
+                                wpp_load_img(wpp_images[i]);
+                                wpp_images[i].classList.remove('wpp-lazyloaded');
+                            }
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var j = 0; j < wpp_widgets.length; j++) {
+                                let wpp_widget = wpp_widgets[j],
+                                    wpp_widget_images = wpp_widget.querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widget.shadowRoot ) {
+                                    wpp_widget_images = wpp_widget.shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    for (var k = 0; k < wpp_widget_images.length; k++) {
+                                        wpp_load_img(wpp_widget_images[k]);
+                                        wpp_widget_images[k].classList.remove('wpp-lazyloaded');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                wpp_observe_imgs();
+
+                // When an ajaxified WPP widget loads,
+                // Lazy load its images
+                document.addEventListener('wpp-onload', function(){
+                    wpp_observe_imgs();
+                });
+            });
+        </script>
+        <link rel='stylesheet' id='wpdevart_lightbox_front_end_css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/wpdevart_lightbox_front.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpdevart_lightbox_effects-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/effects_lightbox.css?ver=5.4.1' type='text/css' media='all' />
+<script type='text/javascript' src='https://www.google.com/recaptcha/api.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/scripts/main.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/wp-embed.min.js?ver=5.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpdevart_lb_variables = {"eneble_lightbox_content":"enable","overlay_transparency_prancent":"80","popup_background_color":"#000000","popup_loading_image":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/popup_loading.png","popup_initial_width":"350","popup_initial_height":"300","popup_youtube_width":"640","popup_youtube_height":"410","popup_vimeo_width":"500","popup_vimeo_height":"410","popup_max_width":"5000","popup_max_height":"5000","popup_position":"5","popup_fixed_position":"true","popup_outside_margin":"0","popup_border_width":"2","popup_border_color":"#000000","popup_border_radius":"10","control_buttons_show":"true","control_buttons_show_in_content":"false","control_buttons_height":"30","control_buttons_line_bg_color":"#000000","control_button_prev_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev.png","control_button_prev_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev_hover.png","control_button_next_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next.png","control_button_next_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next_hover.png","control_button_download_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download.png","control_button_download_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download_hover.png","control_button_innewwindow_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow.png","control_button_innewwindow_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow_hover.png","control_button_fullwidth_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth.png","control_button_fullwidht_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth_hover.png","control_button_fullwidthrest_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset.png","control_button_fullwidhtrest_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset_hover.png","control_button_close_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close.png","control_button_close_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close_hover.png","information_panel_show":"false","information_panel_show_in_content":"false","information_panel_bg_color":"#000000","information_panel_default_transparency":"100","information_panel_hover_trancparency":"100","information_panel_count_image_after_text":"Image","information_panel_count_image_middle_text":"of","information_panel_count_padding_left":"15","information_panel_count_padding_right":"4","information_panel_count_font_size":"20","information_panel_desc_padding_left":"15","information_panel_desc_padding_right":"4","information_panel_desc_font_size":"20","information_panel_desc_show_if_not":"true","information_panel_text_for_no_caption":"No Caption","information_panel_title_padding_left":"5","information_panel_title_padding_right":"5","information_panel_title_font_size":"15","information_panel_title_show_if_not":"true","information_panel_text_for_no_title":"No Title","information_panel_ordering":"{\"count\":[1,\"count\"],\"title\":[0,\"title\"],\"caption\":[0,\"caption\"]}"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/javascript/wpdevart_lightbox_front.js?ver=1.0'></script>
+          
+  </body>
+</html>

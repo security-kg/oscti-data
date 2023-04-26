@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>How to use Cloudflare for Service Discovery</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/service-discovery/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="How to use Cloudflare for Service Discovery" />
+    <meta property="og:description" content="Cloudflare runs 3,588 containers, making up 1,264 apps and services that all need to be able to find and discover each other in order to communicate -- a problem solved with service discovery." />
+    <meta property="og:url" content="https://blog.cloudflare.com/service-discovery/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2017/10/Service-Discovery-Diagram.png" />
+    <meta property="article:published_time" content="2017-07-21T08:01:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T01:30:34.000Z" />
+    <meta property="article:tag" content="DDoS" />
+    <meta property="article:tag" content="Reliability" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="IPv4" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="API" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="Argo Smart Routing" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="Security" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How to use Cloudflare for Service Discovery" />
+    <meta name="twitter:description" content="Cloudflare runs 3,588 containers, making up 1,264 apps and services that all need to be able to find and discover each other in order to communicate -- a problem solved with service discovery." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/service-discovery/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2017/10/Service-Discovery-Diagram.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Dani Grant" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="DDoS, Reliability, Speed &amp; Reliability, IPv4, DNS, API, Programming, Argo Smart Routing, TLS, Security" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@thedanigrant" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Dani Grant",
+        "image": "https://blog.cloudflare.com/content/images/2018/08/efVJR3rj_400x400.jpg",
+        "url": "https://blog.cloudflare.com/author/dani/",
+        "sameAs": [
+            "https://twitter.com/thedanigrant"
+        ]
+    },
+    "headline": "How to use Cloudflare for Service Discovery",
+    "url": "https://blog.cloudflare.com/service-discovery/",
+    "datePublished": "2017-07-21T08:01:00.000Z",
+    "dateModified": "2018-08-29T01:30:34.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2017/10/Service-Discovery-Diagram.png",
+    "keywords": "DDoS, Reliability, Speed & Reliability, IPv4, DNS, API, Programming, Argo Smart Routing, TLS, Security",
+    "description": "Cloudflare runs 3,588 containers, making up 1,264 apps and services that all need to be able to find and discover each other in order to communicate -- a problem solved with service discovery.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-ddos tag-reliability tag-speed-and-reliability tag-ipv4 tag-dns tag-api tag-programming tag-argo tag-tls tag-security sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-ddos tag-reliability tag-speed-and-reliability tag-ipv4 tag-dns tag-api tag-programming tag-argo tag-tls tag-security ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">How to use Cloudflare for Service Discovery</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-07-21T09:01:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 21, 2017 9:01AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/dani/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/08/efVJR3rj_400x400.jpg" alt="Dani Grant" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/dani" class="fw5 f3 no-underline black mr3">Dani Grant</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Cloudflare runs 3,588 containers, making up 1,264 apps and services that all need to be able to find and discover each other in order to communicate -- a problem solved with service discovery.</p>
+<p>You can use Cloudflare for service discovery. By deploying microservices behind Cloudflare, microservices’ origins are masked, secured from DDoS and L7 exploits and authenticated, and service discovery is natively built in. Cloudflare is also cloud platform agnostic, which means that if you have distributed infrastructure deployed across cloud platforms, you still get a holistic view of your services and the ability to manage your security and authentication policies in one place, independent of where services are actually deployed.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/Service-Discovery-Diagram.png" alt=""></p>
+<h3 id="howitworks">How it works</h3>
+<p>Service locations and metadata are stored in a distributed KV store deployed in all 100+ Cloudflare edge locations (the service registry).</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/ServiceRegistry.png" alt=""></p>
+<p>Services register themselves to the service registry when they start up and deregister themselves when they spin down via a POST to Cloudflare’s API. Services provide data in the form of a DNS record, either by giving Cloudflare the address of the service in an A (IPv4) or AAAA (IPv6) record, or by providing more metadata like transport protocol and port in an SRV record.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/SRV-POST.png" alt=""></p>
+<p>Services are also automatically registered and deregistered by health check monitors so only healthy nodes are sent traffic. Health checks are over HTTP and can be setup with custom configuration so that responses to the health check must return a specific response body and or response code otherwise the nodes are marked as unhealthy.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/healthcheck.png" alt=""></p>
+<p>Traffic is distributed evenly between redundant nodes using a load balancer. Clients of the service discovery query the load balancer directly over DNS. The load balancer receives data from the service registry and returns the corresponding service address. If services are behind Cloudflare, the load balancer returns a Cloudflare IP address to route traffic to the service through Cloudflare’s L7 proxy.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/loadbalancer.png" alt=""></p>
+<p>Traffic can also be sent to specific service nodes based on <a href="https://support.cloudflare.com/hc/en-us/articles/115000540888-Load-Balancing-Geographic-Regions">client geography</a>, so the data replication service in North America, for example, can talk to a specific North American version of the billing service, or European data can stay in Europe.</p>
+<p>Clients query the service registry over DNS, and service location and metadata is packaged in A, AAAA, CNAME or SRV records. The benefit of this is that no additional client software needs to be installed on service nodes beyond a DNS client. Cloudflare works natively over DNS, meaning that if your services have a DNS client, there’s no extra software to install, manage, upgrade or patch.</p>
+<p>While usually, TTL’s in DNS mean that if a service location changes or deregisters, clients may still get stale information, Cloudflare DNS keeps low TTL’s (it’s able to do this and maintain <a href="https://www.dnsperf.com/">fast performance</a> because of its distributed network) and if you are using Cloudflare as a proxy, the DNS answers always point back to Cloudflare even when the IP’s of services behind Cloudflare change, removing the effect of cache staleness.</p>
+<p>If your services communicate over HTTP/S and websockets, you can additionally use Cloudflare as a L7 proxy for added security, authentication and optimization. Cloudflare prevents DDoS attacks from hitting your infrastructure, masks your IP’s behind its network, and routes traffic through an <a href="https://www.cloudflare.com/argo/">optimized edge PoP to edge PoP route</a> to shave latency off the internet.</p>
+<p>Once service &lt;--&gt; service traffic is going through Cloudflare, you can use TLS client certificates to <a href="https://blog.cloudflare.com/introducing-tls-client-auth/">authenticate traffic</a> between your services. Cloudflare can authenticate traffic at the edge by ensuring that the client certificate presented during the TLS handshake is signed by your root CA.</p>
+<h3 id="settingitup">Setting it up</h3>
+<p><a href="https://cloudflare.com/a/sign-up">Sign up for Cloudflare account</a></p>
+<p>During the signup process, add all your initial services as DNS records in the DNS editor.</p>
+<p>To finish sign up, move DNS to Cloudflare by logging into your registrar and changing your nameservers to the Cloudflare nameservers assigned to you when you signed up for Cloudflare. If you want traffic to those services to be proxied through Cloudflare, click on the cloud next to each DNS record to make it orange.</p>
+<p>Run a script on each node so that:</p>
+<p>On startup, the node sends a <a href="https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record">POST to the DNS record API</a> to register itself and <a href="https://api.cloudflare.com/#load-balancer-pools-modify-a-pool">PUT to load balancing API</a> to add itself to the origin pool.</p>
+<p>On shutdown, the node sends a <a href="https://api.cloudflare.com/#dns-records-for-a-zone-delete-dns-record">DELETE to the DNS record API</a> to deregister itself and <a href="https://api.cloudflare.com/#load-balancer-pools-modify-a-pool">PUT to load balancing API</a> to remove itself to the origin pool.</p>
+<p>These can be accomplished via <a href="https://cloud.google.com/compute/docs/startupscript">startup and shutdown scripts on Google Compute Engine</a> or <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html#user-data-shell-scripts">user data scripts</a> or <a href="http://docs.aws.amazon.com/autoscaling/latest/userguide/lifecycle-hooks.html">auto scaling lifecycle hooks</a> on AWS.</p>
+<p>Registration:</p>
+<pre><code>curl -X POST &quot;https://api.cloudflare.com/client/v4/zones/023e105f4ecef8ad9ca31a8372d0c353/dns_records&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c1b4b2a4b381a4b9a0acb1ada4efa2aeac">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;type&quot;:&quot;SRV&quot;,&quot;data&quot;:{&quot;service&quot;:&quot;_http&quot;,&quot;proto&quot;:&quot;_tcp&quot;,&quot;name&quot;:&quot;name&quot;,&quot;priority&quot;:1,&quot;weight&quot;:1,&quot;port&quot;:80,&quot;target&quot;:&quot;staging.badtortilla.com&quot;},&quot;ttl&quot;:1,&quot;zone_name&quot;:&quot;badtortilla.com&quot;,&quot;name&quot;:&quot;_http._tcp.name.&quot;,&quot;content&quot;:&quot;SRV 1 1 80 staging.badtortilla.com.&quot;,&quot;proxied&quot;:false,&quot;proxiable&quot;:false,&quot;priority&quot;:1}'
+
+</code></pre>
+<p>De-Registration:</p>
+<pre><code>curl -X DELETE &quot;https://api.cloudflare.com/client/v4/zones/023e105f4ecef8ad9ca31a8372d0c353/dns_records/372e67954025e0ba6aaa6d586b9e0b59&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="483d3b2d3a082d30292538242d662b2725">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot;
+</code></pre>
+<p>Add or remove an origin from an origin pool (this should be a unique IP per node added to the pool):</p>
+<pre><code>curl -X PUT &quot;https://api.cloudflare.com/client/v4/user/load_balancers/pools/17b5962d775c646f3f9725cbc7a53df4&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="621711071022071a030f120e074c010d0f">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;description&quot;:&quot;Primary data center - Provider XYZ&quot;,&quot;name&quot;:&quot;primary-dc-1&quot;,&quot;enabled&quot;:true,&quot;monitor&quot;:&quot;f1aba936b94213e5b8dca0c0dbf1f9cc&quot;,&quot;origins&quot;:[{&quot;name&quot;:&quot;app-server-1&quot;,&quot;address&quot;:&quot;1.2.3.4&quot;,&quot;enabled&quot;:true}],&quot;notification_email&quot;:&quot;<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="81f2eeece4eeefe4c1e4f9e0ecf1ede4afe2eeec">[email&#160;protected]</a>&quot;}'
+</code></pre>
+<p>Create a health check. You can do this <a href="https://api.cloudflare.com/#load-balancer-monitors-create-a-monitor">in the API</a> or in the <a href="https://www.cloudflare.com/a/traffic/">Cloudflare dashboard</a> (in the Load Balancer card).</p>
+<pre><code>curl -X POST &quot;https://api.cloudflare.com/client/v4/organizations/01a7362d577a6c3019a474fd6f485823/load_balancers/monitors&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d0a5a3b5a290b5a8b1bda0bcb5feb3bfbd">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;type&quot;:&quot;https&quot;,&quot;description&quot;:&quot;Login page monitor&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;path&quot;:&quot;/health&quot;,&quot;header&quot;:{&quot;Host&quot;:[&quot;example.com&quot;],&quot;X-App-ID&quot;:[&quot;abc123&quot;]},&quot;timeout&quot;:3,&quot;retries&quot;:0,&quot;interval&quot;:90,&quot;expected_body&quot;:&quot;alive&quot;,&quot;expected_codes&quot;:&quot;2xx&quot;}'
+</code></pre>
+<p>Create an initial load balancer, either <a href="https://api.cloudflare.com/#load-balancers-create-a-load-balancer">through the API</a> or in the <a href="https://www.cloudflare.com/a/traffic/">Cloudflare dashboard</a>.</p>
+<pre><code>curl -X POST &quot;https://api.cloudflare.com/client/v4/zones/699d98642c564d2e855e9661899b7252/load_balancers&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="afdadccaddefcad7cec2dfc3ca81ccc0c2">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;description&quot;:&quot;Load Balancer for www.example.com&quot;,&quot;name&quot;:&quot;www.example.com&quot;,&quot;ttl&quot;:30,&quot;fallback_pool&quot;:&quot;17b5962d775c646f3f9725cbc7a53df4&quot;,&quot;default_pools&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;,&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;],&quot;region_pools&quot;:{&quot;WNAM&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;],&quot;ENAM&quot;:[&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;]},&quot;pop_pools&quot;:{&quot;LAX&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;],&quot;LHR&quot;:[&quot;abd90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;f9138c5d07c2e2f4df57b1f61d4196&quot;],&quot;SJC&quot;:[&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;]},&quot;proxied&quot;:true}'
+</code></pre>
+<p>(optional) Setup geographic routing rules. You can do this <a href="https://api.cloudflare.com/#load-balancers-modify-a-load-balancer">via API</a> or in the <a href="https://www.cloudflare.com/a/traffic/">Cloudflare dashboard</a>.</p>
+<pre><code>curl -X POST &quot;https://api.cloudflare.com/client/v4/zones/699d98642c564d2e855e9661899b7252/load_balancers&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a9dcdaccdbe9ccd1c8c4d9c5cc87cac6c4">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;description&quot;:&quot;Load Balancer for www.example.com&quot;,&quot;name&quot;:&quot;www.example.com&quot;,&quot;ttl&quot;:30,&quot;fallback_pool&quot;:&quot;17b5962d775c646f3f9725cbc7a53df4&quot;,&quot;default_pools&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;,&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;],&quot;region_pools&quot;:{&quot;WNAM&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;],&quot;ENAM&quot;:[&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;]},&quot;pop_pools&quot;:{&quot;LAX&quot;:[&quot;de90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;9290f38c5d07c2e2f4df57b1f61d4196&quot;],&quot;LHR&quot;:[&quot;abd90f38ced07c2e2f4df50b1f61d4194&quot;,&quot;f9138c5d07c2e2f4df57b1f61d4196&quot;],&quot;SJC&quot;:[&quot;00920f38ce07c2e2f4df50b1f61d4194&quot;]},&quot;proxied&quot;:true}'
+</code></pre>
+<p>(optional) Setup Argo for faster PoP to PoP transit in the <a href="https://www.cloudflare.com/a/traffic/">traffic app of the Cloudflare dashboard</a>.</p>
+<p>(optional) Setup rate limiting <a href="https://api.cloudflare.com/#rate-limits-for-a-zone-create-a-ratelimit">via API</a> or <a href="https://www.cloudflare.com/a/firewall/">in the dashboard</a></p>
+<pre><code>curl -X POST &quot;https://api.cloudflare.com/client/v4/zones/023e105f4ecef8ad9ca31a8372d0c353/rate_limits&quot; \
+     -H &quot;X-Auth-Email: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="deabadbbac9ebba6bfb3aeb2bbf0bdb1b3">[email&#160;protected]</a>&quot; \
+     -H &quot;X-Auth-Key: c2547eb745079dac9320b638f5e225cf483cc5cfdda41&quot; \
+     -H &quot;Content-Type: application/json&quot; \
+     --data '{&quot;id&quot;:&quot;372e67954025e0ba6aaa6d586b9e0b59&quot;,&quot;disabled&quot;:false,&quot;description&quot;:&quot;Prevent multiple login failures to mitigate brute force attacks&quot;,&quot;match&quot;:{&quot;request&quot;:{&quot;methods&quot;:[&quot;GET&quot;,&quot;POST&quot;],&quot;schemes&quot;:[&quot;HTTP&quot;,&quot;HTTPS&quot;],&quot;url&quot;:&quot;*.example.org/path*&quot;},&quot;response&quot;:{&quot;status&quot;:[401,403],&quot;origin_traffic&quot;:true}},&quot;bypass&quot;:[{&quot;name&quot;:&quot;url&quot;,&quot;value&quot;:&quot;api.example.com/*&quot;}],&quot;threshold&quot;:60,&quot;period&quot;:900,&quot;action&quot;:{&quot;mode&quot;:&quot;simulate&quot;,&quot;timeout&quot;:86400,&quot;response&quot;:{&quot;content_type&quot;:&quot;text/xml&quot;,&quot;body&quot;:&quot;&lt;error&gt;This request has been rate-limited.&lt;/error&gt;&quot;}}}'
+</code></pre>
+<p>(optional) Setup TLS client authentication. (Enterprise only) Send your account manager your root CA certificate and <a href="https://support.cloudflare.com/hc/en-us/articles/115000088491-Cloudflare-TLS-Client-Auth">which options you would like enabled</a>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/ddos/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DDoS</a>
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/ipv4/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">IPv4</a>
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-18T14:18:20Z">March 18, 2021 2:18PM</p>
+        <a href="/deep-dive-cloudflare-autonomous-edge-ddos-protection/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A deep-dive into Cloudflare’s autonomous edge DDoS protection</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Introducing our autonomous DDoS (Distributed Denial of Service) protection system, globally deployed to all of Cloudflare’s 200+ data centers, and is actively protecting all our customers against DDoS attacks across layers 3 to 7 (in the OSI model) without requiring any human intervention....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/omer/" class="fw5 f2 black no-underline">Omer Yoachimik</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ddos/" class="no-underline f1 fw2 blue3 underline-hover">DDoS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/gatebot/" class="no-underline f1 fw2 blue3 underline-hover">Gatebot</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dosd/" class="no-underline f1 fw2 blue3 underline-hover">dosd</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/xdp/" class="no-underline f1 fw2 blue3 underline-hover">XDP</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-02T17:41:00Z">March 02, 2021 5:41PM</p>
+        <a href="/cloudflare-is-named-a-leader-in-the-forrester-wave-for-ddos-mitigation-solutions/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare recognized as a &#x27;Leader&#x27; in The Forrester Wave for DDoS Mitigation Solutions</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare is named a ‘Leader’ in Forrester Wave™ for DDoS Mitigation Solutions, Q1 2021...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vivek/" class="fw5 f2 black no-underline">Vivek Ganti</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/omer/" class="fw5 f2 black no-underline">Omer Yoachimik</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ddos/" class="no-underline f1 fw2 blue3 underline-hover">DDoS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/analyst/" class="no-underline f1 fw2 blue3 underline-hover">Analyst</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/leader/" class="no-underline f1 fw2 blue3 underline-hover">Leader</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/forrester/" class="no-underline f1 fw2 blue3 underline-hover">Forrester</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-01-22T12:00:00Z">January 22, 2021 12:00PM</p>
+        <a href="/network-layer-ddos-attack-trends-for-q4-2020/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Network-layer DDoS attack trends for Q4 2020</h2>
+        </a>
+
+        <p class="gray1 lh-copy">DDoS attack trends in the final quarter of 2020 defied norms in many ways. For the first time in 2020, Cloudflare observed an increase in the number of large DDoS attacks. Specifically, the number of attacks over 500Mbps and 50K pps saw a massive uptick....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vivek/" class="fw5 f2 black no-underline">Vivek Ganti</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/omer/" class="fw5 f2 black no-underline">Omer Yoachimik</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ddos/" class="no-underline f1 fw2 blue3 underline-hover">DDoS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/trends/" class="no-underline f1 fw2 blue3 underline-hover">Trends</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ransom-attack/" class="no-underline f1 fw2 blue3 underline-hover">Ransom Attack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rddos/" class="no-underline f1 fw2 blue3 underline-hover">RDDoS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/fancy-bear/" class="no-underline f1 fw2 blue3 underline-hover">Fancy Bear</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-01-07T16:19:24Z">January 07, 2021 4:19PM</p>
+        <a href="/ransom-ddos-attacks-target-a-fortune-global-500-company/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Ransom DDoS attacks target a Fortune Global 500 company</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In late 2020, a major Fortune Global 500 company was targeted by a Ransom DDoS (RDDoS) attack by a group claiming to be the Lazarus Group. Cloudflare quickly onboarded them to the Magic Transit service and protected them against the lingering threat....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/omer/" class="fw5 f2 black no-underline">Omer Yoachimik</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ddos/" class="no-underline f1 fw2 blue3 underline-hover">DDoS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/ransom-attack/" class="no-underline f1 fw2 blue3 underline-hover">Ransom Attack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/fancy-bear/" class="no-underline f1 fw2 blue3 underline-hover">Fancy Bear</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/lazarus-group/" class="no-underline f1 fw2 blue3 underline-hover">Lazarus group</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>eBPF can&#x27;t count?!</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/ebpf-cant-count/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="eBPF can&#x27;t count?!" />
+    <meta property="og:description" content="It is unlikely we can tell you anything new about the extended Berkeley Packet Filter, eBPF for short, if you&#x27;ve read all the great man pages, docs, guides, and some of our blogs out there. But we can tell you a war story, who doesn&#x27;t like those?" />
+    <meta property="og:url" content="https://blog.cloudflare.com/ebpf-cant-count/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/04/Grant_mechanical_calculating_machine_1877.jpg" />
+    <meta property="article:published_time" content="2019-05-03T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-05-03T14:32:45.000Z" />
+    <meta property="article:tag" content="eBPF" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="eBPF can&#x27;t count?!" />
+    <meta name="twitter:description" content="It is unlikely we can tell you anything new about the extended Berkeley Packet Filter, eBPF for short, if you&#x27;ve read all the great man pages, docs, guides, and some of our blogs out there. But we can tell you a war story, who doesn&#x27;t like those?" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/ebpf-cant-count/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/04/Grant_mechanical_calculating_machine_1877.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Jakub Sitnicki" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="eBPF, Linux, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Jakub Sitnicki",
+        "image": "https://blog.cloudflare.com/content/images/2019/05/4_300698554542850065.jpg",
+        "url": "https://blog.cloudflare.com/author/jakub/",
+        "sameAs": []
+    },
+    "headline": "eBPF can&#x27;t count?!",
+    "url": "https://blog.cloudflare.com/ebpf-cant-count/",
+    "datePublished": "2019-05-03T13:00:00.000Z",
+    "dateModified": "2019-05-03T14:32:45.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/04/Grant_mechanical_calculating_machine_1877.jpg",
+    "keywords": "eBPF, Linux, Programming",
+    "description": "It is unlikely we can tell you anything new about the extended Berkeley Packet Filter, eBPF for short, if you&#x27;ve read all the great man pages, docs, guides, and some of our blogs out there. But we can tell you a war story, who doesn&#x27;t like those? ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-ebpf tag-linux tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-ebpf tag-linux tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">eBPF can&#x27;t count?!</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-05-03T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">May 03, 2019 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/jakub/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2019/05/4_300698554542850065.jpg" alt="Jakub Sitnicki" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/jakub" class="fw5 f3 no-underline black mr3">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/04/Grant_mechanical_calculating_machine_1877-1.jpg" class="kg-image"><figcaption>Grant mechanical calculating machine, public domain <a href="https://en.wikipedia.org/wiki/File:Grant_mechanical_calculating_machine_1877.jpg">image</a></figcaption></figure><p></p><!--kg-card-begin: markdown--><p>It is unlikely we can tell you anything new about the extended Berkeley Packet Filter, eBPF for short, if you've read all the great <a href="http://man7.org/linux/man-pages/man2/bpf.2.html">man pages</a>, <a href="https://www.kernel.org/doc/Documentation/networking/filter.txt">docs</a>, <a href="https://cilium.readthedocs.io/en/latest/bpf/">guides</a>, and some of our <a href="https://blog.cloudflare.com/epbf_sockets_hop_distance/">blogs</a> out there.</p>
+<p>But we can tell you a war story, and who doesn't like those? This one is about how eBPF lost its ability to count for a while<a href="#f1"><sup>1</sup></a>.</p>
+<p>They say in our Austin, Texas office that all good stories start with &quot;y'all ain't gonna believe this… tale.&quot; This one though, starts with a <a href="https://lore.kernel.org/netdev/CAJPywTJqP34cK20iLM5YmUMz9KXQOdu1-+BZrGMAGgLuBWz7fg@mail.gmail.com/">post</a> to Linux netdev mailing list from <a href="https://twitter.com/majek04">Marek Majkowski</a> after what I heard was a long night:</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/ebpf_bug_email_netdev.png" class="kg-image"></figure><p></p><!--kg-card-begin: markdown--><p>Marek's findings were quite shocking - if you subtract two 64-bit timestamps in eBPF, the result is garbage. But only when running as an unprivileged user. From root all works fine. Huh.</p>
+<p>If you've seen Marek's <a href="https://speakerdeck.com/majek04/linux-at-cloudflare">presentation</a> from the Netdev 0x13 conference, you know that we are using BPF socket filters as one of the defenses against simple, volumetric DoS attacks. So potentially getting your packet count wrong could be a Bad Thing™, and affect legitimate traffic.</p>
+<p>Let's try to reproduce this bug with a simplified <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/filter.c#L63">eBPF socket filter</a> that subtracts two 64-bit unsigned integers passed to it from <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/run_bpf.go#L93">user-space</a> though a BPF map. The input for our BPF program comes from a <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/filter.c#L44">BPF array map</a>, so that the values we operate on are not known at build time. This allows for easy experimentation and prevents the compiler from optimizing out the operations.</p>
+<p>Starting small, eBPF, what is 2 - 1? View the code <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/run_bpf.go#L93">on our GitHub</a>.</p>
+<pre><code>$ ./run-bpf 2 1
+arg0                    2 0x0000000000000002
+arg1                    1 0x0000000000000001
+diff                    1 0x0000000000000001
+</code></pre>
+<p>OK, eBPF, what is 2^32 - 1?</p>
+<pre><code>$ ./run-bpf $[2**32] 1
+arg0           4294967296 0x0000000100000000
+arg1                    1 0x0000000000000001
+diff 18446744073709551615 0xffffffffffffffff
+</code></pre>
+<p>Wrong! But if we ask nicely with sudo:</p>
+<pre><code>$ sudo ./run-bpf $[2**32] 1
+[sudo] password for jkbs:
+arg0           4294967296 0x0000000100000000
+arg1                    1 0x0000000000000001
+diff           4294967295 0x00000000ffffffff
+</code></pre>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h3 id="whoismessingwithmyebpf">Who is messing with my eBPF?</h3>
+<p>When computers stop subtracting, you know something big is up. We called for reinforcements.</p>
+<p>Our colleague Arthur Fabre <a href="https://lore.kernel.org/netdev/20190301113901.29448-1-afabre@cloudflare.com/">quickly noticed</a> something is off when you examine the eBPF code loaded into the kernel. It turns out kernel doesn't actually run the eBPF it's supplied - it sometimes rewrites it first.</p>
+<p>Any sane programmer would expect 64-bit subtraction to be expressed as <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/filter.s#L47">a single eBPF instruction</a></p>
+<pre><code>$ llvm-objdump -S -no-show-raw-insn -section=socket1 bpf/filter.o
+…
+      20:       1f 76 00 00 00 00 00 00         r6 -= r7
+…
+</code></pre>
+<p>However, that's not what the kernel actually runs. Apparently after the rewrite the subtraction becomes a complex, multi-step operation.</p>
+<p>To see what the kernel is actually running we can use little known <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/bpf/bpftool?h=v5.0">bpftool utility</a>. First, we need to load our BPF</p>
+<pre><code>$ ./run-bpf --stop-after-load 2 1
+[2]+  Stopped                 ./run-bpf 2 1
+</code></pre>
+<p>Then list all BPF programs loaded into the kernel with <code>bpftool prog list</code></p>
+<pre><code>$ sudo bpftool prog list
+…
+5951: socket_filter  name filter_alu64  tag 11186be60c0d0c0f  gpl
+        loaded_at 2019-04-05T13:01:24+0200  uid 1000
+        xlated 424B  jited 262B  memlock 4096B  map_ids 28786
+</code></pre>
+<p>The most recently loaded <code>socket_filter</code> must be our program (<code>filter_alu64</code>). Now we now know its id is 5951 and we can list its bytecode with</p>
+<pre><code>$ sudo bpftool prog dump xlated id 5951
+…
+  33: (79) r7 = *(u64 *)(r0 +0)
+  34: (b4) (u32) r11 = (u32) -1
+  35: (1f) r11 -= r6
+  36: (4f) r11 |= r6
+  37: (87) r11 = -r11
+  38: (c7) r11 s&gt;&gt;= 63
+  39: (5f) r6 &amp;= r11
+  40: (1f) r6 -= r7
+  41: (7b) *(u64 *)(r10 -16) = r6
+…
+</code></pre>
+<p>bpftool can also display the JITed code with: <code>bpftool prog dump jited id 5951</code>.</p>
+<p>As you see, subtraction is replaced with a series of opcodes. That is unless you are root. When running from root all is good</p>
+<pre><code>$ sudo ./run-bpf --stop-after-load 0 0
+[1]+  Stopped                 sudo ./run-bpf --stop-after-load 0 0
+$ sudo bpftool prog list | grep socket_filter
+659: socket_filter  name filter_alu64  tag 9e7ffb08218476f3  gpl
+$ sudo bpftool prog dump xlated id 659
+…
+  31: (79) r7 = *(u64 *)(r0 +0)
+  32: (1f) r6 -= r7
+  33: (7b) *(u64 *)(r10 -16) = r6
+…
+</code></pre>
+<p>If you've spent any time using eBPF, you must have experienced first hand the dreaded eBPF verifier. It's a merciless judge of all eBPF code that will reject any programs that it deems not worthy of running in kernel-space.</p>
+<p>What perhaps nobody has told you before, and what might come as a surprise, is that the very same verifier will actually also <a href="https://elixir.bootlin.com/linux/v4.20.13/source/kernel/bpf/verifier.c#L6421">rewrite and patch up your eBPF code</a> as needed to make it safe.</p>
+<p>The problems with subtraction were introduced by an inconspicuous security fix to the verifier. The patch in question first landed in Linux 5.0 and was backported to 4.20.6 stable and 4.19.19 LTS kernel. <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=979d63d50c0c0f7bc537bf821e056cc9fe5abd38">The over 2000 words long commit message</a> doesn't spare you any details on the attack vector it targets.</p>
+<p>The mitigation stems from <a href="https://nvd.nist.gov/vuln/detail/CVE-2019-7308">CVE-2019-7308</a> vulnerability <a href="https://bugs.chromium.org/p/project-zero/issues/detail?id=1711">discovered by Jann Horn at Project Zero</a>, which exploits pointer arithmetic, i.e. adding a scalar value to a pointer, to trigger speculative memory loads from out-of-bounds addresses. Such speculative loads change the CPU cache state and can be used to mount a <a href="https://googleprojectzero.blogspot.com/2018/01/reading-privileged-memory-with-side.html">Spectre variant 1 attack</a>.</p>
+<p>To mitigate it the eBPF verifier rewrites any arithmetic operations on pointer values in such a way the result is always a memory location within bounds. The patch demonstrates how arithmetic operations on pointers get rewritten and we can spot a familiar pattern there</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/bpf_commit.png" class="kg-image"></figure><p></p><!--kg-card-begin: markdown--><p>Wait a minute… What pointer arithmetic? We are just trying to subtract two scalar values. How come the mitigation kicks in?</p>
+<p>It shouldn't. It's a bug. The eBPF verifier keeps track of what kind of values the ALU is operating on, and in this corner case the state was ignored.</p>
+<p>Why running BPF as root is fine, you ask? If your program has <code>CAP_SYS_ADMIN</code> privileges, side-channel mitigations <a href="https://elixir.bootlin.com/linux/v5.0/source/kernel/bpf/verifier.c#L7218">don't</a> <a href="https://elixir.bootlin.com/linux/v5.0/source/kernel/bpf/verifier.c#L3109">apply</a>. As root you already have access to kernel address space, so nothing new can leak through BPF.</p>
+<p>After our report, <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3612af783cf52c74a031a2f11b82247b2599d3cd">the fix</a> has quickly landed in v5.0 kernel and got backported to stable kernels 4.20.15 and 4.19.28. Kudos to Daniel Borkmann for getting the fix out fast. However, kernel upgrades are hard and in the meantime we were left with code running in production that was not doing what it was supposed to.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h3 id="32bitalutotherescue">32-bit ALU to the rescue</h3>
+<p>As one of the eBPF maintainers <a href="https://lore.kernel.org/netdev/af0643e0-08a1-6326-2a80-71892de1bf56@iogearbox.net/">has pointed out</a>, 32-bit arithmetic operations are not affected by the verifier bug. This opens a door for a work-around.</p>
+<p>eBPF registers, <code>r0</code>..<code>r10</code>, are 64-bits wide, but you can also access just the lower 32 bits, which are exposed as subregisters <code>w0</code>..<code>w10</code>. You can operate on the 32-bit subregisters using BPF ALU32 instruction subset. LLVM 7+ can generate eBPF code that uses this instruction subset. Of course, you need to you ask it nicely with trivial <code>-Xclang -target-feature -Xclang +alu32</code> toggle:</p>
+<pre><code>$ cat sub32.c
+#include &quot;common.h&quot;
+
+u32 sub32(u32 x, u32 y)
+{
+        return x - y;
+}
+$ clang -O2 -target bpf -Xclang -target-feature -Xclang +alu32 -c sub32.c
+$ llvm-objdump -S -no-show-raw-insn sub32.o
+…
+sub32:
+       0:       bc 10 00 00 00 00 00 00         w0 = w1
+       1:       1c 20 00 00 00 00 00 00         w0 -= w2
+       2:       95 00 00 00 00 00 00 00         exit
+</code></pre>
+<p>The <code>0x1c</code> <a href="https://elixir.bootlin.com/linux/v5.0/source/include/uapi/linux/bpf_common.h#L11">opcode</a> of the instruction #1, which can be broken down as <code>BPF_ALU | BPF_X | BPF_SUB</code> (read more in the <a href="https://www.kernel.org/doc/Documentation/networking/filter.txt">kernel docs</a>), is the 32-bit subtraction between registers we are looking for, as opposed to regular 64-bit subtract operation <code>0x1f = BPF_ALU64 | BPF_X | BPF_SUB</code>, which will get rewritten.</p>
+<p>Armed with this knowledge we can borrow a page from <a href="https://en.wikipedia.org/wiki/Arbitrary-precision_arithmetic">bignum arithmetic</a> and subtract 64-bit numbers using just 32-bit ops:</p>
+<pre><code class="language-c">u64 sub64(u64 x, u64 y)
+{
+        u32 xh, xl, yh, yl;
+        u32 hi, lo;
+
+        xl = x;
+        yl = y;
+        lo = xl - yl;
+
+        xh = x &gt;&gt; 32;
+        yh = y &gt;&gt; 32;
+        hi = xh - yh - (lo &gt; xl); /* underflow? */
+
+        return ((u64)hi &lt;&lt; 32) | (u64)lo;
+}
+</code></pre>
+<p>This code compiles as expected on normal architectures, like x86-64 or ARM64, but BPF Clang target plays by its own rules:</p>
+<pre><code>$ clang -O2 -target bpf -Xclang -target-feature -Xclang +alu32 -c sub64.c -o - \
+  | llvm-objdump -S -
+…  
+      13:       1f 40 00 00 00 00 00 00         r0 -= r4
+      14:       1f 30 00 00 00 00 00 00         r0 -= r3
+      15:       1f 21 00 00 00 00 00 00         r1 -= r2
+      16:       67 00 00 00 20 00 00 00         r0 &lt;&lt;= 32
+      17:       67 01 00 00 20 00 00 00         r1 &lt;&lt;= 32
+      18:       77 01 00 00 20 00 00 00         r1 &gt;&gt;= 32
+      19:       4f 10 00 00 00 00 00 00         r0 |= r1
+      20:       95 00 00 00 00 00 00 00         exit
+</code></pre>
+<p>Apparently the compiler decided it was better to operate on 64-bit registers and discard the upper 32 bits. Thus we weren't able to get rid of the problematic <code>0x1f</code> opcode. Annoying, back to square one.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h3 id="surelyabitofirwilldo">Surely a bit of IR will do?</h3>
+<p>The problem was in Clang frontend - compiling C to IR. We know that BPF &quot;assembly&quot; backend for LLVM can generate bytecode that uses ALU32 instructions. Maybe if we tweak the Clang compiler's output just a little we can achieve what we want. This means we have to get our hands dirty with the LLVM Intermediate Representation (IR).</p>
+<p>If you haven't heard of LLVM IR before, now is a good time to do some <a href="http://www.aosabook.org/en/llvm.html">reading</a><a href="#f2"><sup>2</sup></a>. In short the LLVM IR is what Clang produces and LLVM BPF backend consumes.</p>
+<p>Time to write IR by hand! Here's a hand-tweaked <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/sub64_ir.ll#L7">IR variant</a> of our <code>sub64()</code> function:</p>
+<pre><code>define dso_local i64 @sub64_ir(i64, i64) local_unnamed_addr #0 {
+  %3 = trunc i64 %0 to i32      ; xl = (u32) x;
+  %4 = trunc i64 %1 to i32      ; yl = (u32) y;
+  %5 = sub i32 %3, %4           ; lo = xl - yl;
+  %6 = zext i32 %5 to i64
+  %7 = lshr i64 %0, 32          ; tmp1 = x &gt;&gt; 32;
+  %8 = lshr i64 %1, 32          ; tmp2 = y &gt;&gt; 32;
+  %9 = trunc i64 %7 to i32      ; xh = (u32) tmp1;
+  %10 = trunc i64 %8 to i32     ; yh = (u32) tmp2;
+  %11 = sub i32 %9, %10         ; hi = xh - yh
+  %12 = icmp ult i32 %3, %5     ; tmp3 = xl &lt; lo
+  %13 = zext i1 %12 to i32
+  %14 = sub i32 %11, %13        ; hi -= tmp3
+  %15 = zext i32 %14 to i64
+  %16 = shl i64 %15, 32         ; tmp2 = hi &lt;&lt; 32
+  %17 = or i64 %16, %6          ; res = tmp2 | (u64)lo
+  ret i64 %17
+}
+</code></pre>
+<p>It may not be pretty but it does produce <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/sub64_ir.s#L5">desired BPF code</a> when compiled<a href="#f3"><sup>3</sup></a>. You will likely find the <a href="https://llvm.org/docs/LangRef.html">LLVM IR reference</a> helpful when deciphering it.</p>
+<p>And voila! First working solution that produces correct results:</p>
+<pre><code>$ ./run-bpf -filter ir $[2**32] 1
+arg0           4294967296 0x0000000100000000
+arg1                    1 0x0000000000000001
+diff           4294967295 0x00000000ffffffff
+</code></pre>
+<p>Actually using this hand-written IR function from C is tricky. See <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/build.ninja#L27">our code on GitHub</a>.</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/04/LED_DISP-1.JPG" class="kg-image"><figcaption>public domain <a href="https://en.wikipedia.org/wiki/File:LED_DISP.JPG">image</a> by <a href="https://commons.wikimedia.org/wiki/User:Sergei_Frolov">Sergei Frolov</a></figcaption></figure><p></p><!--kg-card-begin: markdown--><h3 id="thefinaltrick">The final trick</h3>
+<p>Hand-written IR does the job. The downside is that linking IR modules to your C modules is hard. Fortunately there is a better way. You can persuade Clang to stick to 32-bit ALU ops in generated IR.</p>
+<p>We've already seen the problem. To recap, if we ask Clang to subtract 32-bit integers, it will operate on 64-bit values and throw away the top 32-bits. Putting C, IR, and eBPF side-by-side helps visualize this:</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/sub32_v1.png" class="kg-image"></figure><p></p><!--kg-card-begin: markdown--><p>The trick to get around it is to declare the 32-bit variable that holds the result as <code>volatile</code>. You might already know the <a href="https://en.wikipedia.org/wiki/Volatile_(computer_programming)"><code>volatile</code> keyword</a> if you've written Unix signal handlers. It basically tells the compiler that the value of the variable may change under its feet so it should refrain from reorganizing loads (reads) from it, as well as that stores (writes) to it might have side-effects so changing the order or eliminating them, by skipping writing it to the memory, is not allowed either.</p>
+<p>Using <code>volatile</code> makes Clang emit <a href="https://llvm.org/docs/LangRef.html#volatile-memory-accesses">special loads and/or stores</a> at the IR level, which then on eBPF level translates to writing/reading the value from memory (stack) on every access. While this sounds not related to the problem at hand, there is a surprising side-effect to it:</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/sub32_v2.png" class="kg-image"></figure><p></p><!--kg-card-begin: markdown--><p>With volatile access compiler doesn't promote the subtraction to 64 bits!  Don't ask me why, although I would love to hear an explanation. For now, consider this a hack. One that does not come for free - there is the overhead of going through the stack on each read/write.</p>
+<p>However, if we play our cards right we just might reduce it a little. We don't actually need the volatile load or store to happen, we just want the side effect. So instead of declaring the value as volatile, which implies that both reads and writes are volatile, let's try to make only the writes volatile with a help of a macro:</p>
+<pre><code class="language-c">/* Emits a &quot;store volatile&quot; in LLVM IR */
+#define ST_V(rhs, lhs) (*(volatile typeof(rhs) *) &amp;(rhs) = (lhs))
+</code></pre>
+<p>If this macro looks strangely familiar, it's because it does the same thing as <a href="https://elixir.bootlin.com/linux/v5.1-rc5/source/include/linux/compiler.h#L214"><code>WRITE_ONCE()</code> macro</a> in the Linux kernel. Applying it to our example:</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/04/sub32_v3.png" class="kg-image"></figure><p></p><!--kg-card-begin: markdown--><p>That's another <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2019-04-ebpf-alu32/bpf/filter.c#L143">hacky but working solution</a>. Pick your poison.</p>
+<!--kg-card-end: markdown--><p></p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/04/poison_bottles-2.jpg" class="kg-image"><figcaption><a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a> <a href="https://commons.wikimedia.org/wiki/File:D-BW-Kressbronn_aB_-_Kl%C3%A4ranlage_067.jpg">image</a> by ANKAWÜ</figcaption></figure><p></p><!--kg-card-begin: markdown--><p>So there you have it - from C, to IR, and back to C to hack around a bug in eBPF verifier and be able to subtract 64-bit integers again. Usually you won't have to dive into LLVM IR or assembly to make use of eBPF. But it does help to know a little about it when things don't work as expected.</p>
+<p>Did I mention that 64-bit addition is also broken? Have fun fixing it!</p>
+<!--kg-card-end: markdown--><hr><!--kg-card-begin: markdown--><p><a name="f1"><sup>1</sup></a> Okay, it was more like 3 months time until the bug was discovered and fixed.</p>
+<p><a name="f2"><sup>2</sup></a> Some even think that it is <a href="https://idea.popcount.org/2013-07-24-ir-is-better-than-assembly/">better than assembly</a>.</p>
+<p><a name="f3"><sup>3</sup></a> How do we know? The litmus test is to look for statements matching <code>r[0-9] [-+]= r[0-9]</code> in BPF assembly.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/ebpf/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">eBPF</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-18T12:00:00+01:00">September 18, 2020 12:00PM</p>
+        <a href="/building-rakelimit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Raking the floods: my intern project using eBPF</h2>
+        </a>
+
+        <p class="gray1 lh-copy">SYN-cookies help mitigating SYN-floods for TCP, but how can we protect services from similar attacks that use UDP? We designed an algorithm and a library to fill this gap, and it’s open source!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jonas/" class="fw5 f2 black no-underline">Jonas Otten</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/udp/" class="no-underline f1 fw2 blue3 underline-hover">UDP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-10-12T14:00:00+01:00">October 12, 2019 2:00PM</p>
+        <a href="/its-crowded-in-here/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">It&#x27;s crowded in here!</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We recently gave a presentation on Programming socket lookup with BPF at the Linux Plumbers Conference 2019 in Lisbon, Portugal. This blog post is a recap of the problem statement and proposed solution we presented....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jakub/" class="fw5 f2 black no-underline">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/udp/" class="no-underline f1 fw2 blue3 underline-hover">UDP</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-18T16:00:00+01:00">May 18, 2019 4:00PM</p>
+        <a href="/cloudflare-architecture-and-how-bpf-eats-the-world/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare architecture and how BPF eats the world</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Recently at I gave a short talk titled "Linux at Cloudflare". The talk ended up being mostly about BPF. It seems, no matter the question - BPF is the answer. Here is a transcript of a slightly adjusted version of that talk....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/anycast/" class="no-underline f1 fw2 blue3 underline-hover">Anycast</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

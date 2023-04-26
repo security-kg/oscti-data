@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Efficiently compressing dynamically generated web content</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/efficiently-compressing-dynamically-generated-53805/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Efficiently compressing dynamically generated web content" />
+    <meta property="og:description" content="With the widespread adoption of high bandwidth Internet connections in the home, offices and on mobile devices, limitations in available bandwidth to download web pages have largely been eliminated." />
+    <meta property="og:url" content="https://blog.cloudflare.com/efficiently-compressing-dynamically-generated-53805/" />
+    <meta property="article:published_time" content="2012-12-06T09:19:00.000Z" />
+    <meta property="article:modified_time" content="2019-06-29T21:19:48.000Z" />
+    <meta property="article:tag" content="Tech Talks" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Compression" />
+    <meta property="article:tag" content="Cache" />
+    <meta property="article:tag" content="Deep Dive" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Efficiently compressing dynamically generated web content" />
+    <meta name="twitter:description" content="With the widespread adoption of high bandwidth Internet connections in the home, offices and on mobile devices, limitations in available bandwidth to download web pages have largely been eliminated." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/efficiently-compressing-dynamically-generated-53805/" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="John Graham-Cumming" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Tech Talks, Speed &amp; Reliability, Compression, Cache, Deep Dive" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@jgrahamc" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "John Graham-Cumming",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/url-2.jpg",
+        "url": "https://blog.cloudflare.com/author/john-graham-cumming/",
+        "sameAs": [
+            "https://twitter.com/jgrahamc"
+        ]
+    },
+    "headline": "Efficiently compressing dynamically generated web content",
+    "url": "https://blog.cloudflare.com/efficiently-compressing-dynamically-generated-53805/",
+    "datePublished": "2012-12-06T09:19:00.000Z",
+    "dateModified": "2019-06-29T21:19:48.000Z",
+    "keywords": "Tech Talks, Speed & Reliability, Compression, Cache, Deep Dive",
+    "description": "With the widespread adoption of high bandwidth Internet connections in the home, offices and on mobile devices, limitations in available bandwidth to download web pages have largely been eliminated.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tech-talks tag-speed-and-reliability tag-compression tag-cache tag-deep-dive sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tech-talks tag-speed-and-reliability tag-compression tag-cache tag-deep-dive no-image no-image">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Efficiently compressing dynamically generated web content</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2012-12-06T09:19:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 06, 2012 9:19AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/john-graham-cumming/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/url-2.jpg" alt="John Graham-Cumming" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/john-graham-cumming" class="fw5 f3 no-underline black mr3">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><em>I originally wrote this article for the <a href="http://calendar.perfplanet.com/2012/efficiently-compressing-dynamically-generated-web-content/">Web Performance Calendar website</a>, which is a terrific resource of expert opinions on making your website as fast as possible. We thought CloudFlare users would be interested so we reproduced it here. Enjoy!</em></p>
+<h3 id="efficientlycompressingdynamicallygeneratedwebcontent">Efficiently compressing dynamically generated web content</h3>
+<p>With the widespread adoption of high bandwidth Internet connections in the home, offices and on mobile devices, limitations in available bandwidth to download web pages have largely been eliminated.</p>
+<p>At the same time latency remains a major problem. According to a recent presentation by Google, broadband Internet latency is 18ms for fiber technologies, 26ms for cable-based services, 43ms for DSL and 150ms-400ms for mobile devices. Ultimately, bandwidth can be expanded greatly with new technologies but latency is limited by the speed of light. The latency of an Internet connection directly affects the speed with which a web page can be downloaded.</p>
+<p>The latency problem occurs because the TCP protocol requires round trips to acknowledge received information (since packets can and do get lost while traversing the Internet) and to prevent Internet congestion TCP has mechanisms to limit the amount of data sent per round trip until it has learnt how much it can send without causing congestion.</p>
+<p>The collision between the speed of light and the TCP protocol is made worse by the fact that web site owners are likely to choose the cheapest hosting available without thinking about its physical location. In fact, the move to ‘the cloud' encourages the idea that web sites are simply ‘out there' without taking into account the very real problem of latency introduced by the distance between the end user's web browser and the server. It is not uncommon, for example, to see web sites aimed at UK consumers being hosted in the US. A web user in London accessing a .co.uk site that is actually hosted in Chicago incurs an additional 60ms round trip time because of the distance traversed.</p>
+<p>Dealing with speed-of-light induced latency requires moving web content closer to user who are browsing, or making the web content smaller so that fewer round trips are required (or both).</p>
+<h3 id="thecachingchallenge">The caching challenge</h3>
+<p>Caching technologies and content delivery services mean that static content (such as images, CSS, JavaScript) can be e cached close to end users helping to reduce latency when they are loaded. CloudFlare sees on average that about 65% of web content is cacheable.</p>
+<p>But the most critical part of a web page, the actual HTML content is often dynamically generated and cannot be cached. Because none of the relatively fast to load content that's in cache cannot even be loaded before the HTML, any delay in the web browser receiving the HTML affects the entire web browsing experience.</p>
+<p>Thus being able to deliver the page HTML as quickly as possible even in high latency environments is vital to ensuring a good browsing experience. Studies have shown that the slower the page load time the more likely the user is to give up and move elsewhere. A recent Google study said that a response time of less than 100ms is perceived by a human as ‘instant' (a human eye blink is somewhere in the 100ms to 400ms range); less than 300ms the computer seems sluggish; above 1s and the user's train of thought is lost to distraction or other thoughts. TCP's congestion avoidance algorithm means that many round trips are necessary when downloading a web page. For example, getting just the HTML for the CNN home page takes approximately 15 round trips; it's not hard to see how long latency can quickly multiply into a situation where the end-user is losing patience with the web site.</p>
+<p>Unfortunately, it is not possible to cache the HTML of most web pages because it is dynamically generated. Dynamic pages are commonplace because the HTML is programmatically generated and not static. For example, a news web site will generate fresh HTML as news stories change or to show a different page depending on the geographical location of the end user. Many web pages are also dynamically generated because they are personalized for the end user — each person's Facebook page is unique. And web application frameworks, such as WordPress, encourage the use dynamically generate HTML by default and mark the content as uncachable.</p>
+<h3 id="compressiontotherescue">Compression to the rescue</h3>
+<p>Given that web pages need to be dynamically generated the only viable option is to reduce the page size so that fewer TCP round trips are needed minimizing the effect of latency. The current best option for doing this is the use of the gzip encoding. On typical web page content gzip encoding will reduce the page size to about 20-25% of the original size. But this still results in multiple-kilobytes of page data being transmitted incurring the TCP congestion avoidance and latency penalty; in the CNN example above there were 15 round-trips even though the page was gzip compressed.</p>
+<p>Gzip encoding is completely generic. It does not take into account any special features of the content it is compressing. It is also self-referential: a gzip encoded page is entirely self-contained. This is advantageous because it means that a system that uses gzipped content can be stateless, but it means that even larger compression ratios that would be possible with external dictionaries of common content are not<br>
+possible.</p>
+<p>External dictionaries increase compression ratios dramatically because the compressed data can refer to items from the dictionary. Those references can be very small (a few bytes each) but expand to very large content from the dictionary.</p>
+<p>For example, imagine that it's necessary to transmit The King James Bible to a user. The plain text version from Project Gutenberg is 4,452,097 bytes and compressed with gzip it is 1,404,452 bytes (a reduction in size to 31%). But imagine the case where the compressor knows that the end user has a separate copy of the Old Testament and New Testament in a dictionary of useful content. Instead of transmitting a megabyte of gzip compressed content they can transmit an instruction of the form &amp;lt;Insert Old Testament&gt;&amp;lt;Insert New Testament&gt;. That instruction will just be a few bytes long.</p>
+<p>Clearly, that's an extreme and unusual case but it highlights the usefulness of external shared dictionaries of common content that can be used to reconstruct an original, uncompressed document. External dictionaries can be applied to dynamically generated web content to achieve compression that exceeds that possible with gzip.</p>
+<h3 id="cachingpageparts">Caching page parts</h3>
+<p>On the web, shared dictionaries make sense because dynamic web content contains large chunks that's the same for all users and over time. Consider, for example the BBC News homepage which is approximately 116KB of HTML. That page is dynamically generated and the HTTP caching headers are set so that it is not cached. Even though the news stories on the page are frequently updated a large amount of boilerplate HTML does not change from request to request (or even user to user). The first 32KB of the page (28% of the HTML) consists of embedded JavaScript, headers, navigational elements and styles. If that ‘header block' were stored by web browsers in a local dictionary then the BBC would only need to send a small instruction saying &amp;lt;Insert BBC Header&gt; instead of 32KB of data. That would save multiple round-trips. And throughout the BBC News page there are smaller chunks of unchanging content that could be referenced from a dictionary.</p>
+<p>It's not hard to imagine that for any web site there are large parts of the HTML that are the same from request to request and from user to user. Even on a very personalized site like Facebook the HTML is similar from user to user.</p>
+<p>And as more and more applications use HTTP for APIs there's an opportunity to increase API performance through the use of shared dictionaries of JSON or XML. APIs often contain even more common, repeated parts than HTML as they are intended for machine consumption and change slowly over time (whereas the HTML of a page will change more quickly as designers update the look of a page).</p>
+<p>Two different proposals have tried to address this in different ways:</p>
+<p>SDCH and ESI. Neither have achieved acceptance as Internet standards partly because of the added complexity of deploying them.</p>
+<h4 id="sdch">SDCH</h4>
+<p>In 2008, a group working at Google proposed a protocol for negotiating shared dictionaries of content so that a web server can compress a page in the knowledge that a web browser has chunks of the page in its cache. The proposal is known as <a href="http://en.wikipedia.org/wiki/Shared_Dictionary_Compression_Over_HTTP">SDCH</a> (Shared Dictionary Compression over HTTP). Current versions of Google Chrome use SDCH to compress Google Search results.</p>
+<p>This can be seen in the Developer Tools in Google Chrome. Any search request will contain an HTTP header specifying that the browser accepts SDCH compressed pages:</p>
+<pre><code>Accept-Encoding: gzip,deflate,sdch
+</code></pre>
+<p>And if SDCH is used then the server responds indicating the dictionary that was used. If necessary Chrome will retrieve the dictionary. Since the dictionary should change infrequently it will be in local web browser cache most of the time. For example, here's a sample HTTP header seen in a real response from a Google Search:</p>
+<pre><code>Get-Dictionary: /sdch/60W93cgP.dct
+</code></pre>
+<p>The dictionary file simply contains HTML (and JavaScript etc.) and the compressed page contains references to parts of the dictionary file using the <a href="http://en.wikipedia.org/wiki/VCDIFF">VCDIFF</a> format specified in <a href="http://tools.ietf.org/html/rfc3284">RFC 3284</a>. The compressed page consists mostly of COPY and ADD VCDIFF functions. A COPY x, y instruction tells the browser to copy y bytes of data from  osition x in the dictionary (this is how common content gets compressed and expanded from the dictionary). The ADD instruction is used to insert uncompressed data (i.e. those parts of the page that are not in the dictionary).</p>
+<p>In a Google Search the dictionary is used to locally cache infrequently changing parts of a page (such as the HTML header, navigation elements and page footer).</p>
+<p>SDCH has not achieved widespread acceptance because of the difficulty of generating the shared dictionaries. Three problems arise: when to update the dictionary, how to update the dictionary and prevention of leakage of private information.</p>
+<p>For maximum effectiveness it's desirable to produce a shared dictionary that will be useful in reducing page sizes across a large number of page views. To do this it's necessary to either implement an automatic technique that samples real web traffic and identifies common blocks of HTML, or to determine which pages are most viewed and compute dictionaries for them (perhaps based on specialised knowledge of what parts of the page are common across requests).</p>
+<p>When automated techniques are used it's important to ensure that when sampling traffic that contains personal information (such as for a logged in user) that personal information does not end up in the dictionary.</p>
+<p>Although SDCH is powerful when used, these dictionary generation difficulties have prevented its widespread use. The Apache mod_sdch project is inactive and the Google SDCH group has been largely inactive since 2011.</p>
+<h4 id="esi">ESI</h4>
+<p>In 2001 a consortium of companies proposed addressing both latency and common content with <a href="http://en.wikipedia.org/wiki/Edge_Side_Includes">ESI</a> (Edge Side Includes). Edge Side Includes work by having a web page creator identify unchanging parts of the page and then making these available as separate mini-pages using HTTP.</p>
+<p>For example, if a page contains a common header and navigation, a web page author might place that in a separate nav.html file and then in a page they are authoring enter the following XML in place of the header and navigation HTML:</p>
+<pre><code>\&amp;lt;esi:include src=&amp;quot;http://example.com/nav.html&amp;quot; &amp;quot;continue&amp;quot;/&amp;gt;
+</code></pre>
+<p>ESI is intended for use with HTML content that is delivered via a Content Delivery Network and major CDNs were the sponsor of the original proposal.</p>
+<p>When a user retrieves a CDN managed page that contains ESI components the CDN reconstructs the complete page from the component parts (which the CDN will either have to retrieve, or, more likely, have in cache since they change infrequently).</p>
+<p>The CDN delivers the complete, normal HTML to the end user, but because the CDN has access nodes all over the world the latency between the end user web browser and the CDN is minimized. ESI tries to minimize the amount of data sent between the origin web server and the CDN (where the latency may be high) while being transparent to the browser.</p>
+<p>The biggest problem with adoption of ESI is that it forces web page authors to break pages up into blocks that can be safely cached by a CDN adding to the complexity of web page authoring. In addition, a CDN has to be used to deliver the pages as web browsers do not understand the ESI directives.</p>
+<h3 id="thetimedimension">The time dimension</h3>
+<p>The SDCH and ESI approaches rely on identifying parts of pages that are known to be unchanging and can be cached either at the edge of a CDN or in a shared dictionary in a web browser.</p>
+<p>Another approach is to consider how web pages evolve over time. It is common for web users to visit the same web pages frequently (such as news sites, online email, social media and major retailers). This may<br>
+mean that a user's web browser has some previous version of the web page they are loading in its local cache. Even though that web page may be out of date it could still be used as a shared dictionary as components of it are likely to appear in the latest version of the page.</p>
+<p>For example, a daily visit to a news web site could be speeded up if a web server were only able to send the differences between yesterday's news and today's. It's likely that most of the HTML of a page like the BBC News homepage will have remained unchanged; only the stories will be new and they will only make up a small portion of the page.</p>
+<p>CloudFlare looked at how much dynamically generated pages change over time and found that, for example, reddit.com changes by about 2.15% over five minutes and 3.16% over an hour. The New York Times home page changes by about 0.6% over five minutes and 3% over an hour. BBC News changes by about 0.4% over five minutes and 2% over an hour. With delta compression it would be possible to turn those figures directly into a compression ratio by only sending the tiny percentage of the page that has changed. Compressing the BBC News web site to 0.4% is an enormous improvement compared to gzip's 20-25% compression ratio meaning that 116KB would result in just 464 bytes transmitted (which would likely all fit in a single TCP packet requiring a single round trip).</p>
+<p>This delta method is the essence of <a href="http://www.ietf.org/rfc/rfc3229.txt">RFC 3229</a> which was written in 2002.</p>
+<h3 id="rfc3229">RFC 3229</h3>
+<p>This RFC proposes an extension to HTTP where a web browser can indicate to a server that it has a particular version of a page (using the value from the ETag HTTP header that was supplied when the page was previously downloaded). The receiving web server can then apply a delta compression technique (encoded using VCDIFF discussed above) to send only the parts that have changed since that particular version of the page.</p>
+<p>The RFC also proposes that a web browser be able to send the identifiers of multiple versions of a single page so that the web server can choose among them. That way, if the web browser has multiple versions in cache there's an increased chance that the server will have one of the versions available to it for delta compression.</p>
+<p>Although this technique is powerful because it greatly reduces the amount of data to be sent from a web server to browser it has not been widely deployed because of the enormous resources needed on web servers.</p>
+<p>To be effective a web server would need to keep copies of versions of the pages it generates in order that when a request comes in it is able to perform delta compression. For a popular web site that would create a large storage burden; for a site with heavy personalization it would mean keeping a copy of the pages served to every single user. For example, Facebook has around 1 billion active users, just keeping a copy of the HTML of the last time they viewed their timeline would require 250TB of storage.</p>
+<h3 id="cloudflaresrailgun">CloudFlare's Railgun</h3>
+<p>CloudFlare's <a href="https://www.cloudflare.com/railgun">Railgun</a> is a transparent delta compression technology that takes advantage of CloudFlare's CDN network to greatly accelerate the transmission of dynamically generated web pages from origin web servers to the CDN node nearest end user web surfers. Unlike SDCH and ESI it does not require any work on the part of a web site creator and unlike RFC 3229 it does not require caching a version of each page for each end user.</p>
+<p>Railgun consists of two components: the sender and the listener. The sender is installed at every CloudFlare data center around the world. The listener is a software component that customers install on their network.</p>
+<p>The sender and listener establish a permanent TCP connection that's secured by TLS. This TCP connection is used for the Railgun protocol. It's an all binary multiplexing protocol that allows multiple HTTP requests to be run simultaneously and asynchronously across the link. To a web client the Railgun system looks like a proxy server, but instead of being a server it's a wide-area link with special properties. One of those properties is that it performs compression on non-cacheable content by synchronizing page versions.</p>
+<p>Each end of the Railgun link keeps track of the last version of a web page that's been requested. When a new request comes in for a page that Railgun has already seen, only the changes are sent across the link. The listener component make an HTTP request to the real, origin web server for the uncacheable page, makes a comparison with the stored version and sends across the differences.</p>
+<p>The sender then reconstructs the page from its cache and the difference sent by the other side. Because multiple users pass through the same Railgun link only a single cached version of the page is needed for delta compression as opposed to one per end user with techniques like RFC 3229.</p>
+<p>For example, a test on a major news site sent 23,529 bytes of gzipped data which when decompressed become 92,516 bytes of page (so the page is compressed to 25.25% of its original size). Railgun compression between two version of the page at a five minute interval resulted in just 266 bytes of difference data being sent (a compression to 0.29% of the original page size). The one hour difference is 2,885 bytes (a compression to 3% of the original page size). Clearly, Railgun delta compression outperforms gzip enormously.</p>
+<p>For pages that are frequently accessed the deltas are often so small that they fit inside a single TCP packet, and because the connection between the two parts of Railgun is kept active problems with TCP congestion avoidance are eliminated.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>The use of external dictionaries of content is a powerful technique that can achieve much larger compression ratios that the self-contained gzip method. But only CloudFlare's Railgun implements delta compression in a manner that is completely transparent to end users and website owners.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tech-talks/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Tech Talks</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/compression/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Compression</a>
+        <a href="/tag/cache/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cache</a>
+        <a href="/tag/deep-dive/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Deep Dive</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-10-09T11:26:42+01:00">October 09, 2015 11:26AM</p>
+        <a href="/single-rx-queue-kernel-bypass-with-netmap/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Single RX queue kernel bypass in Netmap for high packet rate networking</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a previous post we discussed the performance limitations of the Linux kernel network stack. We detailed the available kernel bypass techniques allowing user space programs to receive packets with high throughput....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/gilberto-bertin/" class="fw5 f2 black no-underline">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tech-talks/" class="no-underline f1 fw2 blue3 underline-hover">Tech Talks</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/open-source/" class="no-underline f1 fw2 blue3 underline-hover">Open Source</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2012-06-19T16:56:00+01:00">June 19, 2012 4:56PM</p>
+        <a href="/a-note-about-kerckhoffs-principle/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A note about Kerckhoff&#x27;s Principle</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The other day I wrote a long post describing in detail how we used to and how we now store customer passwords. Some people were surprised that we were open about this....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tech-talks/" class="no-underline f1 fw2 blue3 underline-hover">Tech Talks</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

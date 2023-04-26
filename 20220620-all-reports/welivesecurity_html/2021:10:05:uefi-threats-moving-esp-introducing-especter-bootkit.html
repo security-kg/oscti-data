@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en-US" prefix="og: http://ogp.me/ns#">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="google-site-verification" content="_b2avZwzr79oru6lM2Ddae1fNpSIbPaP0H0WNkc2x3k"/>
+    <meta name="msvalidate.01" content="CE77828A466C2513F660017CFCB6BA13"/>
+    <link rel="icon" href="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/favicon.ico">
+
+    
+
+            
+    
+    <link href="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/css/main.css?id=09d01dd87b618f2315ce" rel="stylesheet">
+    <script type="text/javascript"> var appInsights=window.appInsights||function(a){ function b(a){c[a]=function(){var b=arguments;c.queue.push(function(){c[a].apply(c,b)})}}var c={config:a},d=document,e=window;setTimeout(function(){var b=d.createElement("script");b.src=a.url||"https://az416426.vo.msecnd.net/scripts/a/ai.0.js",d.getElementsByTagName("script")[0].parentNode.appendChild(b)});try{c.cookie=d.cookie}catch(a){}c.queue=[];for(var f=["Event","Exception","Metric","PageView","Trace","Dependency"];f.length;)b("track"+f.pop());if(b("setAuthenticatedUserContext"),b("clearAuthenticatedUserContext"),b("startTrackEvent"),b("stopTrackEvent"),b("startTrackPage"),b("stopTrackPage"),b("flush"),!a.disableExceptionTracking){f="onerror",b("_"+f);var g=e[f];e[f]=function(a,b,d,e,h){var i=g&&g(a,b,d,e,h);return!0!==i&&c["_"+f](a,b,d,e,h),i}}return c }({ instrumentationKey:"dcb460fe-684e-4d39-bfcd-d3a6f2710a32" }); window.appInsights=appInsights,appInsights.queue&&0===appInsights.queue.length&&appInsights.trackPageView(); </script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+        'Author': 'Martin Smolár',
+        'ArticleCategory': 'Malware',
+        'ArticleSection': 'Research',
+        'cookie-bar-hq': true
+    });
+
+    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PMDGSM');
+</script>
+
+<!-- This site is optimized with the Yoast SEO plugin v9.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<title>UEFI threats moving to the ESP: Introducing ESPecter bootkit | WeLiveSecurity</title>
+<meta name="description" content="ESET researchers discover and analyze ESPecter, a previously undocumented UEFI bootkit with roots that go back all the way to at least 2012."/>
+<link rel="canonical" href="https://www.welivesecurity.com/2021/10/05/uefi-threats-moving-esp-introducing-especter-bootkit/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="UEFI threats moving to the ESP: Introducing ESPecter bootkit | WeLiveSecurity" />
+<meta property="og:description" content="ESET researchers discover and analyze ESPecter, a previously undocumented UEFI bootkit with roots that go back all the way to at least 2012." />
+<meta property="og:url" content="https://www.welivesecurity.com/2021/10/05/uefi-threats-moving-esp-introducing-especter-bootkit/" />
+<meta property="og:site_name" content="WeLiveSecurity" />
+<meta property="article:section" content="Malware" />
+<meta property="article:published_time" content="2021-10-05T09:30:30+00:00" />
+<meta property="article:modified_time" content="2021-10-05T17:30:01+00:00" />
+<meta property="og:updated_time" content="2021-10-05T17:30:01+00:00" />
+<meta property="og:image" content="https://www.welivesecurity.com/wp-content/uploads/2021/10/especter-bootkit-uefi-esp-eset-research.jpg" />
+<meta property="og:image:secure_url" content="https://www.welivesecurity.com/wp-content/uploads/2021/10/especter-bootkit-uefi-esp-eset-research.jpg" />
+<meta property="og:image:width" content="623" />
+<meta property="og:image:height" content="415" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:description" content="ESET researchers discover and analyze ESPecter, a previously undocumented UEFI bootkit with roots that go back all the way to at least 2012." />
+<meta name="twitter:title" content="UEFI threats moving to the ESP: Introducing ESPecter bootkit | WeLiveSecurity" />
+<meta name="twitter:site" content="@welivesecurity" />
+<meta name="twitter:image" content="https://www.welivesecurity.com/wp-content/uploads/2021/10/especter-bootkit-uefi-esp-eset-research.jpg" />
+<meta name="twitter:creator" content="@welivesecurity" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel="alternate" type="application/rss+xml" title="WeLiveSecurity RSS 2.0 Feed" href="/rss-configurator/" /><style type="text/css" id="syntaxhighlighteranchor"></style>
+        <link id="cookie-style" rel="stylesheet" type="text/css" href="https://assets.esetstatic.com/3PS/cookiebar.min.css">
+</head>
+<body class="no-js single wide">
+<noscript>
+	<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PMDGSM" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+
+<div class="main">
+    <header id="site-header" class="container">
+        <div class="row">
+            <div class="col-md-4 col-sm-12 col-xs-12 pull-right" id="header-nav">
+                <div class="row">
+                    <div class="col-xs-12 mobile-search-input">
+                        <form action="https://www.welivesecurity.com/" class="basic-searchform imc dark col-md-12 col-sm-10 col-xs-12" method="get" role="search">
+	<div class="search-input clearfix">
+		<input type="text" name="s" value="" placeholder="Search..." class="imc">
+		<button class="imc">
+			<span class="icomoon icon-icon_search imc"></span>
+		</button>
+	</div>
+</form>	                    </div>
+                    <div class="hidden-lg hidden-md col-sm-7 col-xs-8 hidden-xxs">
+                        <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                    </div>
+                    <div class="col-md-8 hidden-sm hidden-xs languages">
+                        <div class="dropdown">
+	<button class="btn btn-default dropdown-toggle" type="button" id="main-language-picker" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    	<span class="text">In English</span>
+    	<span class="icomoon icon-icon_arrow"></span>
+  	</button>
+  	<ul class="dropdown-menu" aria-labelledby="main-language-picker">
+            <li>
+        <a href="/br/" title="Em Português">
+            Em Português        </a>
+    </li>
+        <li>
+        <a href="/fr/" title="En français">
+            En français        </a>
+    </li>
+        <li>
+        <a href="/la-es/" title="En Español">
+            En Español        </a>
+    </li>
+        <li>
+        <a href="/deutsch/" title="In Deutsch">
+            In Deutsch        </a>
+    </li>
+      	</ul>
+</div>                    </div>
+                    <div class="col-md-4 col-sm-2 col-xs-3 menu-trigger">
+                        <div class="menu-btn">
+	<span class="text">Menu</span>
+	<button type="button" id="menu-trigger" class="tcon tcon-menu--xcross" aria-label="toggle menu">
+        <span class="wrapper">
+            <span class="tcon-menu__lines" aria-hidden="true"></span>
+            <span class="tcon-visuallyhidden">toggle menu</span>
+        </span>
+    </button>
+</div>                    </div>
+                    <div class="hidden-lg hidden-md hidden-sm hidden-xs col-xs-2 mobile-search imc">
+                        <button class="imc">
+                            <span class="icomoon icon-icon_search imc"></span>
+                        </button>
+                    </div>
+                    <div class="col-md-12 col-sm-12 col-xs-12 imc" id="main-menu">
+                        <nav class="menu clearfix imc">
+                            <ul class="col-md-12 col-sm-6 col-xs-6 imc">
+                                                                    <li class="">
+                                        <a href="/">
+                                            All Posts                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="/research">
+                                            Research                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="/category/how-to/">
+                                            How To                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/media/videos/">
+                                            Videos                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/media/podcasts/">
+                                            Podcasts                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/conference-papers/">
+                                            Conference Materials                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/white-papers/">
+                                            White Papers                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/threat-reports/">
+                                            Threat Reports                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/magazine/">
+                                            Magazine                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/our-experts/">
+                                            Our Experts                                        </a>
+                                    </li>
+                                                            </ul>
+
+                            <div class="col-md-12 col-sm-6 col-xs-6 imc">
+                                <ul class="languages hidden-lg hidden-md hidden-xxs col-xs-12 imc">
+                                        <li>
+        <a href="/br/" title="Em Português">
+            Em Português        </a>
+    </li>
+        <li>
+        <a href="/fr/" title="En français">
+            En français        </a>
+    </li>
+        <li>
+        <a href="/la-es/" title="En Español">
+            En Español        </a>
+    </li>
+        <li>
+        <a href="/deutsch/" title="In Deutsch">
+            In Deutsch        </a>
+    </li>
+                                    </ul>
+                                <div class="hidden-lg hidden-md col-xs-12 imc">
+                                    <form action="https://www.welivesecurity.com/" class="basic-searchform imc dark col-md-12 col-sm-10 col-xs-12" method="get" role="search">
+	<div class="search-input clearfix">
+		<input type="text" name="s" value="" placeholder="Search..." class="imc">
+		<button class="imc">
+			<span class="icomoon icon-icon_search imc"></span>
+		</button>
+	</div>
+</form>	                                </div>
+                            </div>
+                        </nav>
+                    </div>
+                    <div class="menu-overlay col-md-12 col-sm-12 col-xs-12 imc">
+                        <div class="inner imc"></div>
+                    </div>
+                </div>
+                <div class="row hidden-sm hidden-xs">
+                    <form action="https://www.welivesecurity.com/" class="basic-searchform imc  col-md-12 col-sm-10 col-xs-12" method="get" role="search">
+	<div class="search-input clearfix">
+		<input type="text" name="s" value="" placeholder="Search..." class="imc">
+		<button class="imc">
+			<span class="icomoon icon-icon_search imc"></span>
+		</button>
+	</div>
+</form>	                </div>
+            </div>
+            <div class="col-md-5 hidden-sm hidden-xs pull-left" id="header-logo">
+                <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                <span class="slogan hidden-sm hidden-xs">
+						Award-winning news, views, and insight from the ESET <strong>security community</strong>					</span>
+            </div>
+        </div>
+    </header>
+        <section id="article-detail">
+            <div class="hero-wide" style="background-image: url('../../../../wp-content/uploads/2021/10/especter-bootkit-uefi-eset-research.jpg'); background-position: 50% 50%;">
+    <div class="text-wrapper">
+        <div class="container promo-text">
+            <div class="col-md-11 col-sm-11 col-xs-12 no-padding">
+                <h1>UEFI threats moving to the ESP: Introducing ESPecter bootkit</h1>
+<div class="excerpt">ESET research discovers a previously undocumented UEFI bootkit with roots going back all the way to at least 2012 </div>
+<div class="post-meta">
+    <div class="wls-authors">
+                <div class="wls-author with-avatar">
+                            <div class="wls-author-avatar">
+                    <a href="https://www.welivesecurity.com/author/msmolar/" title="Martin Smolár">
+                        <img src="https://www.welivesecurity.com/wp-content/uploads/2020/05/martin.smolar-1-222x179.jpg" alt="Martin Smolár">
+                    </a>
+                </div>
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/msmolar/" title="Martin Smolár">
+                    Martin Smolár                </a>
+            </div>
+        </div>
+                <div class="wls-author with-avatar">
+                            <div class="wls-author-avatar">
+                    <a href="https://www.welivesecurity.com/author/acherepanov/" title="Anton Cherepanov">
+                        <img src="https://www.welivesecurity.com/wp-content/uploads/2020/03/Anton_Cherepanov-222x179.jpg" alt="Anton Cherepanov">
+                    </a>
+                </div>
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/acherepanov/" title="Anton Cherepanov">
+                    Anton Cherepanov                </a>
+            </div>
+        </div>
+            </div>
+    <span class="meta">
+		<span class="strong">
+			<time datetime="2021-10-05 11:30:30">5 Oct 2021 - 11:30AM</time>
+		</span>
+			</span>
+</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+            <div class="content">
+                <div class="social-wrapper" id="social-sharer">
+                    <span class="text">Share</span>
+	<a class="share-facebook" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Facebook">
+		<span class="icomoon icon-icon_fb"></span>
+	</a>
+	<a class="share-twitter" href="https://twitter.com/intent/tweet?&url=https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F&text=UEFI threats moving to the ESP: Introducing ESPecter bootkit%0A&via=welivesecurity" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Twitter">
+		<span class="icomoon icon-icon_tw"></span>
+	</a>
+	<a class="share-linkedin" href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Linkedin">
+		<span class="icomoon icon-icon_in"></span>
+	</a>
+                </div>
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-1 col-sm-1 hidden-xs">
+
+                        </div>
+                        <div class="col-md-10 col-sm-10 col-xs-12 formatted">
+
+                            <div class="excerpt wide">
+                                <p>ESET research discovers a previously undocumented UEFI bootkit with roots going back all the way to at least 2012 </p>
+                            </div>
+
+                            <p>ESET researchers analyze a previously undocumented, real-world UEFI bootkit that persists on the EFI System Partition (ESP). The bootkit, which we’ve named ESPecter, can bypass Windows Driver Signature Enforcement to load its own unsigned driver, which facilitates its espionage activities. Alongside Kaspersky’s recent discovery of the unrelated <a href="https://securelist.com/finspy-unseen-findings/104322/" target="_blank" rel="noopener">FinSpy bootkit</a>, it is now safe to say that real-world UEFI threats are no longer limited to SPI flash implants, as used by <a href="https://www.welivesecurity.com/2018/09/27/lojax-first-uefi-rootkit-found-wild-courtesy-sednit-group/">Lojax</a>.</p>
+<p>The days of UEFI (Unified Extensible Firmware Interface) living in the shadows of the legacy BIOS are gone for good. As a leading technology embedded into chips of modern computers and devices, it plays a crucial role in securing the pre-OS environment and loading the operating system. And it’s no surprise that such a widespread technology has also become a tempting target for threat actors in their search for ultimate persistence.</p>
+<p>In the last few years, we have seen proofs of concept examples of UEFI bootkits (<a href="https://github.com/quarkslab/dreamboot" target="_blank" rel="noopener">DreamBoot</a>, <a href="https://github.com/Mattiwatti/EfiGuard" target="_blank" rel="noopener">EfiGuard</a>), leaked documents (<a href="https://wikileaks.org/ciav7p1/cms/page_26968082.html" target="_blank" rel="noopener">DerStarke</a>, <a href="https://wikileaks.org/ciav7p1/cms/page_26968082.html" target="_blank" rel="noopener">QuarkMatter</a>) and even leaked source code (<a href="https://github.com/hackedteam/vector-edk" target="_blank" rel="noopener">Hacking Team Vector EDK</a>), suggesting the existence of real UEFI malware either in the form of SPI flash implants or ESP implants. Despite all of the above, only three real-world cases of UEFI malware have been discovered so far (<a href="https://www.welivesecurity.com/wp-content/uploads/2018/09/ESET-LoJax.pdf" target="_blank" rel="noopener">LoJax</a>, discovered by our team in 2018, <a href="https://securelist.com/mosaicregressor/98849/" target="_blank" rel="noopener">MosaicRegressor</a>, discovered by Kaspersky in 2019, and most recently the FinSpy bootkit, whose analysis was just published by Kaspersky). While the first two fall in the category of SPI flash implants, the last falls in the ESP implants category, and surprisingly, it’s not alone there.</p>
+<p>Today, we describe our recent discovery of ESPecter, just the second real-world case of a UEFI bootkit persisting on the ESP in the form of a patched Windows Boot Manager to be analyzed. ESPecter was encountered on a compromised machine along with a user-mode client component with keylogging and document-stealing functionalities, which is why we believe ESPecter is mainly used for espionage. Interestingly, we traced the roots of this threat back to at least 2012, previously operating as a bootkit for systems with legacy BIOSes. Despite ESPecter’s long existence, its operations and upgrade to UEFI went unnoticed and have not been documented until now. Note that the only similarity between ESPecter and the Kaspersky FinSpy find is that they share the UEFI boot manager compromise approach.</p>
+<div id="attachment_155473" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems.png"><img class="wp-image-155473" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems.png" alt="" width="800" height="603" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems.png 1431w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems-300x226.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems-768x579.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-1.-Comparison-of-the-Legacy-Boot-flow-left-and-UEFI-boot-flow-right-on-Windows-Vista-and-newer-systems-1024x772.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 1. Comparison of the Legacy Boot flow (left) and UEFI boot flow (right) on Windows (Vista and newer) systems</em></p></div>
+<p>By patching the Windows Boot Manager, attackers achieve execution in the early stages of the system boot process (see Figure 1), before the operating system is fully loaded. This allows ESPecter to bypass Windows Driver Signature Enforcement (DSE) in order to execute its own unsigned driver at system startup. This driver then injects other user-mode components into specific system processes to initiate communication with ESPecter’s C&amp;C server and to allow the attacker to take control of the compromised machine by downloading and running additional malware or executing C&amp;C commands.</p>
+<p>Even though Secure Boot stands in the way of executing untrusted UEFI binaries from the ESP, over the last few years we have been witness to various UEFI firmware vulnerabilities affecting thousands of devices that allow disabling or bypassing Secure Boot (e.g. <a href="https://www.kb.cert.org/vuls/id/758382" target="_blank" rel="noopener">VU#758382</a>, <a href="https://www.kb.cert.org/vuls/id/976132" target="_blank" rel="noopener">VU#976132</a>, <a href="https://www.kb.cert.org/vuls/id/631788" target="_blank" rel="noopener">VU#631788</a>, …). This shows that securing UEFI firmware is a challenging task and that the way various vendors apply security policies and use UEFI services is not always ideal.</p>
+<p>Previously, we have reported <a href="https://twitter.com/ESETresearch/status/1275770256389222400?s=20" target="_blank" rel="noopener">multiple malicious EFI samples</a> in the form of simple, single-purpose UEFI applications without extensive functionality. These observations, along with the concurrent discovery of the ESPecter and <a href="https://securelist.com/finspy-unseen-findings/104322/" target="_blank" rel="noopener">FinFisher</a> bootkits, both fully functional UEFI bootkits, show that threat actors are not relying only on UEFI firmware implants when it comes to pre-OS persistence, but also are trying to take advantage of disabled Secure Boot to execute their own ESP implants.</p>
+<p>We were not able to attribute ESPecter to any known threat actor, but the Chinese debug messages in the associated user-mode client component (as seen in Figure 2) leads us to believe with a low confidence that an unknown Chinese-speaking threat actor is behind ESPecter. At this point, we don’t know how it was distributed.</p>
+<div id="attachment_155474" style="width: 810px" class="wp-caption aligncenter"><img class="wp-image-155474" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-2.-Example-of-Chinese-debug-messages-in-the-user-mode-client-component.png" alt="" width="800" height="159" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-2.-Example-of-Chinese-debug-messages-in-the-user-mode-client-component.png 1373w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-2.-Example-of-Chinese-debug-messages-in-the-user-mode-client-component-300x60.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-2.-Example-of-Chinese-debug-messages-in-the-user-mode-client-component-768x153.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-2.-Example-of-Chinese-debug-messages-in-the-user-mode-client-component-1024x204.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /><p class="wp-caption-text"><em>Figure 2. Example of Chinese debug messages in the user-mode client component</em></p></div>
+<h2>Evolution of the ESPecter bootkit</h2>
+<p>When we looked at our telemetry, we were able to date the beginnings of this bootkit back to at least 2012. At its beginning, it used MBR (Master Boot Record) modification as its persistence method and its authors were continuously adding support for new Windows OS versions. What is interesting is that the malware’s components have barely changed over all these years and the differences between 2012 and 2020 versions are not as significant as one would expect.</p>
+<p>After all the years of insignificant changes, those behind ESPecter apparently decided to move their malware from legacy BIOS systems to modern UEFI systems. They decided to achieve this by modifying a legitimate Windows Boot Manager binary (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>) located on the ESP while supporting multiple Windows versions spanning Windows 7 through Windows 10 inclusive. As we mentioned earlier, this method has one drawback – it requires that the Secure Boot feature be disabled in order to successfully boot with a modified boot manager. However, it’s worth mentioning that the first Windows version supporting Secure Boot was Windows 8, meaning that all previous versions are vulnerable to this persistence method.</p>
+<p>For Windows OS versions that support Secure Boot, the attacker would need to disable it. For now, it’s unknown how the ESPecter operators achieved this, but there are a few possible scenarios:</p>
+<ul>
+<li>The attacker has physical access to the device (historically known as an “evil maid” attack) and manually disables Secure Boot in the BIOS setup menu (it is common for the firmware configuration menu to still be labeled and referred to as the “BIOS setup menu”, even on UEFI systems).</li>
+<li>Secure Boot was already disabled on the compromised machine (e.g., user might dual-boot Windows and other OSes that do not support Secure Boot).</li>
+<li>Exploiting an unknown UEFI firmware vulnerability that allows disabling Secure Boot.</li>
+<li>Exploiting a known UEFI firmware vulnerability in the case of an outdated firmware version or a no-longer-supported product.</li>
+</ul>
+<h2>Technical analysis</h2>
+<p>During our investigation, we discovered several malicious components related to ESPecter:</p>
+<ul>
+<li>Installers, only for the older MBR versions of the bootkit, whose purpose was to set up persistence on the machine by rewriting the MBR of the boot device.</li>
+<li>Boot code in the form of either a modified Windows Boot Manager (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>) on UEFI systems or a malicious MBR in the case of Legacy Boot systems.</li>
+<li>A kernel-mode driver used to prepare the environment for the user-mode payloads and to load them in the early stages of OS startup by injecting them into specific system processes.</li>
+<li>User-mode payloads responsible for communication with the C&amp;C, updating the C&amp;C configuration and executing C&amp;C commands.</li>
+</ul>
+<p>For the complete scheme of the ESPecter bootkit infection see Figure 3.</p>
+<div id="attachment_155475" style="width: 610px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components.png"><img class="wp-image-155475" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components.png" alt="" width="600" height="1013" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components.png 878w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components-178x300.png 178w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components-768x1296.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-3.-ESPecter-bootkit-components-607x1024.png 607w" sizes="(max-width: 600px) 100vw, 600px" /></a><p class="wp-caption-text"><em>Figure 3. ESPecter bootkit components</em></p></div>
+<h3>Achieving persistence – UEFI boot</h3>
+<p>On systems using UEFI Boot mode, ESPecter persistence is established by modifying the Windows Boot Manager <span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span> and the fallback bootloader binary <span style="font-family: courier new, courier, monospace;">bootx64.efi</span>, which are usually located in the ESP directories <span style="font-family: courier new, courier, monospace;">\EFI\Microsoft\Boot\</span> and <span style="font-family: courier new, courier, monospace;">\EFI\Boot\</span>, respectively. Modification of the bootloader includes adding a new section called <span style="font-family: courier new, courier, monospace;">.efi</span> to the PE, and changing the executable’s entry point address so program flow jumps to the beginning of the added section, as seen in Figure 4.</p>
+<div id="attachment_155476" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_.png"><img class="wp-image-155476" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_.png" alt="" width="800" height="384" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_.png 1656w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_-300x144.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_-768x369.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-4.-Comparison-of-original-top-and-modified-bottom-Windows-Boot-Manager-bootmgfw.efi_-1024x492.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 4. Comparison of original (top) and modified (bottom) Windows Boot Manager (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>)</em></p></div>
+<h4><strong><em>Simplified boot chain</em></strong></h4>
+<p>As shown in the scheme on the left in Figure 5, the boot process on UEFI systems (ignoring the firmware part) starts with execution of the bootloader application located in the ESP. For the Windows OS, this is the Windows Boot Manager binary (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>) and its purpose is to find an installed operating system and transfer execution to its OS kernel loader – <span style="font-family: courier new, courier, monospace;">winload.efi</span>. Similar to the boot manager, the OS kernel loader is responsible for the loading and execution of the next component in the boot chain – the Windows kernel (<span style="font-family: courier new, courier, monospace;">ntoskrnl.exe</span><em>)</em>.</p>
+<div id="attachment_155477" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right.png"><img class="wp-image-155477" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right.png" alt="" width="800" height="693" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right.png 1192w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right-300x260.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right-768x666.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right-1024x887.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right-60x53.png 60w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-5.-Typical-Windows-UEFI-boot-flow-left-compared-to-the-boot-flow-modified-by-ESPecter-right-85x75.png 85w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 5. Typical Windows UEFI boot flow (left) compared to the boot flow modified by ESPecter (right)</em></p></div>
+<h4><strong><em>How does ESPecter modify the UEFI boot process?</em></strong></h4>
+<p>In order to successfully drop its malicious payload, ESPecter needs to bypass integrity checks performed by the Windows Boot Manager and the Windows kernel during the boot process. To do this, it looks for byte patterns identifying the desired functions in memory and patches them accordingly.</p>
+<p>Starting with the bootloader, in our case Windows Boot Manager (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>), the bootkit begins by patching the <span style="font-family: courier new, courier, monospace;">BmFwVerifySelfIntegrity</span> function. This function is responsible for verification of the boot manager’s own digital signature and is intended to prevent execution of a modified boot manager. In Figure 6 you can see how ESPecter searches memory for <span style="font-family: courier new, courier, monospace;">BmFwVerifySelfIntegrity</span> using various byte patterns (to support many <span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span> versions) and modifies this function in a way that it always returns zero, indicating that verification was successful.</p>
+<p>As mentioned earlier, the bootloader’s main goal is to find an installed operating system and transfer execution to its OS kernel loader. For the Windows Boot Manager, this happens in the <span style="font-family: courier new, courier, monospace;">Archpx64TransferTo64BitApplicationAsm</span> function; therefore, ESPecter looks for this function in order to catch the moment that the OS loader is loaded into memory, but still hasn’t been executed. If found, ESPecter patches this function to insert its own detour function, which can easily modify the loaded OS loader in memory at the right moment.</p>
+<div id="attachment_155478" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function.png"><img class="wp-image-155478" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function.png" alt="" width="800" height="427" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function.png 1284w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function-300x160.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function-768x410.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-6.-Hex-Rays-decompiled-code-–-searching-for-and-patching-the-BmFwVerifySelfIntegrity-function-1024x546.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 6. Hex-Rays decompiled code – searching for and patching the <span style="font-family: courier new, courier, monospace;">BmFwVerifySelfIntegrity </span>function</em></p></div>
+<p>Modification of the OS loader does not include patching of any integrity checks or other functionality. At this stage it’s important for the bootkit to reallocate its code, because as a UEFI Application it will be unloaded from memory after returning from its entry point function. For this purpose, it uses the <span style="font-family: courier new, courier, monospace;">BlImgAllocateImageBuffer</span> or <span style="font-family: courier new, courier, monospace;">BlMmAllocateVirtualPages</span> function (depending on the pattern found). After this reallocation, the bootkit inserts a detour (located in the previously allocated buffer) to the function responsible for transferring execution to the OS kernel – <span style="font-family: courier new, courier, monospace;">OslArchTransferToKernel</span> – so it can patch the Windows kernel in memory, once it is loaded but before it is executed. The final stage of the bootkit’s boot code is responsible for disabling DSE by patching the <span style="font-family: courier new, courier, monospace;">SepInitializeCodeIntegrity </span>kernel function (see Figure 7 for details).</p>
+<div id="attachment_155479" style="width: 811px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory.png"><img class="wp-image-155479" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory.png" alt="" width="801" height="410" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory.png 1373w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory-300x154.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory-768x393.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-7.-Comparison-of-Hex-Rays-decompiled-SepInitializeCodeIntegrity-function-before-left-and-after-right-it-is-patched-in-memory-1024x524.png 1024w" sizes="(max-width: 801px) 100vw, 801px" /></a><p class="wp-caption-text"><em>Figure 7. Comparison of Hex-Rays decompiled <span style="font-family: courier new, courier, monospace;">SepInitializeCodeIntegrity</span> function before (left) and after (right) it is patched in memory</em></p></div>
+<p>Interestingly, the boot code also patches the <span style="font-family: courier new, courier, monospace;">MiComputeDriverProtection</span> kernel function. Even though this function does not directly affect successful loading of the malicious driver, the bootkit does not proceed to the driver dropping if it does not find and patch this function in kernel memory. We were not able to identify the purpose of this second patch, but we assume this modified function may be used by other, as yet unknown, ESPecter components.</p>
+<ul>
+<li><span style="font-family: courier new, courier, monospace;">\SystemRoot\System32\null.sys</span> (driver)</li>
+<li><span style="font-family: courier new, courier, monospace;">\SystemRoot\Temp\syslog</span> (encrypted configuration)</li>
+</ul>
+<p>The configuration is used by the <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> user-mode component deployed by the kernel driver and consists of a one-byte XOR key followed by the encrypted configuration data. To decrypt the configuration, <span style="font-family: courier new, courier, monospace;">WinSys.dll</span>:</p>
+<ol>
+<li>Base64 decodes the configuration data</li>
+<li>XORs the data with the XOR key</li>
+<li>Base64 decodes each value delimited by “|” separately</li>
+</ol>
+<p>An example of a configuration dropped by the EFI version of ESPecter is presented in Figure 8. A full list of IP addresses and domains from configurations embedded in the ESPecter bootkit samples that we have discovered (both Legacy Boot and UEFI versions) is included in the <em>IoCs</em> section.</p>
+<div id="attachment_155480" style="width: 809px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit.png"><img class="wp-image-155480" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit.png" alt="" width="799" height="187" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit.png 1183w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit-300x70.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit-768x180.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-8.-Decryption-of-configuration-delivered-by-the-EFI-version-of-the-ESPecter-bootkit-1024x240.png 1024w" sizes="(max-width: 799px) 100vw, 799px" /></a><p class="wp-caption-text"><em>Figure 8. Decryption of configuration delivered by the EFI version of the ESPecter bootkit</em></p></div>
+<h3>Achieving persistence – Legacy Boot</h3>
+<p>As already mentioned, there are ESPecter versions supporting UEFI, and others supporting Legacy Boot, modes. In the case of Legacy Boot mode, persistence is achieved by the well-known technique of modifying the MBR code located in the first physical sector of the disk drive; therefore, we won’t explain it in detail here, but will just summarize it.</p>
+<h4><strong><em>How does ESPecter modify the Legacy Boot process?</em></strong></h4>
+<p>The malicious MBR first decrypts code previously copied to disk sectors 2, 3 and 4 by the installer, hooks the real-mode <a href="https://en.wikipedia.org/wiki/INT_13H" target="_blank" rel="noopener">INT13h</a> (BIOS sector read-write services) interrupt handler and then passes execution to the original MBR code, backed up to the second sector (sector 1) by the installer. Similar to other known MBR bootkits, when the INT13h interrupt handler is invoked, hook code (located in sector 0) checks for service 0x02 (Read sectors from drive) and 0x42 (Extended read sectors from drive) being handled in order to intercept loading of <span style="font-family: courier new, courier, monospace;">bootmgr</span> – the legacy version of the Windows Boot Manager. Note that ESPecter legacy versions do not need to patch the <span style="font-family: courier new, courier, monospace;">BmFwVerifySelfIntegrity</span> function in <span style="font-family: courier new, courier, monospace;">bootmgr</span>, because the <span style="font-family: courier new, courier, monospace;">bootmgr</span> binary wasn’t modified in any way.</p>
+<p>From this point, the functionality of the boot code is almost the same as in the UEFI version, resulting in dropping the malicious driver (located contiguously on Track 0, starting at sector 6) into one of the following locations, depending on the architecture:</p>
+<ul>
+<li><span style="font-family: courier new, courier, monospace;">\SystemRoot\System32\drivers\beep.sys</span> (x86)</li>
+<li><span style="font-family: courier new, courier, monospace;">\SystemRoot\System32\drivers\null.sys</span> (x64)</li>
+</ul>
+<p>In this case, the encrypted configuration is not dropped to the <span style="font-family: courier new, courier, monospace;">syslog</span> file but stays hidden in sector 5 of the infected disk.</p>
+<div id="attachment_155481" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version.png"><img class="wp-image-155481" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version.png" alt="" width="800" height="112" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version.png 1428w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version-300x42.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version-768x108.png 768w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-9.-Modified-disk-scheme-used-by-the-legacy-ESPecter-version-1024x143.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 9. Modified disk scheme used by the legacy ESPecter version</em></p></div>
+<h3>Kernel-mode driver</h3>
+<p>The driver’s main purpose is to load user-mode payloads, set up the keylogger and, in the end, delete itself. Setting up the keylogger is done in two steps:</p>
+<ul>
+<li>At first, it creates a device named <span style="font-family: courier new, courier, monospace;">\Device\WebBK</span> that exposes a function handling <span style="font-family: courier new, courier, monospace;">IRP_MJ_DEVICE_CONTROL</span> requests from the user-mode components. This function supports one IOCTL (Input/Output Control) code (<span style="font-family: courier new, courier, monospace;">0x22C004</span>), which can be used to trigger registration of an asynchronous procedure call routine responsible for processing intercepted keystrokes.</li>
+<li>Interception of keystrokes is done by setting up <span style="font-family: courier new, courier, monospace;">CompletionRoutine</span> for <span style="font-family: courier new, courier, monospace;">IRP_MJ_READ</span> requests for the keyboard driver object <span style="font-family: courier new, courier, monospace;">\Device\KeyboardClass0</span>.</li>
+</ul>
+<p>When done, any process can start logging intercepted keystrokes by defining its own routine and passing it to the created device object using the custom IOCTL <span style="font-family: courier new, courier, monospace;">0x22C004</span>.</p>
+<p>By default, the driver tries to load two base payloads – <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> and <span style="font-family: courier new, courier, monospace;">Client.dll</span><em> – </em>which have the ability to download and execute additional payloads. The first one, <span style="font-family: courier new, courier, monospace;">WinSys.dll</span>, is an <a href="https://www.autohotkey.com/mpress/mpress_web.htm">MPRESS</a>-packed DLL embedded in the driver’s binary in an encrypted form. The second one, <span style="font-family: courier new, courier, monospace;">Client.dll</span>, is downloaded by the <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> to the file <span style="font-family: courier new, courier, monospace;">\SystemRoot\Temp\memlog</span>, also in an encrypted form, using the same encryption method – a simple one-byte XOR with subtraction – but not the same keys. Both libraries are decrypted and dropped to the system directory <span style="font-family: courier new, courier, monospace;">\SystemRoot\System32\</span> by the driver.</p>
+<p>Execution of both <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> and <span style="font-family: courier new, courier, monospace;">Client.dll</span> libraries is achieved by injecting them into <span style="font-family: courier new, courier, monospace;">svchost.exe</span> and <span style="font-family: courier new, courier, monospace;">winlogon.exe</span>, respectively. To do this, the driver registers the image load callback routine <span style="font-family: courier new, courier, monospace;">NotifyRoutine</span> using <span style="font-family: courier new, courier, monospace;">PsSetLoadImageNotifyRoutine</span>, which is used to execute:</p>
+<ul>
+<li>The <span style="font-family: courier new, courier, monospace;">MainThread</span> export from <span style="font-family: courier new, courier, monospace;">Client.dll</span>, in context of the <span style="font-family: courier new, courier, monospace;">winlogon.exe</span> process</li>
+<li>The <span style="font-family: courier new, courier, monospace;">MainThread</span> export from <span style="font-family: courier new, courier, monospace;">WinSys.dll</span>, in context of the <span style="font-family: courier new, courier, monospace;">svchost.exe</span> process</li>
+</ul>
+<p><span style="font-family: courier new, courier, monospace;">NotifyRoutine</span> hooks the entry point of the <span style="font-family: courier new, courier, monospace;">winlogon.exe</span> and <span style="font-family: courier new, courier, monospace;">svchost.exe</span> process images in memory before being executed; this hook is then responsible for loading and executing the appropriate payload DLL. As shown in Figure 10, only the first <span style="font-family: courier new, courier, monospace;">svchost.exe</span> or <span style="font-family: courier new, courier, monospace;">winlogon.exe</span> image being loaded is processed by the routine.</p>
+<div id="attachment_155482" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-10.-Hex-Rays-decompiled-NotifyRoutine-checking-if-svchost.exe-or-winlogon.exe-is-being-loaded.png"><img class="wp-image-155482" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-10.-Hex-Rays-decompiled-NotifyRoutine-checking-if-svchost.exe-or-winlogon.exe-is-being-loaded.png" alt="" width="800" height="316" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-10.-Hex-Rays-decompiled-NotifyRoutine-checking-if-svchost.exe-or-winlogon.exe-is-being-loaded.png 951w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-10.-Hex-Rays-decompiled-NotifyRoutine-checking-if-svchost.exe-or-winlogon.exe-is-being-loaded-300x119.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-10.-Hex-Rays-decompiled-NotifyRoutine-checking-if-svchost.exe-or-winlogon.exe-is-being-loaded-768x304.png 768w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 10. Hex-Rays decompiled <span style="font-family: courier new, courier, monospace;">NotifyRoutine</span> checking if <span style="font-family: courier new, courier, monospace;">svchost.exe</span> or <span style="font-family: courier new, courier, monospace;">winlogon.exe</span> is being loaded</em></p></div>
+<h3>User-mode components – WinSys.dll</h3>
+<p><span style="font-family: courier new, courier, monospace;">WinSys.dll</span> acts as a base update agent, which periodically contacts its C&amp;C server in order to download or execute additional payloads or execute simple commands. The C&amp;C address, along with other values like campaign ID, bootkit version, time between C&amp;C communication attempts and active hours range, are located in the configuration, which can be loaded from:</p>
+<ul>
+<li><span style="font-family: courier new, courier, monospace;">DefaultConfig</span> value in <span style="font-family: courier new, courier, monospace;">HKLM\SYSTEM\CurrentControlSet\Control</span> registry</li>
+<li><span style="font-family: courier new, courier, monospace;">\SystemRoot\Temp\syslog</span> file</li>
+<li>or directly from the specific disk sector (in the Legacy Boot version)</li>
+</ul>
+<p>If both registry- and disk-stored configurations exist, the one from the registry is used.</p>
+<h3><strong><em>C&amp;C communication</em></strong></h3>
+<p><span style="font-family: courier new, courier, monospace;">WinSys.dll</span> communicates with its C&amp;C using HTTPS and the communication is initiated by sending an HTTP GET request using the following URL format:</p>
+<p style="margin-left: 0%; margin-right: 0%;"><span style="font-family: courier new, courier, monospace;">https://&lt;ip&gt;/Heart.aspx?ti=&lt;drive_ID&gt;&amp;tn=&lt;campaign_ID&gt;&amp;tg=&lt;number&gt;&amp;tv=&lt;malware_version&gt;</span></p>
+<p>where <span style="font-family: courier new, courier, monospace;">drive_ID</span> is the MD5 hash of the serial number of the main system volume and the other parameters are further information identifying this instance of the malware.</p>
+<p>As a result, the C&amp;C can respond with the command ID represented as a string, optionally followed by command parameters. The full list of commands is available in Table 1.</p>
+<p><em>Table 1. WinSys component C&amp;C commands</em></p>
+
+<table id="tablepress-1012" class="tablepress tablepress-id-1012">
+<thead>
+<tr class="row-1 odd">
+	<th class="column-1">Command&nbsp;ID</th><th class="column-2">Description</th><th class="column-3">URL</th>
+</tr>
+</thead>
+<tbody class="row-hover">
+<tr class="row-2 even">
+	<td class="column-1">1 or 4</td><td class="column-2">Exit.</td><td class="column-3">-</td>
+</tr>
+<tr class="row-3 odd">
+	<td class="column-1">2</td><td class="column-2">Upload various system info (CPU name, OS version, memory size, ethernet MAC address, list of installed software, etc.) to the predefined URL using the HTTP POST.</td><td class="column-3"><nobr><span style="font-family: courier new, courier, monospace;">https://&lt;ip&gt;/GetSysteminfo.aspx</span></nobr></td>
+</tr>
+<tr class="row-4 even">
+	<td class="column-1">3</td><td class="column-2">Download or download and execute file into one of the predefined locations (listed in  <em>IoCs </em>) from the predefined URL using HTTP GET.</td><td class="column-3"><nobr><span style="font-family: courier new, courier, monospace;">https://&lt;ip&gt;/UpLoad.aspx?ti=&lt;drive_ID&gt;</span></nobr></td>
+</tr>
+<tr class="row-5 odd">
+	<td class="column-1">5</td><td class="column-2">Restart PC via <span style="font-family: courier new, courier, monospace;">ExitProcess</span> (for Windows Vista only).</td><td class="column-3">N/A</td>
+</tr>
+<tr class="row-6 even">
+	<td class="column-1">6</td><td class="column-2">Download new configuration from the predefined URL using HTTP GET and save it in the registry.</td><td class="column-3"><nobr><span style="font-family: courier new, courier, monospace;">https://&lt;ip&gt;/ModifyIpaddr.aspx?ti=&lt;drive_ID&gt;</span></nobr></td>
+</tr>
+</tbody>
+</table>
+
+<h3>User-mode components – Client.dll</h3>
+<p>The second payload deployed by the malicious driver, if available, is <span style="font-family: courier new, courier, monospace;">Client.dll</span>. It’s a backdoor that supports a rich set of commands (Table 2) and contains various automatic data exfiltration capabilities including document stealing, keylogging, and monitoring of the victim’s screen by periodically taking screenshots. All of the collected data is stored in a hidden directory, with separate subdirectories for each data source – the full list of directory paths used is available from our <a href="https://github.com/eset/malware-ioc/tree/master/especter" target="_blank" rel="noopener">GitHub repository</a>. Also note that interception of the keyboard is handled by the driver and the client just needs to register its logging function by sending IOCTL <span style="font-family: courier new, courier, monospace;">0x22C004</span> to the driver’s device in order to save intercepted keystrokes to the file (Figure 11).</p>
+<div id="attachment_155483" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-11.-Client-payload-setting-up-keylogger-function-by-sending-IOCTL-to-the-bootkits-device-driver.png"><img class="wp-image-155483" src="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-11.-Client-payload-setting-up-keylogger-function-by-sending-IOCTL-to-the-bootkits-device-driver.png" alt="" width="800" height="169" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-11.-Client-payload-setting-up-keylogger-function-by-sending-IOCTL-to-the-bootkits-device-driver.png 945w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-11.-Client-payload-setting-up-keylogger-function-by-sending-IOCTL-to-the-bootkits-device-driver-300x63.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/10/Figure-11.-Client-payload-setting-up-keylogger-function-by-sending-IOCTL-to-the-bootkits-device-driver-768x163.png 768w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 11. Client payload setting up keylogger function by sending IOCTL to the bootkit&#8217;s device driver</em></p></div>
+<p>Configuration for the Client component should be located in an encrypted form in the file’s overlay. It contains information such as the C&amp;C address and port, flags indicating what data should be collected (keystrokes, screenshots, files with specific extensions), time period for the screenshotting thread, maximum file size for exfiltrated data and a list of file extensions.</p>
+<h4><strong><em>C&amp;C communication</em></strong></h4>
+<p>The client sets its own communication channel with the C&amp;C. For communication with the C&amp;C, it uses the TCP protocol with single-byte XOR encryption applied to non-null message bytes that are different from the key, which was <span style="font-family: courier new, courier, monospace;">0x66</span> in the campaign analyzed here. Communication is initiated by sending beacon messages to the IP:PORT pair specified in the configuration. This message contains the <span style="font-family: courier new, courier, monospace;">drive_ID</span> value (the MD5 hash of the serial number of the main system volume) along with a value specifying the type of message – that is, a command request or the uploading of collected data.</p>
+<p>After execution of the C&amp;C command, the result is reported back to the C&amp;C specifying the result code of the executed operation, command ID and, interestingly, each such resulting report message contains a watermark/tag representing the wide string <span style="font-family: courier new, courier, monospace;">WBKP</span> located at offset 0x04, which makes it easier to identify this malicious communication at the network level.</p>
+<p><em>Table 2. List of Client C&amp;C commands</em></p>
+
+<table id="tablepress-1013" class="tablepress tablepress-id-1013">
+<thead>
+<tr class="row-1 odd">
+	<th class="column-1">Command&nbsp;ID</th><th class="column-2">Description</th>
+</tr>
+</thead>
+<tbody class="row-hover">
+<tr class="row-2 even">
+	<td class="column-1">0x0000</td><td class="column-2">Stop backdoor.</td>
+</tr>
+<tr class="row-3 odd">
+	<td class="column-1">0x0064</td><td class="column-2">Execute command line  received from C&amp;C  and capture output using pipes.</td>
+</tr>
+<tr class="row-4 even">
+	<td class="column-1">0x00C8</td><td class="column-2">Execute power commands logoff, power off, reboot, or shutdown, depending on the value of this C&amp;C command’s parameter.</td>
+</tr>
+<tr class="row-5 odd">
+	<td class="column-1">0x012C</td><td class="column-2">Take screenshot of foreground window, full screenshot, or change automatic screenshotting parameters, depending on the value of the parameter.</td>
+</tr>
+<tr class="row-6 even">
+	<td class="column-1">0x0190</td><td class="column-2">Execute various file system operations.</td>
+</tr>
+<tr class="row-7 odd">
+	<td class="column-1">0x01F4</td><td class="column-2">Upload collected data and files.</td>
+</tr>
+<tr class="row-8 even">
+	<td class="column-1">0x0258</td><td class="column-2">Execute various service-related commands.</td>
+</tr>
+<tr class="row-9 odd">
+	<td class="column-1">0x02BC</td><td class="column-2">Execute various process-related commands.</td>
+</tr>
+<tr class="row-10 even">
+	<td class="column-1">0x0320</td><td class="column-2">Modify configuration values.</td>
+</tr>
+<tr class="row-11 odd">
+	<td class="column-1">0x0384</td><td class="column-2">Stop/start keylogger, depending on the value of the parameter.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Conclusion</h2>
+<p>ESPecter shows that threat actors are relying not only on UEFI firmware implants when it comes to pre-OS persistence and, despite the existing security mechanisms like UEFI Secure Boot, invest their time into creating malware that would be easily blocked by such mechanisms, if enabled and configured correctly.</p>
+<p>To keep safe against threats similar to the ESPecter bootkit, make sure that:</p>
+<ul>
+<li>You always use the latest firmware version.</li>
+<li>Your system is properly configured and Secure Boot is enabled.</li>
+<li>You apply proper <a href="https://attack.mitre.org/mitigations/M1026" target="_blank" rel="noopener">Privileged Account Management</a> to help prevent adversaries from accessing privileged accounts necessary for bootkit installation.</li>
+</ul>
+<h2>Indicators of Compromise (IoCs)</h2>
+<p>A comprehensive list of IoCs and samples can be found in <a href="https://github.com/eset/malware-ioc/tree/master/especter" target="_blank" rel="noopener">our GitHub repository</a>.</p>
+<h3>ESET detections</h3>
+<p>EFI/Rootkit.ESPecter<br />
+Win32/Rootkit.ESPecter<br />
+Win64/Rootkit.ESPecter</p>
+<h3>C&amp;C IP addresses and domains from configurations</h3>
+<p><span style="font-family: courier new, courier, monospace;">196.1.2[.]111</span><br />
+<span style="font-family: courier new, courier, monospace;">103.212.69[.]175</span><br />
+<span style="font-family: courier new, courier, monospace;">183.90.187[.]65</span><br />
+<span style="font-family: courier new, courier, monospace;">61.178.79[.]69</span><br />
+<span style="font-family: courier new, courier, monospace;">swj02.gicp[.]net</span><br />
+<span style="font-family: courier new, courier, monospace;">server.microsoftassistant[.]com</span><br />
+<span style="font-family: courier new, courier, monospace;">yspark.justdied[.]com</span><br />
+<span style="font-family: courier new, courier, monospace;">crystalnba[.]com</span></p>
+<h3>Legacy version installers</h3>
+<p><span style="font-family: courier new, courier, monospace;">ABC03A234233C63330C744FDA784385273AF395B</span><br />
+<span style="font-family: courier new, courier, monospace;">DCD42B04705B784AD62BB36E17305B6E6414F033</span><br />
+<span style="font-family: courier new, courier, monospace;">656C263FA004BB3E6F3EE6EF6767D101869C7F7C</span><br />
+<span style="font-family: courier new, courier, monospace;">A8B4FE8A421C86EAE060BB8BF525EF1E1FC133B2</span><br />
+<span style="font-family: courier new, courier, monospace;">3AC6F9458A4A1A16390379621FDD230C656FC444</span><br />
+<span style="font-family: courier new, courier, monospace;">9F6DF0A011748160B0C18FB2B44EBE9FA9D517E9</span><br />
+<span style="font-family: courier new, courier, monospace;">2C22AE243FDC08B84B38D9580900A9A9E3823ACF</span><br />
+<span style="font-family: courier new, courier, monospace;">08077D940F2B385FBD287D84EDB58493136C8391</span><br />
+<span style="font-family: courier new, courier, monospace;">1D75BFB18FFC0B820CB36ACF8707343FA6679863</span><br />
+<span style="font-family: courier new, courier, monospace;">37E49DBCEB1354D508319548A7EFBD149BFA0E8D</span><br />
+<span style="font-family: courier new, courier, monospace;">7F501AEB51CE3232A979CCF0E11278346F746D1F</span></p>
+<h3>Compromised Windows Boot Manager</h3>
+<p><span style="font-family: courier new, courier, monospace;">27AD0A8A88EAB01E2B48BA19D2AAABF360ECE5B8</span><br />
+<span style="font-family: courier new, courier, monospace;">8AB33E432C8BEE54AE759DFB5346D21387F26902</span></p>
+<h2>MITRE ATT&amp;CK techniques</h2>
+<p>This table was built using <a href="https://attack.mitre.org/resources/versions/" target="_blank" rel="noopener">version 9</a> of the MITRE ATT&amp;CK framework.<br />
+
+<table id="tablepress-1014" class="tablepress tablepress-id-1014">
+<thead>
+<tr class="row-1 odd">
+	<th class="column-1">Tactic</th><th class="column-2">ID</th><th class="column-3">Name</th><th class="column-4">Description</th>
+</tr>
+</thead>
+<tbody class="row-hover">
+<tr class="row-2 even">
+	<td class="column-1">Execution</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1106/" rel="noopener" target="_blank">T1106</a></td><td class="column-3">Native API</td><td class="column-4">ESPecter leverages several Windows APIs:  VirtualAlloc ,  <span style="font-family: courier new, courier, monospace;">WriteProcessMemory</span>, and  <span style="font-family: courier new, courier, monospace;">CreateRemoteThread</span> for process injection.</td>
+</tr>
+<tr class="row-3 odd">
+	<td rowspan="2" class="column-1">Persistence</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1542/003/" rel="noopener" target="_blank">T1542.003</a></td><td class="column-3">Pre-OS Boot: Bootkit</td><td class="column-4">ESPecter achieves persistence by infecting Windows Boot Manager (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>) located on the ESP, or by modifying the MBR on Legacy Boot systems. </td>
+</tr>
+<tr class="row-4 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1547/" rel="noopener" target="_blank">T1547</a></td><td class="column-3">Boot or Logon Autostart Execution</td><td class="column-4">ESPecter replaces the legitimate <span style="font-family: courier new, courier, monospace;">null.sys</span> or <span style="font-family: courier new, courier, monospace;">beep.sys</span> driver with its own malicious one in order to be executed on system startup.</td>
+</tr>
+<tr class="row-5 odd">
+	<td rowspan="12" class="column-1">Defense Evasion</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1055/001/" rel="noopener" target="_blank">T1055.001</a></td><td class="column-3">Process Injection: Dynamic-link Library Injection</td><td class="column-4">ESPecter’s driver injects its main user-mode components into  <span style="font-family: courier new, courier, monospace;">svchost.exe </span>and <span style="font-family: courier new, courier, monospace;">winlogon.exe</span> processes.</td>
+</tr>
+<tr class="row-6 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1564/001/" rel="noopener" target="_blank">T1564.001</a></td><td class="column-3">Hide Artifacts: Hidden Files and Directories</td><td class="column-4">ESPecter’s <span style="font-family: courier new, courier, monospace;">Client.dll</span> component creates hidden directories to store collected data.</td>
+</tr>
+<tr class="row-7 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1564/005/" rel="noopener" target="_blank">T1564.005</a></td><td class="column-3">Hide Artifacts: Hidden File System</td><td class="column-4">ESPecter bootkit installers for Legacy Boot versions use unallocated disk space located right after the MBR to store its code, configuration and malicious driver.</td>
+</tr>
+<tr class="row-8 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1140/" rel="noopener" target="_blank">T1140</a></td><td class="column-3">Deobfuscate/Decode Files or Information</td><td class="column-4">ESPecter uses single-byte XOR with subtraction to decrypt user-mode payloads.</td>
+</tr>
+<tr class="row-9 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1562/" rel="noopener" target="_blank">T1562</a></td><td class="column-3">Impair Defenses</td><td class="column-4">ESPecter patches <span style="font-family: courier new, courier, monospace;"></span> Windows kernel function directly in memory to disable DSE.</td>
+</tr>
+<tr class="row-10 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1036/003/" rel="noopener" target="_blank">T1036.003</a></td><td class="column-3">Masquerading: Rename System Utilities</td><td class="column-4">ESPecter bootkit installers for Legacy Boot versions copy <span style="font-family: courier new, courier, monospace;">cmd.exe</span> to <span style="font-family: courier new, courier, monospace;">con1866.exe</span> to evade detection.</td>
+</tr>
+<tr class="row-11 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1112/" rel="noopener" target="_blank">T1112</a></td><td class="column-3">Modify Registry</td><td class="column-4">ESPecter can use <span style="font-family: courier new, courier, monospace;">DefaultConfig</span> value under <nobr><span style="font-family: courier new, courier, monospace;">HKLM\SYSTEM\CurrentControlSet\Control</span></nobr> to store configuration.</td>
+</tr>
+<tr class="row-12 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1601/001/" rel="noopener" target="_blank">T1601.001</a></td><td class="column-3">Modify System Image: Patch System Image</td><td class="column-4">ESPecter patches various functions in Windows Boot Manager, Windows OS loader and OS kernel directly in memory during the boot process.</td>
+</tr>
+<tr class="row-13 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1027/002/" rel="noopener" target="_blank">T1027.002</a></td><td class="column-3">Obfuscated Files or Information: Software Packing</td><td class="column-4">ESPecter’s <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> component is packed using the MPRESS packer.</td>
+</tr>
+<tr class="row-14 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1542/003/" rel="noopener" target="_blank">T1542.003</a></td><td class="column-3">Pre-OS Boot: Bootkit</td><td class="column-4">ESPecter achieves persistence by modifying Windows Boot Manager (<span style="font-family: courier new, courier, monospace;">bootmgfw.efi</span>) located on the ESP or by modifying the MBR on Legacy Boot systems.</td>
+</tr>
+<tr class="row-15 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1553/006/" rel="noopener" target="_blank">T1553.006</a></td><td class="column-3">Subvert Trust Controls: Code Signing Policy Modification</td><td class="column-4">ESPecter patches Windows kernel function <span style="font-family: courier new, courier, monospace;">SepInitializeCodeIntegrity</span>  directly in memory to disable DSE.</td>
+</tr>
+<tr class="row-16 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1497/003/" rel="noopener" target="_blank">T1497.003</a></td><td class="column-3">Virtualization/Sandbox Evasion: Time Based Evasion</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> component can be configured to postpone C&amp;C communication after execution or to communicate with the C&amp;C only in a specified time range.</td>
+</tr>
+<tr class="row-17 odd">
+	<td class="column-1">Credential Access</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1056/001/" rel="noopener" target="_blank">T1056.001</a></td><td class="column-3">Input Capture: Keylogging</td><td class="column-4">ESPecter has a keylogging capability.</td>
+</tr>
+<tr class="row-18 even">
+	<td rowspan="7" class="column-1">Discovery</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1010/" rel="noopener" target="_blank">T1010</a></td><td class="column-3">Application Window Discovery</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component reports foreground window names along with keylogger information to provide application context.</td>
+</tr>
+<tr class="row-19 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1083/" rel="noopener" target="_blank">T1083</a></td><td class="column-3">File and Directory Discovery</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component can list file information for specific directories.</td>
+</tr>
+<tr class="row-20 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1120/" rel="noopener" target="_blank">T1120</a></td><td class="column-3">Peripheral Device Discovery</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component detects the insertion of new devices by listening for the  WM_DEVICECHANGE</span> window message.</td>
+</tr>
+<tr class="row-21 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1057/" rel="noopener" target="_blank">T1057</a></td><td class="column-3">Process Discovery</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component can list running processes and their loaded modules.</td>
+</tr>
+<tr class="row-22 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1012/" rel="noopener" target="_blank">T1012</a></td><td class="column-3">Query Registry</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> component can check for installed software under the Registry key <nobr><span style="font-family: courier new, courier, monospace;">HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall</span></nobr>.</td>
+</tr>
+<tr class="row-23 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1082/" rel="noopener" target="_blank">T1082</a></td><td class="column-3">System Information Discovery</td><td class="column-4">ESPecter user-mode payloads can collect system information from the victim’s machine.</td>
+</tr>
+<tr class="row-24 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1124/" rel="noopener" target="_blank">T1124</a></td><td class="column-3">System Time Discovery</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> component can use <span style="font-family: courier new, courier, monospace;">GetLocalTime</span>  for time discovery.</td>
+</tr>
+<tr class="row-25 odd">
+	<td rowspan="5" class="column-1">Collection</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1119/" rel="noopener" target="_blank">T1119</a></td><td class="column-3">Automated Collection</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component can automatically collect screenshots, intercepted keystrokes and various files.</td>
+</tr>
+<tr class="row-26 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1025/" rel="noopener" target="_blank">T1025</a></td><td class="column-3">Data from Removable Media</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component can collect files with specified extension from removable drives.</td>
+</tr>
+<tr class="row-27 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1074/001/" rel="noopener" target="_blank">T1074.001</a></td><td class="column-3">Data Staged: Local Data Staging</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component stores automatically collected data into a hidden local directory.</td>
+</tr>
+<tr class="row-28 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1056/001/" rel="noopener" target="_blank">T1056.001</a></td><td class="column-3">Input Capture: Keylogging</td><td class="column-4">ESPecter has keylogging functionality.</td>
+</tr>
+<tr class="row-29 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1113/" rel="noopener" target="_blank">T1113</a></td><td class="column-3">Screen Capture</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component has screen capture functionality.</td>
+</tr>
+<tr class="row-30 even">
+	<td rowspan="5" class="column-1">Command and Control</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1071/001/" rel="noopener" target="_blank">T1071.001</a></td><td class="column-3">Application Layer Protocol: Web Protocols</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">WinSys.dll</span> component communicates with its C&amp;C server over HTTPS.</td>
+</tr>
+<tr class="row-31 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1573/001/" rel="noopener" target="_blank">T1573.001</a></td><td class="column-3">Encrypted Channel: Symmetric Cryptography</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component encrypts C&amp;C traffic using single-byte XOR.</td>
+</tr>
+<tr class="row-32 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1105/" rel="noopener" target="_blank">T1105</a></td><td class="column-3">Ingress Tool Transfer</td><td class="column-4">ESPecter’s user-mode components can download additional payloads from C&amp;C.</td>
+</tr>
+<tr class="row-33 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1104/" rel="noopener" target="_blank">T1104</a></td><td class="column-3">Multi-Stage Channels</td><td class="column-4">ESPecter’s user-mode components use separate C&amp;C channels.</td>
+</tr>
+<tr class="row-34 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1095/" rel="noopener" target="_blank">T1095</a></td><td class="column-3">Non-Application Layer Protocol</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component uses TCP for C&amp;C communication.</td>
+</tr>
+<tr class="row-35 odd">
+	<td rowspan="3" class="column-1">Exfiltration</td><td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1020/" rel="noopener" target="_blank">T1020</a></td><td class="column-3">Automated Exfiltration</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component creates a thread to automatically upload collected data to the C&amp;C.</td>
+</tr>
+<tr class="row-36 even">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1041/" rel="noopener" target="_blank">T1041</a></td><td class="column-3">Exfiltration Over C2 Channel</td><td class="column-4">ESPecter exfiltrates data over the same channel used for C&amp;C.</td>
+</tr>
+<tr class="row-37 odd">
+	<td class="column-2"><a href="https://attack.mitre.org/versions/v9/techniques/T1029/" rel="noopener" target="_blank">T1029</a></td><td class="column-3">Scheduled Transfer</td><td class="column-4">ESPecter’s  <span style="font-family: courier new, courier, monospace;">Client.dll</span> component is set to upload collected data to the C&amp;C every five seconds.</td>
+</tr>
+</tbody>
+</table>
+</p>
+<p><a class="no-fancy" href="https://www.eset.com/int/business/services/threat-intelligence/?utm_source=welivesecurity.com&amp;utm_medium=referral&amp;utm_campaign=wls-research&amp;utm_content=uefi-threats-moving-esp-introducing-especter-bootkit/" target="_blank" rel="noopener"><img class="aligncenter wp-image-152551" src="https://www.welivesecurity.com/wp-content/uploads/2021/07/bandook-bandidos-eti-cta.png" alt="" width="899" height="290" srcset="https://www.welivesecurity.com/wp-content/uploads/2021/07/bandook-bandidos-eti-cta.png 918w, https://www.welivesecurity.com/wp-content/uploads/2021/07/bandook-bandidos-eti-cta-300x97.png 300w, https://www.welivesecurity.com/wp-content/uploads/2021/07/bandook-bandidos-eti-cta-768x248.png 768w" sizes="(max-width: 899px) 100vw, 899px" /></a></p>
+
+                            
+                                                            <div class="dot">
+                                    <span class="icomoon icon-icon_article_dot"></span>
+                                </div>
+
+                                <div class="meta">
+                                    <div class="wls-authors wls-authors-footer">
+                                                <div class="wls-author">
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/msmolar/" title="Martin Smolár">
+                    Martin Smolár                </a>
+            </div>
+        </div>
+                <div class="wls-author">
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/acherepanov/" title="Anton Cherepanov">
+                    Anton Cherepanov                </a>
+            </div>
+        </div>
+                                            </div>
+                                    <span class="strong">
+								        <time datetime="2021-10-05 11:30:30">5 Oct 2021 - 11:30AM</time>
+                                    </span>
+                                </div>
+                            
+                            <div class="widgets row">
+                                <div class="col-md-12 col-sm-12 col-xs-12">
+                                    <div class="heading-line col-md-12 col-sm-12 col-xs-12 no-padding">
+                                        <h3><span class="text">Newsletter</span></h3>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-sm-6 col-xs-12 newsletter-wrapper">
+                                    		<div class="heading-line col-md-12 no-padding sidebar-item clearfix">
+			<h3>
+				<span class="text">Newsletter</span>
+			</h3>
+
+			<form action="https://enjoy.eset.com/pub/rf" class="basic-searchform col-md-12 col-sm-12 col-xs-12 no-padding newsletter" method="post" role="search">
+				<div class="search-input clearfix">
+                    <input type="text" name="EMAIL_ADDRESS_" value="" placeholder="Email...">
+                    <input type="hidden" name="NEWSLETTER" value="We Live Security">
+
+                    <input type="hidden" name="_ri_" value="X0Gzc2X%3DAQpglLjHJlTQGgXv4jDGEK4KW2uhw0qgUzfwuivmOJOPCgzgo9vsI3VwjpnpgHlpgneHmgJoXX0Gzc2X%3DAQpglLjHJlTQGzbD6yU2pAgzaJM16bkTA7tOwuivmOJOPCgzgo9vsI3">
+                    <input type="hidden" name="_ei_" value="Ep2VKa8UKNIAPP_2GAEW0bY">
+                    <input type="hidden" name="_di_" value="m0a5n0j02duo9clmm4btuu5av8rdtvqfqd03v1hallrvcob47ad0">
+                    <input type="hidden" name="EMAIL_PERMISSION_STATUS_" value="O">
+                    <input type="hidden" name="CONTACT_SOURCE_MOST_RECENT" value="WLS_Subscribe_Form">
+                    <button>
+						Submit					</button>
+				</div>
+			</form>
+		</div>
+                                </div>
+                            </div>
+
+                                                            <div class="similar-articles row">
+                                    <div class="heading-line col-md-12 col-sm-12 col-xs-12">
+                                        <h3><span class="text">Similar Articles</span></h3>
+                                    </div>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/malware/" class="category-tag-btn">Malware</a>                                                <a href="https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2021/09/eset-research-famoussparrow-apt-group-proxylogon-623x415.jpg"
+                                                         alt="UEFI threats moving to the ESP: Introducing ESPecter bootkit">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2021/09/23/famoussparrow-suspicious-hotel-guest/">
+                                                    FamousSparrow: A&nbsp;suspicious hotel guest                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/malware/" class="category-tag-btn">Malware</a>                                                <a href="https://www.welivesecurity.com/2021/09/17/numando-latam-banking-trojan/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2021/09/shutterstock_582222715-623x432-1.jpg"
+                                                         alt="UEFI threats moving to the ESP: Introducing ESPecter bootkit">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2021/09/17/numando-latam-banking-trojan/">
+                                                    Numando: Count once, code twice                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/malware/" class="category-tag-btn">Malware</a>                                                <a href="https://www.welivesecurity.com/2021/08/24/sidewalk-may-be-as-dangerous-as-crosswalk/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2021/08/winnti-group-sidewalk-backdoor-crosswalk-sparklinggoblin-623x415.jpg"
+                                                         alt="UEFI threats moving to the ESP: Introducing ESPecter bootkit">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2021/08/24/sidewalk-may-be-as-dangerous-as-crosswalk/">
+                                                    The SideWalk may be as dangerous as the CROSSWALK                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/malware/" class="category-tag-btn">Malware</a>                                                <a href="https://www.welivesecurity.com/2021/08/11/iiserpent-malware-driven-seo-fraud-service/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2021/08/iis-malware‑iiserpent-seo-fraud-623x415.jpg"
+                                                         alt="UEFI threats moving to the ESP: Introducing ESPecter bootkit">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2021/08/11/iiserpent-malware-driven-seo-fraud-service/">
+                                                    IISerpent: Malware-driven SEO fraud as a service                                                </a>
+                                            </h4>
+                                        </article>
+                                                                    </div>
+                            
+                            <div class="comments row">
+                                <div class="heading-line col-xs-12">
+                                    <h3><span class="text">Discussion</span></h3>
+                                                                            
+<div id="disqus_thread"></div>
+                                                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    	</div> 	<footer id="site-footer">
+		<div class="container">
+			<div class="row">
+				<div class="col-md-2">
+                    <div class="hidden-sm hidden-xs">
+                        <div class="logo-wrapper footer clearfix">
+                            <div class="dark clearfix">
+                                <a href="https://www.welivesecurity.com/" class="wls">
+                                    <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-footer-1.svg" alt="Welivesecurity.com">
+                                </a>
+                                <a href="https://www.eset.com" class="eset">
+                                    <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-footer-2.svg" alt="by ESET">
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden-lg hidden-md">
+                        <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                    </div>
+				</div>
+				<nav id="footer" class="clearfix">
+											<div class="mobile-block">
+																<div class="col-md-2 col-md-offset-2">
+										<ul>
+																							<li>
+													<a href="/">Home</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/about-us/">About Us</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/contact-us/">Contact Us</a>
+												</li>
+																					</ul>
+									</div>
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/sitemap/">Sitemap</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/our-experts/">Our Experts</a>
+												</li>
+																							<li>
+													<a href="https://eset.com">ESET</a>
+												</li>
+																					</ul>
+									</div>
+													</div>
+											<div class="mobile-block">
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/research/">Research</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/category/how-to/">How To</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/categories/">Categories</a>
+												</li>
+																					</ul>
+									</div>
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/rss-configurator/">RSS Configurator</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/news-widget-generator/">News Widget</a>
+												</li>
+																					</ul>
+									</div>
+													</div>
+									</nav>
+			</div>
+			<div class="row">
+				<div class="col-md-12 legal clearfix">
+					<div class="wrap clearfix">
+													<span>
+								<a href="https://www.welivesecurity.com/privacy/">
+									Privacy Policy								</a>
+							</span>
+													<span>
+								<a href="https://www.welivesecurity.com/legal-information/">
+									Legal Information								</a>
+							</span>
+											</div>
+					<span class="copyright pull-right">Copyright &copy; ESET, All Rights Reserved</span>
+				</div>
+							</div>
+		</div>
+	</footer>
+	
+	<button id="back-to-top" class="animated-scroll" data-target="absoluteTop">
+		<span class="icomoon icon-icon_arrow"></span>
+		<span class="text">Back to top</span>
+	</button>
+
+			<div class="social-wrapper-mobile hidden-lg hidden-md hidden-sm" id="mobile-article-sharer">
+			<div class="col-xs-12">
+				<div class="icons" style="text-align: center;">
+											<a class="share-facebook" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Facebook">
+							<span class="icomoon icon-icon_fb"></span>
+						</a>
+											<a class="share-twitter" href="https://twitter.com/intent/tweet?https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Twitter">
+							<span class="icomoon icon-icon_tw"></span>
+						</a>
+											<a class="share-linkedin" href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fwww.welivesecurity.com%2F2021%2F10%2F05%2Fuefi-threats-moving-esp-introducing-especter-bootkit%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Linkedin">
+							<span class="icomoon icon-icon_in"></span>
+						</a>
+									</div>
+			</div>
+		</div>
+	
+	<script>
+		var baseUrl = "https://www.welivesecurity.com/";
+	</script>
+	
+			<script>
+            !function(){if(-1==window.document.cookie.indexOf("user_rec=1")){function e(e,o){var t=document.createElement("img");t.setAttribute("style","display:none"),t.src=e+o,window.document.body.appendChild(t)}function o(){d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=Default%20status&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=defaultStatus&z="+Math.floor(1e6*Math.random(0,1)),e(u,a),e(s,c)}function t(){console.log("GA and GTM are loaded."),d=ga.getAll()[0].get("clientId"),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20loaded,%20GTM%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=11",e(u,a),e(s,c)}function n(){var e=new Date;e.setTime(e.getTime()+63072e6);var o="expires="+e.toUTCString();window.document.cookie="user_rec=1; "+o+"; path=/"}var d,a,c,i,r,l="UA-76266002-27",g=window.location.href,s="https://cdn1.esetstatic.com/ESET/INT/assets/img/check.png",u="https://www.google-analytics.com/collect",w="wls",m=0,h=function e(){i=window.ga&&ga.create?1:0,r=window.google_tag_manager?1:0,m++,console.log("Timer: ",m),h=setTimeout(e,500)};window.document.addEventListener&&(d=1e6*Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=Script%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=scriptLoaded&z="+Math.floor(1e6*Math.random(0,1)),e(u,a),e(s,c),window.addEventListener("beforeunload",o),window.ga&&ga.create&&window.google_tag_manager?(t(),window.removeEventListener("beforeunload",o),n()):(setTimeout(h,500),setTimeout(function(){clearTimeout(h),i&&r?t():i&&!r?(console.log("GA is loaded and GTM is blocked."),d=ga.getAll()[0].get("clientId"),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20loaded,%20GTM%20blocked&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=10",e(u,a),e(s,c)):!i&&r?(console.log("GA is blocked and GTM is loaded."),d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20blocked,%20GTM%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=01",e(u,a),e(s,c)):i||r||(console.log("GA is blocked and GTM is blocked."),d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20blocked,%20GTM%20blocked&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=00",e(u,a),e(s,c)),window.removeEventListener("beforeunload",o),n()},1e4)))}}();
+		</script>
+	
+	<script src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/js/main.js?id=fef3139dcedd23afc232"></script>
+    <!-- Version: v1.4.1.0bbcde.pro.awus -->
+    		<script type="text/javascript">
+			var disqus_config = function () { 
+				this.language = "en";
+			};
+			var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":"", "numsVisible": false};
+			var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+		</script>
+		<script src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/static/js/crayon.min.js"></script>
+
+			
+		
+    <script>
+    	Main.init();
+    </script>
+
+    <script type='text/javascript'>
+/* <![CDATA[ */
+var countVars = {"disqusShortname":"welivesecurity"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://www.welivesecurity.com/wp-content/plugins/disqus-comment-system/public/js/comment_count.js?ver=3.0.16'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var embedVars = {"disqusConfig":{"integration":"wordpress 3.0.16"},"disqusIdentifier":"155437 https:\/\/backend.welivesecurity.com\/?p=155437","disqusShortname":"welivesecurity","disqusTitle":"UEFI threats moving to the ESP: Introducing ESPecter bootkit","disqusUrl":"https:\/\/www.welivesecurity.com\/2021\/10\/05\/uefi-threats-moving-esp-introducing-especter-bootkit\/","postId":"155437"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://www.welivesecurity.com/wp-content/plugins/disqus-comment-system/public/js/comment_embed.js?ver=3.0.16'></script>
+    <script src="https://assets.esetstatic.com/3PR/app.min.js"></script>
+  </body>
+</html>

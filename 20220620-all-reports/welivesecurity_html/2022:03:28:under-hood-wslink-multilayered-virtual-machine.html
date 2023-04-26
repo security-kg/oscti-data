@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en-US" prefix="og: http://ogp.me/ns#">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="google-site-verification" content="_b2avZwzr79oru6lM2Ddae1fNpSIbPaP0H0WNkc2x3k"/>
+    <meta name="msvalidate.01" content="CE77828A466C2513F660017CFCB6BA13"/>
+    <link rel="icon" href="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/favicon.ico">
+
+    
+
+            
+    
+    <link href="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/css/main.css?id=09d01dd87b618f2315ce" rel="stylesheet">
+    <script type="text/javascript"> var appInsights=window.appInsights||function(a){ function b(a){c[a]=function(){var b=arguments;c.queue.push(function(){c[a].apply(c,b)})}}var c={config:a},d=document,e=window;setTimeout(function(){var b=d.createElement("script");b.src=a.url||"https://az416426.vo.msecnd.net/scripts/a/ai.0.js",d.getElementsByTagName("script")[0].parentNode.appendChild(b)});try{c.cookie=d.cookie}catch(a){}c.queue=[];for(var f=["Event","Exception","Metric","PageView","Trace","Dependency"];f.length;)b("track"+f.pop());if(b("setAuthenticatedUserContext"),b("clearAuthenticatedUserContext"),b("startTrackEvent"),b("stopTrackEvent"),b("startTrackPage"),b("stopTrackPage"),b("flush"),!a.disableExceptionTracking){f="onerror",b("_"+f);var g=e[f];e[f]=function(a,b,d,e,h){var i=g&&g(a,b,d,e,h);return!0!==i&&c["_"+f](a,b,d,e,h),i}}return c }({ instrumentationKey:"dcb460fe-684e-4d39-bfcd-d3a6f2710a32" }); window.appInsights=appInsights,appInsights.queue&&0===appInsights.queue.length&&appInsights.trackPageView(); </script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+        'Author': 'Vladislav Hrčka',
+        'ArticleCategory': 'ESET Research',
+        'ArticleSection': 'Research',
+        'cookie-bar-hq': true
+    });
+
+    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PMDGSM');
+</script>
+
+<!-- This site is optimized with the Yoast SEO plugin v9.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<title>Under the hood of Wslink’s multilayered virtual machine | WeLiveSecurity</title>
+<meta name="description" content="ESET researchers describe thes structure of the virtual machine used in samples of Wslink and suggest an approach to see through its obfuscation techniques."/>
+<link rel="canonical" href="https://www.welivesecurity.com/2022/03/28/under-hood-wslink-multilayered-virtual-machine/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Under the hood of Wslink’s multilayered virtual machine | WeLiveSecurity" />
+<meta property="og:description" content="ESET researchers describe thes structure of the virtual machine used in samples of Wslink and suggest an approach to see through its obfuscation techniques." />
+<meta property="og:url" content="https://www.welivesecurity.com/2022/03/28/under-hood-wslink-multilayered-virtual-machine/" />
+<meta property="og:site_name" content="WeLiveSecurity" />
+<meta property="article:section" content="ESET Research" />
+<meta property="article:published_time" content="2022-03-28T09:30:18+00:00" />
+<meta property="article:modified_time" content="2022-03-28T09:31:44+00:00" />
+<meta property="og:updated_time" content="2022-03-28T09:31:44+00:00" />
+<meta property="og:image" content="https://www.welivesecurity.com/wp-content/uploads/2022/03/vm-1200x628.png" />
+<meta property="og:image:secure_url" content="https://www.welivesecurity.com/wp-content/uploads/2022/03/vm-1200x628.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="628" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:description" content="ESET researchers describe thes structure of the virtual machine used in samples of Wslink and suggest an approach to see through its obfuscation techniques." />
+<meta name="twitter:title" content="Under the hood of Wslink’s multilayered virtual machine | WeLiveSecurity" />
+<meta name="twitter:site" content="@welivesecurity" />
+<meta name="twitter:image" content="https://www.welivesecurity.com/wp-content/uploads/2022/03/vm-1200x628.png" />
+<meta name="twitter:creator" content="@welivesecurity" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel="alternate" type="application/rss+xml" title="WeLiveSecurity RSS 2.0 Feed" href="/rss-configurator/" /><style type="text/css" id="syntaxhighlighteranchor"></style>
+        <link id="cookie-style" rel="stylesheet" type="text/css" href="https://assets.esetstatic.com/3PS/cookiebar.min.css">
+
+<script>(window.BOOMR_mq=window.BOOMR_mq||[]).push(["addVar",{"rua.upush":"false","rua.cpush":"false","rua.upre":"false","rua.cpre":"false","rua.uprl":"false","rua.cprl":"false","rua.cprf":"false","rua.trans":"","rua.cook":"false","rua.ims":"false","rua.ufprl":"false","rua.cfprl":"false","rua.isuxp":"false","rua.texp":"norulematch"}]);</script>
+                              <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="7R9SM-QGSYF-QDLJK-UETXR-SPM6B",function(){function e(){if(!o){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,i.parentNode.appendChild(e),o=!0}}function t(e){o=!0;var n,t,a,r,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(i.parentNode,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",r=(a.frameElement||a).style,r.width=0,r.height=0,r.border=0,r.display="none",i.parentNode.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void(0);",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=12,window.BOOMR.url=n+"7R9SM-QGSYF-QDLJK-UETXR-SPM6B";var i=document.currentScript||document.getElementsByTagName("script")[0],o=!1,r=document.createElement("link");if(r.relList&&"function"==typeof r.relList.supports&&r.relList.supports("preload")&&"as"in r)window.BOOMR.snippetMethod="p",r.href=window.BOOMR.url,r.rel="preload",r.as="script",r.addEventListener("load",e),r.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!o)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),i.parentNode.appendChild(r);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="qcw62iqx3vessyscvf7a-f-834137604-clientnsv4-s.akamaihd.net",i="false"=="true"?2:1,o={"ak.v":"32","ak.cp":"1251022","ak.ai":parseInt("757730",10),"ak.ol":"0","ak.cr":15,"ak.ipv":4,"ak.proto":"http/1.1","ak.rid":"128054b8","ak.r":34010,"ak.a2":n,"ak.m":"dscr","ak.n":"ff","ak.bpcip":"128.173.237.0","ak.cport":40818,"ak.gh":"23.221.73.37","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.csrc":"-","ak.acc":"reno","ak.t":"1648535934","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==a54o1tkMUQuCcQRlMuc0MVcuYFxgCVg9zvqTy5QrMXZRPo4h9MMYo0mF7ermWCpb9zS6pVdnlE+FQEHG/MMlxzhI4J6eKHdJNAEQqAGcQRoxlkwuSKHzdMYYwwwVXLvz4OPt5fEvm4P4IKE9XQGs9515dyO68Rk12HcRVqCXaF8uFO6iMM31e/4sXKdrW/PWuo3UW7hyoF3+bd518ujFtV6TDi2AOLH3KJ5YXBtQDnhccmSPfzapGU9Qv9Wew6zcnNFk7vxCS1Pi+oXJoJSBlLWHLo1T5J9AoPVy3oTdsMoEEoDuswdifQRtLiFi4ptozt1jCMx3I/ZDFo53FstRPaVg6f+N38w16TPFiqflk4Rd8wlYtCGo7vzcJoiOTPngwjBthxdmGlXdSwFJwva6Ok3OMLyRu1SrNyrSgmw6TY4=","ak.pv":"11","ak.dpoabenc":"","ak.tf":i};if(""!==t)o["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))o["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(o)},rv:function(){var e=["ak.bpcip","ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:o,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body class="no-js single wide">
+<noscript>
+	<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PMDGSM" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+
+<div class="main">
+    <header id="site-header" class="container">
+        <div class="row">
+            <div class="col-md-4 col-sm-12 col-xs-12 pull-right" id="header-nav">
+                <div class="row">
+                    <div class="hidden-lg hidden-md col-sm-7 col-xs-8 hidden-xxs">
+                        <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                    </div>
+                    <div class="col-md-8 hidden-sm hidden-xs languages">
+                        <div class="dropdown">
+	<button class="btn btn-default dropdown-toggle" type="button" id="main-language-picker" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    	<span class="text">In English</span>
+    	<span class="icomoon icon-icon_arrow"></span>
+  	</button>
+  	<ul class="dropdown-menu" aria-labelledby="main-language-picker">
+            <li>
+        <a href="/br/" title="Em Português">
+            Em Português        </a>
+    </li>
+        <li>
+        <a href="/fr/" title="En français">
+            En français        </a>
+    </li>
+        <li>
+        <a href="/la-es/" title="En Español">
+            En Español        </a>
+    </li>
+        <li>
+        <a href="/deutsch/" title="In Deutsch">
+            In Deutsch        </a>
+    </li>
+      	</ul>
+</div>                    </div>
+                    <div class="col-md-4 col-sm-2 col-xs-3 menu-trigger">
+                        <div class="menu-btn">
+	<span class="text">Menu</span>
+	<button type="button" id="menu-trigger" class="tcon tcon-menu--xcross" aria-label="toggle menu">
+        <span class="wrapper">
+            <span class="tcon-menu__lines" aria-hidden="true"></span>
+            <span class="tcon-visuallyhidden">toggle menu</span>
+        </span>
+    </button>
+</div>                    </div>
+                    <div class="col-md-12 col-sm-12 col-xs-12 imc" id="main-menu">
+                        <nav class="menu clearfix imc">
+                            <ul class="col-md-12 col-sm-6 col-xs-6 imc">
+                                                                    <li class="">
+                                        <a href="/">
+                                            All Posts                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="http://welivesecurity.com/category/ukraine-crisis-digital-security-resource-center/">
+                                            Ukraine Crisis – Digital Security Resource Center                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="/category/we-live-progress/">
+                                            We Live Progress                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="/research">
+                                            Research                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="/category/how-to/">
+                                            How To                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/media/videos/">
+                                            Videos                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/media/podcasts/">
+                                            Podcasts                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/conference-papers/">
+                                            Conference Materials                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/white-papers/">
+                                            White Papers                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/threat-reports/">
+                                            Threat Reports                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/papers/magazine/">
+                                            Magazine                                        </a>
+                                    </li>
+                                                                    <li class="">
+                                        <a href="https://www.welivesecurity.com/our-experts/">
+                                            Our Experts                                        </a>
+                                    </li>
+                                                            </ul>
+
+                            <div class="col-md-12 col-sm-6 col-xs-6 imc">
+                                <ul class="languages hidden-lg hidden-md hidden-xxs col-xs-12 imc">
+                                        <li>
+        <a href="/br/" title="Em Português">
+            Em Português        </a>
+    </li>
+        <li>
+        <a href="/fr/" title="En français">
+            En français        </a>
+    </li>
+        <li>
+        <a href="/la-es/" title="En Español">
+            En Español        </a>
+    </li>
+        <li>
+        <a href="/deutsch/" title="In Deutsch">
+            In Deutsch        </a>
+    </li>
+                                    </ul>
+                            </div>
+                        </nav>
+                    </div>
+                    <div class="menu-overlay col-md-12 col-sm-12 col-xs-12 imc">
+                        <div class="inner imc"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5 hidden-sm hidden-xs pull-left" id="header-logo">
+                <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                <span class="slogan hidden-sm hidden-xs">
+						Award-winning news, views, and insight from the ESET <strong>security community</strong>					</span>
+            </div>
+        </div>
+    </header>
+        <section id="article-detail">
+            <div class="hero-wide" style="background-image: url('../../../../wp-content/uploads/2022/03/wslink-malware-virtual-machine.png'); background-position: 50% 50%;">
+    <div class="text-wrapper">
+        <div class="container promo-text">
+            <div class="col-md-11 col-sm-11 col-xs-12 no-padding">
+                <h1>Under the hood of Wslink’s multilayered virtual machine</h1>
+<div class="excerpt">ESET researchers describe the structure of the virtual machine used in samples of Wslink and suggest a possible approach to see through its obfuscation techniques</div>
+<div class="post-meta">
+    <div class="wls-authors">
+                <div class="wls-author with-avatar">
+                            <div class="wls-author-avatar">
+                    <a href="https://www.welivesecurity.com/author/vhrcka/" title="Vladislav Hrčka">
+                        <img src="https://www.welivesecurity.com/wp-content/uploads/2019/11/vladislav-hrcka-222x179.jpg" alt="Vladislav Hrčka">
+                    </a>
+                </div>
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/vhrcka/" title="Vladislav Hrčka">
+                    Vladislav Hrčka                </a>
+            </div>
+        </div>
+            </div>
+    <span class="meta">
+		<span class="strong">
+			<time datetime="2022-03-28 11:30:18">28 Mar 2022 - 11:30AM</time>
+		</span>
+			</span>
+</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+            <div class="content">
+                <div class="social-wrapper" id="social-sharer">
+                    <span class="text">Share</span>
+	<a class="share-facebook" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Facebook">
+		<span class="icomoon icon-icon_fb"></span>
+	</a>
+	<a class="share-twitter" href="https://twitter.com/intent/tweet?&url=https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F&text=Under the hood of Wslink’s multilayered virtual machine%0A&via=welivesecurity" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Twitter">
+		<span class="icomoon icon-icon_tw"></span>
+	</a>
+	<a class="share-linkedin" href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Linkedin">
+		<span class="icomoon icon-icon_in"></span>
+	</a>
+                </div>
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-1 col-sm-1 hidden-xs">
+
+                        </div>
+                        <div class="col-md-10 col-sm-10 col-xs-12 formatted">
+
+                            <div class="excerpt wide">
+                                <p>ESET researchers describe the structure of the virtual machine used in samples of Wslink and suggest a possible approach to see through its obfuscation techniques</p>
+                            </div>
+
+                            <p>ESET researchers recently described <a href="https://www.welivesecurity.com/2021/10/27/wslink-unique-undocumented-malicious-loader-runs-server/"><em>Wslink</em></a>, a unique and previously undocumented malicious loader that runs as a server and that features a virtual-machine-based obfuscator. There are no code, functionality or operational similarities that suggest this is likely to be a tool from a known threat actor.</p>
+<p>In our white paper, linked below, we describe the structure of the virtual machine used in samples of Wslink and suggest a possible approach to see through the obfuscation techniques used in the analyzed samples. We demonstrate our approach on chunks of code of the protected sample. We were not motivated to fully deobfuscate the code, because we discovered a non-obfuscated sample.</p>
+<div class="nwg-promo document clearfix">
+            <div class="text">
+                <p>
+                     <a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/eset_wsliknkvm.pdf" target="_blank">Under the hood of Wslink’s multilayered virtual machine</a>
+                </p>
+                <a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/eset_wsliknkvm.pdf" class="my-btn document" target="_blank">
+                    Download Research Paper
+                </a>
+            </div>
+            <a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/eset_wsliknkvm.pdf" target="_blank" class="no-fancy download">
+                <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/pdf-document-big.png" alt="" class="document">
+            </a>
+        </div>
+<p>Obfuscation techniques are a kind of software protection intended to make code hard to understand and hence conceal its objectives; obfuscating virtual machine techniques have become widely misused for illicit purposes such as obfuscation of malware samples, since they hinder both analysis and detection. The ability to analyze malicious code and subsequently improve our detection capabilities is the driving force behind our motivation to overcome these techniques.</p>
+<p>Virtualized Wslink samples do not contain any clear artifacts, such as specific section names, that easily link it to a known virtualization obfuscator. During our research, we were able to successfully design and implement a semiautomatic solution capable of significantly facilitating analysis of the underlying program’s code.</p>
+<p>This virtual machine introduced a diverse arsenal of obfuscation techniques, which we were able to overcome to reveal a part of the deobfuscated malicious code that we describe in this blogpost. In the last sections of our white paper, we present parts of the code we developed to facilitate our research.</p>
+<p>Our white paper also provides an overview of the internal structure of virtual machines in general, and introduces some important terms and frameworks used in our detailed analysis of the Wslink virtual machine.</p>
+<p>In an <a href="https://www.welivesecurity.com/wp-content/uploads/2018/01/WP-FinFisher.pdf" target="_blank" rel="noopener"><em>earlier white paper</em></a>, we described the structure of a custom virtual machine, along with our techniques to devirtualize the machine. That virtual machine contained an interesting anti-disassembly trick, previously utilized by <a href="https://www.welivesecurity.com/2017/09/21/new-finfisher-surveillance-campaigns/" target="_blank" rel="noopener"><em>FinFisher</em></a> – spyware with extensive spying capabilities, such as live surveillance through webcams and microphones, keylogging, and exfiltration of files. We additionally presented an approach for its deobfuscation.</p>
+<p>This blogpost consists of excerpts from the Under the hood of Wslink’s multilayered virtual machine white paper; we encourage everyone interested in virtual machines and obfuscation techniques to go through the original white paper, as it contains detailed information on various steps required to see through the obfuscation techniques used in Wslink.</p>
+<h2>Overview of virtual machine structures</h2>
+<p>Before diving into the analysis of Wslink’s virtual machine (VM), we provide an overview of the internal structure of virtual machines in general, describe known approaches to deal with such obfuscation, and introduce some important terms and frameworks used in our detailed analysis of the Wslink VM.</p>
+<h3>General structure of virtual machines</h3>
+<p>Virtual machines can be divided into two main categories:</p>
+<ol>
+<li>System virtual machines – support execution of complete operating systems (e.g., various VMWare products, VirtualBox)</li>
+<li>Process virtual machines – execute individual programs in an OS-independent environment (e.g., Java, the .NET Common Language Runtime)</li>
+</ol>
+<p>Here, we are interested only in the second category – process virtual machines – and we will briefly describe certain parts of their internal anatomy necessary to understand the rest of this paper.</p>
+<p>Process virtual machines run as normal applications on their host OSes, and in turn run programs whose code is stored as OS-independent <strong>bytecode</strong> (Figure 1) that represents a series of instructions – an application – of a virtual instruction set architecture (<a href="https://www.arm.com/glossary/isa" target="_blank" rel="noopener"><em>ISA</em></a>).</p>
+<div id="attachment_160503" style="width: 910px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1.png"><img class="wp-image-160503" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1-300x49.png" alt="" width="900" height="148" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1-300x49.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1-768x127.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1-1024x169.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-1.-Illustration-of-bytecode-where-all-opcodes-and-operands-are-virtual-1.png 1213w" sizes="(max-width: 900px) 100vw, 900px" /></a><p class="wp-caption-text"><em>Figure 1. Illustration of bytecode, where all opcodes and operands are virtual</em></p></div>
+<p>One can also think about bytecode as a sort of <strong>intermediate representation</strong> (<strong>IR</strong>); an abstract representation of code consisting of a specific instruction set that resembles assembly more than a high-level language. It is also known as intermediate language.</p>
+<p>The use of IR is convenient in terms of code reusability – when one needs to add support for a new architecture or CPU instruction set, it is easier to convert it to the IR instead of writing all the required algorithms again. Another benefit is that it can simplify the application of some optimization algorithms.</p>
+<p>One can generally translate both high- and low-level languages into an IR. Translation of a higher-level language is known as “lowering”, and similarly translation of a lower-level one, “lifting”.</p>
+<p>The following example lifts an assembly block bb0 into a block with the pseudo-IR code <span style="font-family: 'courier new', courier, monospace;">irb0</span>. All assembly instructions are translated into a set of IR operations and individual operations in sets do not affect each other, where <span style="font-family: 'courier new', courier, monospace;">ZF</span> stands for zero flag and <span style="font-family: 'courier new', courier, monospace;">CF</span> for carry flag:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">bb0:</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  MOV R8, 0x05</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  SUB AX, DX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  XCHG ECX, EDX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">irb0:</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  R8 = 0x05</span></p>
+<p><span style="font-family: 'courier new', courier, monospace;">  EAX[:0x10] = EAX[:0x10] – EDX[:0x10]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  ZF = EAX[:0x10] – EDX[:0x10] == 0x00</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  CF = EAX[:0x10] &lt; EDX[:0x10]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  &#8230;</span></p>
+<p><span style="font-family: 'courier new', courier, monospace;">  ECX = EDX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">  EDX = ECX</span></p>
+<p>Modern process VMs usually provide a compiler that can lower code written in a high-level language &#8212; one that is easy to understand and comfortable to use – into the respective bytecode.</p>
+<p>A VM’s <strong>ISA</strong> generally defines the supported instructions, data types and registers, among other things, that naturally must be implemented by a virtual ISA as well.</p>
+<p>Instructions consist of the following parts:</p>
+<ul>
+<li><strong>opcodes</strong> – operation codes that specify an instruction</li>
+<li><strong>operands</strong> – parameters of the instructions</li>
+</ul>
+<p>ISAs often use two well-known virtual registers:</p>
+<ul>
+<li><strong>virtual program counter</strong> (VPC) – a pointer to the current position in the bytecode</li>
+<li><strong>virtual stack pointer</strong> – a pointer to pre-allocated virtual stack space used internally by the VM</li>
+</ul>
+<p>The virtual stack pointer does not have to be present in all VMs; it is common only in a certain type of VM – <a href="https://andreabergia.com/stack-based-virtual-machines/" target="_blank" rel="noopener"><em>stack-based ones</em></a>.</p>
+<p>We will refer to the instructions and their respective parts of a virtual ISA simply as <strong>virtual instructions</strong>, <strong>virtual opcodes</strong>, and <strong>virtual operands</strong>. We sometimes omit the explicit use of “virtual” when it is obvious that we are talking about the virtual representation.</p>
+<p>An OS-dependent (Figure 2) executable file – <strong>interpreter</strong> – processes the supplied bytecode and sequentially interprets the underlying virtual instructions thus executing the virtualized program.</p>
+<div id="attachment_160485" style="width: 610px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter.png"><img class="wp-image-160485" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter-252x300.png" alt="" width="600" height="716" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter-252x300.png 252w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter-768x916.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter-859x1024.png 859w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-2.-Illustration-of-the-relationship-between-bytecode-and-the-VM’s-interpreter.png 971w" sizes="(max-width: 600px) 100vw, 600px" /></a><p class="wp-caption-text"><em>Figure 2. Illustration of the relationship between bytecode and the VM’s interpreter</em></p></div>
+<p>Transfer of control from one virtual instruction to the next during interpretation needs to be performed by every VM. This process is generally known as <strong>dispatching</strong>. There are several <a href="http://www.cs.toronto.edu/~matz/dissertation/matzDissertation-latex2html/node6.html" target="_blank" rel="noopener"><em>documented</em></a> dispatch techniques such as:</p>
+<ul>
+<li>Switch Dispatch – the simplest dispatch mechanism where virtual instructions are defined as case clauses and a virtual opcode is used as the test expression (Figure 3)</li>
+<li>Direct Call Threading – virtual instructions are defined as functions and virtual opcodes contain addresses of these functions</li>
+<li>Direct Threading – virtual instructions are defined as functions again; however, in comparison to Direct Call Threading, addresses of the functions are stored in a table and virtual opcodes represent offsets to this table. Each function should indirectly call the following one according to the specification (Figure 4)</li>
+</ul>
+<p>The body of a virtual opcode in the interpreter’s code is usually called a <strong>virtual handler</strong> because it defines the behavior of the opcode and handles it when the virtual program counter points to a location in the bytecode that contains a virtual instruction with that opcode.</p>
+<p>By <strong>context</strong>, regarding VMs, we mean a sort of virtual <a href="https://tldp.org/LDP/LG/issue23/flower/context.html" target="_blank" rel="noopener"><em>process context</em></a>: each time a process is removed from access to the processor during process switching, sufficient information on its current operating state – its context – must be stored such that when it is again scheduled to run on the processor, it can resume its operation from an identical position.</p>
+<div id="attachment_160505" style="width: 910px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1.png"><img class="wp-image-160505" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1-300x259.png" alt="" width="900" height="777" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1-300x259.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1-768x663.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1-60x53.png 60w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-3.-Illustration-of-Switch-Dispatch-where-R0-is-a-virtual-register-1.png 978w" sizes="(max-width: 900px) 100vw, 900px" /></a><p class="wp-caption-text"><em>Figure 3. Illustration of Switch Dispatch, where R0 is a virtual register</em></p></div>
+<div id="attachment_160487" style="width: 910px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1.png"><img class="wp-image-160487" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1-300x172.png" alt="" width="900" height="516" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1-300x172.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1-768x440.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1-1024x587.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-4.-Illustration-of-Direct-Threading-1.png 1572w" sizes="(max-width: 900px) 100vw, 900px" /></a><p class="wp-caption-text"><em>Figure 4. Illustration of Direct Threading</em></p></div>
+<p><strong>Obfuscation techniques</strong> are a kind of software protection intended to make code hard to understand and hence conceal its objectives. Such techniques were initially developed to protect the intellectual property of legitimate software, e.g., to hamper reverse engineering.</p>
+<p><strong>Virtual machines used as obfuscation engines</strong> are based on process virtual machines, as described above. The primary difference is that they are not intended to run cross-platform applications and they usually take machine code compiled or assembled for a known ISA, disassemble it, and translate that to their own virtual ISA. It is also usually the case that the VM environment and the virtualized application code are contained all in one application, whereas traditional process VMs usually consist of a process that runs as a standalone application that loads separate, virtualized applications</p>
+<p>The strength of this obfuscation technique resides in the fact that the ISA of the VM is unknown to any prospective reverse engineer – a thorough analysis of the VM, which can be <em>very</em> time-consuming, is required to understand the meaning of the virtual instructions and other structures of the VM. Further, if performance is not an issue, the VM’s ISA can be designed to be arbitrarily complex, slowing its execution of virtualized applications, but making reverse engineering even more complex. Understanding of the VM is necessary for decoding the bytecode and making the virtualized code understandable.</p>
+<p><strong>Context</strong> has a bit of a different meaning in regard to obfuscating virtual machines: each time we want to switch from the native to virtual ISA or vice-versa, sufficient information – context – on the current operating state must be stored so that when the lSA has to be switched back, execution can resume with only the relevant data and registers modified.</p>
+<p>Additionally, obfuscating VMs usually virtualize only certain “interesting” functions – native context is mapped to the virtual one and bytecode, representing the respective function, is chosen beforehand. The built-in interpreter is invoked afterwards (Figure 5). Beginnings of the original functions contain code that prepares and executes the interpreter – entry of the VM (<span style="font-family: 'courier new', courier, monospace;">vm_entry</span>); the rest of their code is omitted in Figure 5.</p>
+<p>Interpreter, bytecode, and virtual ISA code with data of obfuscating VMs are often all stored in a dedicated section of the executable binary, along with the rest of the partially virtualized program.</p>
+<p>Figure 5 shows the way a function, <span style="font-family: 'courier new', courier, monospace;">Function 1</span>, in the original application targeting a common ISA, can be virtualized for an obfuscating VM’s ISA. It needs to be converted into bytecode, for example using a generate_bytecode method. Its body is afterwards overwritten by a call into <span style="font-family: 'courier new', courier, monospace;">vm_entry</span> and zeroes. The <span style="font-family: 'courier new', courier, monospace;">vm_entry</span> function chooses the respective bytecode, for example, based on the calling function’s address, then conducts a context switch, and next interprets the bytecode. Finally, it returns to the code where the virtualized function, <span style="font-family: 'courier new', courier, monospace;">Function 1</span>, would return.</p>
+<div id="attachment_160488" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process.png"><img class="wp-image-160488" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process-300x168.png" alt="" width="800" height="449" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process-300x168.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process-768x431.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process-1024x574.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process-143x79.png 143w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-5.-Overview-of-the-virtualization-process.png 1382w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 5. Overview of the virtualization process</em></p></div>
+<p>In VMs hosted on x86 architectures, such context switches usually consist of a series of PUSH and POP instructions. For example:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">PUSH EAX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">PUSH EBX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">PUSH ECX</span><br />
+<span style="font-family: 'courier new', courier, monospace;">&#8230;</span><br />
+<span style="font-family: 'courier new', courier, monospace;">MOV ECX, context_addr</span><br />
+<span style="font-family: 'courier new', courier, monospace;">POP DWORD PTR [ECX]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">POP DWORD PTR [ECX + 4]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">POP DWORD PTR [ECX + 8]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">&#8230;</span></p>
+<p>When the bytecode is fully processed, virtual context is mapped back to native context and execution continues in the non-virtualized code; however, another virtualized function could be executed in the same manner, right away.</p>
+<p>Note that several context switches can occur in one virtualized function, for example when a native instruction from the original ISA could not be translated to virtual instructions or an unknown function from the native API needs to be executed.</p>
+<h2>Wslink’s virtual machine entry – vm_entry</h2>
+<p>Let&#8217;s get to the analysis of Wslink’s VM now. There are several function calls that enter the VM, all of which are followed by some gibberish data that IDA attempts to disassemble – the data most likely just overwrites the function’s original code before virtualization (Figure 6).</p>
+<div id="attachment_160489" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine.png"><img class="wp-image-160489" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine-300x205.png" alt="" width="800" height="548" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine-300x205.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine-768x526.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine-151x103.png 151w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine-97x65.png 97w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-6.-Entry-point-to-the-virtual-machine.png 958w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 6. Entry point to the virtual machine</em></p></div>
+<p>The <span style="font-family: 'courier new', courier, monospace;">vm_entry</span> of the VM:</p>
+<ul>
+<li>calculates the actual base address by subtracting the expected relative virtual address from the actual virtual address of a place in the code</li>
+<li>unpacks code and data related to the VM on the first run; it uses the calculated base address to determine the location of the packed VM and destination of the unpacked data</li>
+<li>executes an initialization function – one of the <span style="font-family: 'courier new', courier, monospace;">vm_pre_init()</span> functions to be described is based on the caller’s relative address that is mapped to the respective <span style="font-family: 'courier new', courier, monospace;">vm_pre_init()</span></li>
+</ul>
+<h2>Packer</h2>
+<p>Wslink’s VM is packed with <a href="http://www.heaventools.com/pe-explorer-nspack-unpacker.htm" target="_blank" rel="noopener"><em>NsPack</em></a> to reduce the size of the huge executable file; additional obfuscation is probably just a side effect. Similarities between Wslink’s unpacking code and ClamAV’s <span style="font-family: 'courier new', courier, monospace;">unspack()</span> function are clearly visible (Figure 7 and Figure 8). Note that Ghidra has optimized out calculation of the base address.</p>
+<div id="attachment_160490" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-7.-A-part-of-vm_entry-of-the-virtual-machine-decompiled-with-Ghidra.png"><img class="wp-image-160490" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-7.-A-part-of-vm_entry-of-the-virtual-machine-decompiled-with-Ghidra-300x232.png" alt="" width="800" height="619" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-7.-A-part-of-vm_entry-of-the-virtual-machine-decompiled-with-Ghidra-300x232.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-7.-A-part-of-vm_entry-of-the-virtual-machine-decompiled-with-Ghidra-768x595.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-7.-A-part-of-vm_entry-of-the-virtual-machine-decompiled-with-Ghidra.png 965w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 7. A part of vm_entry of the virtual machine decompiled with Ghidra</em></p></div>
+<div id="attachment_160491" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-8.-Function-used-to-unpack-NsPack-in-ClamAV.png"><img class="wp-image-160491" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-8.-Function-used-to-unpack-NsPack-in-ClamAV-300x253.png" alt="" width="800" height="675" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-8.-Function-used-to-unpack-NsPack-in-ClamAV-300x253.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-8.-Function-used-to-unpack-NsPack-in-ClamAV-768x648.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-8.-Function-used-to-unpack-NsPack-in-ClamAV.png 966w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 8. Function used to unpack NsPack in ClamAV</em></p></div>
+<p>The <span style="font-family: 'courier new', courier, monospace;">vm_pre_init_dispatch_table</span> in Figure 7 is the structure that maps callers’ addresses of the <span style="font-family: 'courier new', courier, monospace;">vm_entry</span> to the respective <span style="font-family: 'courier new', courier, monospace;">vm_pre_init()</span> functions that are to be described.</p>
+<h2>Virtual machine initialization</h2>
+<p>Initialization of the VM consists of several steps, such as saving values of the native registers on the stack and later moving them to the virtual context, relocation of its internal structures, or preparation of bytecode. We cover these steps more thoroughly in the following subsections.</p>
+<h3>vm_pre_init() functions</h3>
+<p><span style="font-family: 'courier new', courier, monospace;">vm_pre_init()</span> functions are meant only to prepare parameters for another stage of initialization (Figure 9). These functions call a single <span style="font-family: 'courier new', courier, monospace;">vm_init()</span> function (explained in the next section) with specific parameters. The supplied parameters are:</p>
+<ul>
+<li>CPU flags, which are stored on the stack with a <span style="font-family: 'courier new', courier, monospace;">PUSHF</span> instruction at the beginning of each function</li>
+<li>hardcoded offset to a virtual instruction table that represents the first virtual instruction to be executed (its opcode)</li>
+<li>hardcoded address of the bytecode to be interpreted</li>
+</ul>
+<div id="attachment_160492" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init.png"><img class="wp-image-160492" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init-300x212.png" alt="" width="800" height="567" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init-300x212.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init-768x544.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init-1024x725.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init-601x426.png 601w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-9.-Miasm’s-symbolic-execution-of-a-vm_pre_init-showing-parameters-supplied-to-vm_init.png 1217w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 9. Miasm’s symbolic execution of a vm_pre_init() showing parameters supplied to vm_init()</em></p></div>
+<h3>vm_init() function</h3>
+<p><span style="font-family: 'courier new', courier, monospace;">vm_init()</span> pushes all the native registers and the supplied CPU flags from parameters (context) onto the stack. The native context will later be moved to the virtual one that, in addition, holds several internal registers.</p>
+<p>One of the internal registers determines whether another instance of the VM is already running – there is only one global virtual context and only one instance of the VM can run at a time. Figure 10 shows the part of the code busy-waiting for the virtual register, where <span style="font-family: 'courier new', courier, monospace;">RBP</span> contains the address of the virtual context and RBX the offset of the virtual register – the internal register is stored in<span style="font-family: 'courier new', courier, monospace;"> [RBX + RBP]</span>.</p>
+<p>The entire function is summarized in Figure 11.</p>
+<div id="attachment_160493" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init.png"><img class="wp-image-160493" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init-300x133.png" alt="" width="800" height="355" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init-300x133.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init-768x341.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init-1024x454.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-10.-Busy-waiting-for-interpreter-in-vm_init.png 1134w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 10. Busy-waiting for interpreter in vm_init()</em></p></div>
+<p>The bytecode’s address, supplied in the parameters, is added to the virtual context along with the address of the virtual instruction table, which is hardcoded. Both have a dedicated virtual register.</p>
+<p>The VM calculates the base address again in the same way as was described for <span style="font-family: 'courier new', courier, monospace;">vm_entry</span>; in addition, it stores the address in another internal register that is used later, should an API be called. Then the base address is used to relocate the instruction table, its entries, and the bytecode’s address.</p>
+<p>The calculated base address is simply added to all the function addresses if they have not already been relocated.</p>
+<div id="attachment_160494" style="width: 510px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-11.-vm_init-summary.png"><img class="wp-image-160494" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-11.-vm_init-summary-221x300.png" alt="" width="500" height="679" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-11.-vm_init-summary-221x300.png 221w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-11.-vm_init-summary.png 605w" sizes="(max-width: 500px) 100vw, 500px" /></a><p class="wp-caption-text"><em>Figure 11. vm_init() summary</em></p></div>
+<h3>Virtual instructions of the second virtual machine</h3>
+<p>We start by looking at the first few executed virtual instructions to observe the behavior of the second VM and then try to process the rest of them in a partially automated way.</p>
+<p>The diagram in Figure 12 highlights in blue where the virtual instructions of the second VM are in the structure of the VMs.</p>
+<div id="attachment_160495" style="width: 547px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-12.-Virtual-instructions-in-the-structure-of-the-virtual-machines.png"><img class="wp-image-160495 size-full" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-12.-Virtual-instructions-in-the-structure-of-the-virtual-machines.png" alt="" width="537" height="772" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-12.-Virtual-instructions-in-the-structure-of-the-virtual-machines.png 537w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-12.-Virtual-instructions-in-the-structure-of-the-virtual-machines-209x300.png 209w" sizes="(max-width: 537px) 100vw, 537px" /></a><p class="wp-caption-text"><em>Figure 12. Virtual instructions in the structure of the virtual machines</em></p></div>
+<h4><em><strong>The first virtual instruction</strong></em></h4>
+<p>The first virtual instruction is, exceptionally, not obfuscated, as can be seen in Figure 13. Finally, we can see some operations in the virtual context.</p>
+<p>By inspecting the modified memory and calculated destination address of the instruction, it is clear that the instruction does three things:</p>
+<ul>
+<li>Zeroes out a virtual 32-bit register at offset <span style="font-family: 'courier new', courier, monospace;">0xB5</span> in the virtual context (highlighted in gray in Figure 13), which is stored in the <span style="font-family: 'courier new', courier, monospace;">RBP</span> register</li>
+<li>A virtual 64-bit register at offset <span style="font-family: 'courier new', courier, monospace;">0x28</span> is increased by <span style="font-family: 'courier new', courier, monospace;">0x04</span>: it is the pointer to the bytecode – virtual program counter. The size of the virtual instruction is hence four bytes (highlighted in red in Figure 13).</li>
+<li>The next virtual instruction is prepared to be executed, the offset to the virtual instruction table – virtual opcode – is fetched from the virtual program counter. The virtual instruction table is at offset <span style="font-family: 'courier new', courier, monospace;">0xA4</span> (highlighted in green in Figure 13). This means that the VM uses the Direct Threading Dispatch technique.</li>
+</ul>
+<div id="attachment_160496" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM.png"><img class="wp-image-160496" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM-300x145.png" alt="" width="800" height="386" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM-300x145.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM-768x370.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM-1024x494.png 1024w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-13.-The-initial-virtual-instruction-of-the-second-VM.png 1223w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 13. The initial virtual instruction of the second VM</em></p></div>
+<p>Note that the size of the next instruction’s opcode is only two bytes and the remaining word is left unused. We can see that it is just a zero when we look at virtual operands (Figure 14). Sizes of the other instructions differ – it is not just padding that preserves the same size for all instructions.</p>
+<div id="attachment_160497" style="width: 610px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-14.-Bytecode-of-the-virtual-instruction.png"><img class="wp-image-160497" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-14.-Bytecode-of-the-virtual-instruction-300x22.png" alt="" width="600" height="43" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-14.-Bytecode-of-the-virtual-instruction-300x22.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-14.-Bytecode-of-the-virtual-instruction-768x56.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-14.-Bytecode-of-the-virtual-instruction.png 788w" sizes="(max-width: 600px) 100vw, 600px" /></a><p class="wp-caption-text"><em>Figure 14. Bytecode of the virtual instruction</em></p></div>
+<h4><strong><em>The second virtual instruction</em></strong></h4>
+<p>The second virtual instruction does not do anything special; it just zeroes out several virtual registers and jumps to the next instruction (Figure 15).</p>
+<div id="attachment_160498" style="width: 710px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-15.-Destination-address-and-memory-modified-by-the-second-virtual-instruction.png"><img class="wp-image-160498" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-15.-Destination-address-and-memory-modified-by-the-second-virtual-instruction-300x84.png" alt="" width="700" height="196" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-15.-Destination-address-and-memory-modified-by-the-second-virtual-instruction-300x84.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-15.-Destination-address-and-memory-modified-by-the-second-virtual-instruction-768x215.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-15.-Destination-address-and-memory-modified-by-the-second-virtual-instruction.png 945w" sizes="(max-width: 700px) 100vw, 700px" /></a><p class="wp-caption-text"><em>Figure 15. Destination address and memory modified by the second virtual instruction</em></p></div>
+<h4><em><strong>The third virtual instruction</strong></em></h4>
+<p>The third virtual instruction stores the address of the stack pointer in a virtual register (Figure 16); the offset of the register is determined by one of the operands, and its offset is <span style="font-family: 'courier new', courier, monospace;">0x0141</span> in our case.</p>
+<div id="attachment_160499" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-16.-Destination-address-and-memory-modified-by-the-third-virtual-instruction.png"><img class="wp-image-160499" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-16.-Destination-address-and-memory-modified-by-the-third-virtual-instruction-300x21.png" alt="" width="800" height="56" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-16.-Destination-address-and-memory-modified-by-the-third-virtual-instruction-300x21.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-16.-Destination-address-and-memory-modified-by-the-third-virtual-instruction-768x54.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-16.-Destination-address-and-memory-modified-by-the-third-virtual-instruction.png 939w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 16. Destination address and memory modified by the third virtual instruction</em></p></div>
+<h4><em><strong>The fourth virtual instruction</strong></em></h4>
+<p>The fourth instruction contains two immediately visible anomalies in comparison with previous instructions – the stack pointer’s delta is lower at the end of the function and it contains a conditional branch (Figure 17).</p>
+<div id="attachment_160500" style="width: 557px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-17.-The-conditional-branch-and-delta-of-the-stack-pointer-of-the-fourth-virtual-instruction.png"><img class="wp-image-160500 size-full" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-17.-The-conditional-branch-and-delta-of-the-stack-pointer-of-the-fourth-virtual-instruction.png" alt="" width="547" height="840" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-17.-The-conditional-branch-and-delta-of-the-stack-pointer-of-the-fourth-virtual-instruction.png 547w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-17.-The-conditional-branch-and-delta-of-the-stack-pointer-of-the-fourth-virtual-instruction-195x300.png 195w" sizes="(max-width: 547px) 100vw, 547px" /></a><p class="wp-caption-text"><em>Figure 17. The conditional branch and delta of the stack pointer of the fourth virtual instruction</em></p></div>
+<p>Symbolic execution of the first block reveals that a value is popped from the stack into a virtual register (Figure 18), which makes sense as the values of the native registers remain on the stack after being saved there by <span style="font-family: 'courier new', courier, monospace;">vm2_init()</span>. They are now being moved to the virtual context – the context switch is partially performed by a number of virtual instructions, each of which pops one value off the stack into a different register.</p>
+<div id="attachment_160501" style="width: 810px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-18.-Destination-address-and-memory-modified-by-the-fourth-virtual-instruction.png"><img class="wp-image-160501" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-18.-Destination-address-and-memory-modified-by-the-fourth-virtual-instruction-300x16.png" alt="" width="800" height="42" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-18.-Destination-address-and-memory-modified-by-the-fourth-virtual-instruction-300x16.png 300w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-18.-Destination-address-and-memory-modified-by-the-fourth-virtual-instruction-768x40.png 768w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-18.-Destination-address-and-memory-modified-by-the-fourth-virtual-instruction-1024x54.png 1024w" sizes="(max-width: 800px) 100vw, 800px" /></a><p class="wp-caption-text"><em>Figure 18. Destination address and memory modified by the fourth virtual instruction</em></p></div>
+<p>The virtual register, where the value of the native register is to be saved, is determined by an operand and two other virtual registers at offsets 0x0B and 0x70. However, their initial value is already known: they were set to zero by the second virtual instruction (Figure 15), which means that we can calculate the offset of the register and simplify the expressions – they are used just to obfuscate the code.</p>
+<h5><strong><em>Rolling decryption</em></strong></h5>
+<p>Analysis of other virtual instructions confirmed that the virtual registers at offsets 0x0B and 0x70 are meant just to encode operands. This technique is called <a href="https://back.engineering/17/05/2021/#rolling-decryption" target="_blank" rel="noopener"><em>rolling decryption</em></a> and it is known to be used by the <a href="https://vmpsoft.com/" target="_blank" rel="noopener"><em>VMProtect</em></a> obfuscator. However, it is the only overlap with that obfuscator and we are highly confident that this VM is different.</p>
+<p>The obfuscation technique is certainly one of the reasons for the enormous number of virtual instructions – use of the technique requires duplication of individual instructions since each uses a different key to decode the operands.</p>
+<h5><em><strong>Simplification</strong></em></h5>
+<p>The expressions can be simplified to the following when we apply the known values of the virtual registers:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">IRDst = (-@16[@64[RBP_init + 0x28] + 0x4] ^ 0x3038 == @16[@64[RBP_init + 0x28] + 0x6])?(0x7FEC91ABD1C,0x7FEC91ABCF6)</span></p>
+<p><span style="font-family: 'courier new', courier, monospace;">@64[RBP_init + {-@16[@64[RBP_init + 0x28] + 0x4] ^ 0x3038, 0, 16, 0x0, 16, 64}] = @64[RSP_init]</span></p>
+<p>Now let us take a look at the expression in the conditional block:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">@64[RBP_init + {@16[@64[RBP_init + 0x28] + 0x6], 0, 16, 0x0, 16, 64}] = @64[RBP_init + {@16[@64[RBP_init + 0x28] + 0x6], 0, 16, 0x0, 16, 64}] + 0x8</span></p>
+<p>We can now see that the virtual instruction is definitely POP – it moves a value off the top of the stack to a virtual register, whose offset is still obfuscated with a simple XOR; it additionally increases the stack pointer when the destination register is not the stack pointer.</p>
+<p>As values in the bytecode are known too, we can apply them and simplify the instruction even further into the following final unconditional expressions:</p>
+<p><span style="font-family: 'courier new', courier, monospace;">IRDst = @64[@64[RBP_init + 0xA4] + 0x5A8]</span><br />
+<span style="font-family: 'courier new', courier, monospace;">@64[RBP_init + 0x28] = @64[RBP_init + 0x28] + 0x8</span><br />
+<span style="font-family: 'courier new', courier, monospace;">@64[RBP_init + 0x141] = @64[RBP_init + 0x141] + 0x8</span><br />
+<span style="font-family: 'courier new', courier, monospace;">@64[RBP_init + 0x12A] = @64[RSP_init]</span></p>
+<h4><strong><em>Automating analysis of the virtual instructions</em></strong></h4>
+<p>As doing this for more than 1000 instructions would be very time consuming, we wrote a Python script with Miasm that collects this information for us so we can get a better overview of what is going on. We are particularly interested in modified memory and destination addresses.</p>
+<p>Just as in the fourth virtual instruction, we will treat certain virtual registers as concrete values to retrieve clear expressions. These registers are dedicated to the rolling decryption and perform memory accesses that are relative to the bytecode pointer, e.g., <span style="font-family: 'courier new', courier, monospace;">[&lt;obf_reg_1&gt;] = [&lt;bytecode_ptr&gt; + 0x05] ^ 0xABCD</span>.</p>
+<p>Subsequently we concretize the pointer to the virtual instruction table too and, by the end of the virtual instruction: calculate addresses of the next ones, clear the symbolic state, and start with the following virtual instructions.</p>
+<p>We additionally save aside memory assignments that are not related to the internal registers of the VM and gradually build a graph based on the virtual program counter (Figure 19).</p>
+<div id="attachment_160502" style="width: 711px" class="wp-caption aligncenter"><a href="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-19.-Call-graph-generated-from-memory-assignments-and-the-VPC.png"><img class="wp-image-160502 size-full" src="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-19.-Call-graph-generated-from-memory-assignments-and-the-VPC.png" alt="" width="701" height="763" srcset="https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-19.-Call-graph-generated-from-memory-assignments-and-the-VPC.png 701w, https://www.welivesecurity.com/wp-content/uploads/2022/03/Figure-19.-Call-graph-generated-from-memory-assignments-and-the-VPC-276x300.png 276w" sizes="(max-width: 701px) 100vw, 701px" /></a><p class="wp-caption-text"><em>Figure 19. Call graph generated from memory assignments and the VPC</em></p></div>
+<p>We stop when we cannot unambiguously determine the next virtual instructions to be executed; one can automatically process most of the virtual instructions in this way.</p>
+<p>Note that instructions featuring complex loops cannot be processed with certainty and need to be addressed individually due to the path explosion problem of symbolic execution, which is described for example in the paper <a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2008/01/fulltext.pdf" target="_blank" rel="noopener"><em>Demand-Driven Compositional Symbolic Execution</em></a>: “Systematically executing symbolically all feasible program paths does not scale to large programs. Indeed, the number of feasible paths can be exponential in the program size, or even infinite in presence of loops with unbounded number of iterations.”</p>
+<p>For other actions related to virtual instructions and virtual machine initialization, please consult the ESET Research white paper Under the hood of Wslink’s multilayered virtual machine.</p>
+<h2>Conclusion</h2>
+<p>We have described internals of an advanced multilayered virtual machine featured in Wslink and successfully designed and implemented a semiautomatic solution capable of significantly facilitating analysis of the program’s code.</p>
+<p>This virtual machine introduced several other obfuscation techniques such as junk code, encoding of virtual operands, duplication of virtual opcodes, opaque predicates, merging of virtual instructions, and a nested virtual machine to further obstruct reverse engineering of the code that it protects, yet we successfully overcame them all.</p>
+<p>To deal with the obfuscation, we modified a known technique that extracts the semantics of the virtual opcodes using symbolic execution with simplifying rules. Additionally, we made concrete the internal virtual registers for obfuscation along with memory accesses relative to the virtual program counter to automatically apply known values and de-obfuscate semantics of the virtual instructions – this additionally broke down boundaries between individual virtual instructions.</p>
+<p>Boundaries are necessary to prevent path explosion of the symbolic execution; we would lose track of the virtual program counter – our position in the interpreted code – without them.</p>
+<p>We defined new boundaries by symbolizing the address of the virtual instruction table, since it is required to get the next instruction, and concretized it only when we needed to move to the following virtual instructions. We subsequently constructed a control flow graph of the original code in an intermediate representation from one of the bytecode blocks based on the virtual program counter, and extracted deobfuscated semantics of individual virtual instructions. We finally extended the approach to process both virtual machines at once by entirely concretizing the nested one. Again: for full details, see our white paper.</p>
+
+                            
+                                                            <div class="dot">
+                                    <span class="icomoon icon-icon_article_dot"></span>
+                                </div>
+
+                                <div class="meta">
+                                    <div class="wls-authors wls-authors-footer">
+                                                <div class="wls-author">
+                        <div class="wls-author-name">
+                <a href="https://www.welivesecurity.com/author/vhrcka/" title="Vladislav Hrčka">
+                    Vladislav Hrčka                </a>
+            </div>
+        </div>
+                                            </div>
+                                    <span class="strong">
+								        <time datetime="2022-03-28 11:30:18">28 Mar 2022 - 11:30AM</time>
+                                    </span>
+                                </div>
+                            
+                            <div class="widgets row">
+                                <div class="col-md-12 col-sm-12 col-xs-12">
+                                    <div class="heading-line col-md-12 col-sm-12 col-xs-12 no-padding">
+                                        <h3><span class="text">Newsletter</span></h3>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-sm-6 col-xs-12 newsletter-wrapper">
+                                    		<div class="heading-line col-md-12 no-padding sidebar-item clearfix">
+			<h3>
+				<span class="text">Newsletter</span>
+			</h3>
+
+			<form action="https://enjoy.eset.com/pub/rf" class="basic-searchform col-md-12 col-sm-12 col-xs-12 no-padding newsletter" method="post" role="search">
+				<div class="search-input clearfix">
+                    <input type="text" name="EMAIL_ADDRESS_" value="" placeholder="Email...">
+                    <input type="hidden" name="NEWSLETTER" value="We Live Security">
+
+                    <input type="hidden" name="_ri_" value="X0Gzc2X%3DAQpglLjHJlTQGgXv4jDGEK4KW2uhw0qgUzfwuivmOJOPCgzgo9vsI3VwjpnpgHlpgneHmgJoXX0Gzc2X%3DAQpglLjHJlTQGzbD6yU2pAgzaJM16bkTA7tOwuivmOJOPCgzgo9vsI3">
+                    <input type="hidden" name="_ei_" value="Ep2VKa8UKNIAPP_2GAEW0bY">
+                    <input type="hidden" name="_di_" value="m0a5n0j02duo9clmm4btuu5av8rdtvqfqd03v1hallrvcob47ad0">
+                    <input type="hidden" name="EMAIL_PERMISSION_STATUS_" value="O">
+                    <input type="hidden" name="CONTACT_SOURCE_MOST_RECENT" value="WLS_Subscribe_Form">
+                    <button>
+						Submit					</button>
+				</div>
+			</form>
+		</div>
+                                </div>
+                            </div>
+
+                                                            <div class="similar-articles row">
+                                    <div class="heading-line col-md-12 col-sm-12 col-xs-12">
+                                        <h3><span class="text">Similar Articles</span></h3>
+                                    </div>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/eset-research/" class="category-tag-btn">ESET Research</a>                                                <a href="https://www.welivesecurity.com/2022/03/24/crypto-malware-patched-wallets-targeting-android-ios-devices/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2022/03/crypto-malware-patched-wallets-targeting-android-iOS-thumbnail-623x415.jpg"
+                                                         alt="Under the hood of Wslink’s multilayered virtual machine">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2022/03/24/crypto-malware-patched-wallets-targeting-android-ios-devices/">
+                                                    Crypto malware in patched wallets targeting Android and iOS devices                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/eset-research/" class="category-tag-btn">ESET Research</a>                                                <a href="https://www.welivesecurity.com/2022/03/23/mustang-panda-hodur-old-tricks-new-korplug-variant/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2022/03/mustang-panda-apt-hodur-korplug-malware-asia-623x415.jpg"
+                                                         alt="Under the hood of Wslink’s multilayered virtual machine">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2022/03/23/mustang-panda-hodur-old-tricks-new-korplug-variant/">
+                                                    Mustang Panda’s Hodur: Old tricks, new Korplug variant                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/eset-research/" class="category-tag-btn">ESET Research</a>                                                <a href="https://www.welivesecurity.com/2022/01/25/watering-hole-deploys-new-macos-malware-dazzlespy-asia/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2022/01/dazzlespy-malware-macos-623x415.jpg"
+                                                         alt="Under the hood of Wslink’s multilayered virtual machine">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2022/01/25/watering-hole-deploys-new-macos-malware-dazzlespy-asia/">
+                                                    Watering hole deploys new macOS malware, DazzleSpy, in Asia                                                </a>
+                                            </h4>
+                                        </article>
+                                                                            <article class="col-md-3 col-sm-3 col-xs-3">
+                                            <div class="img-wrapper">
+                                                <a href="https://www.welivesecurity.com/category/eset-research/" class="category-tag-btn">ESET Research</a>                                                <a href="https://www.welivesecurity.com/2022/01/18/donot-go-do-not-respawn/"
+                                                   class="related-article-thumb">
+                                                    <img class="col-xs-12 no-padding clickable"
+                                                         src="https://www.welivesecurity.com/wp-content/uploads/2022/01/donot-team-malware-eset-research-623x415.jpg"
+                                                         alt="Under the hood of Wslink’s multilayered virtual machine">
+                                                </a>
+                                            </div>
+                                            <h4>
+                                                <a href="https://www.welivesecurity.com/2022/01/18/donot-go-do-not-respawn/">
+                                                    DoNot Go! Do not respawn!                                                </a>
+                                            </h4>
+                                        </article>
+                                                                    </div>
+                            
+                            <div class="comments row">
+                                <div class="heading-line col-xs-12">
+                                    <h3><span class="text">Discussion</span></h3>
+                                                                            
+<div id="disqus_thread"></div>
+                                                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    	</div> 	<footer id="site-footer">
+		<div class="container">
+			<div class="row">
+				<div class="col-md-2">
+                    <div class="hidden-sm hidden-xs">
+                        <div class="logo-wrapper footer clearfix">
+                            <div class="dark clearfix">
+                                <a href="https://www.welivesecurity.com/" class="wls">
+                                    <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-footer-1.svg" alt="Welivesecurity.com">
+                                </a>
+                                <a href="https://www.eset.com" class="eset">
+                                    <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-footer-2.svg" alt="by ESET">
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden-lg hidden-md">
+                        <div class="logo-wrapper clearfix">
+    <div class="dark clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-dark-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+    <div class="light clearfix">
+        <a href="https://www.welivesecurity.com/" class="wls">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-1.svg" alt="Welivesecurity.com">
+        </a>
+        <a href="https://www.eset.com" class="eset">
+            <img src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/img/new-logo/eset-wls-light-header-2.svg" alt="by ESET">
+        </a>
+    </div>
+</div>                    </div>
+				</div>
+				<nav id="footer" class="clearfix">
+											<div class="mobile-block">
+																<div class="col-md-2 col-md-offset-2">
+										<ul>
+																							<li>
+													<a href="/">Home</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/about-us/">About Us</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/contact-us/">Contact Us</a>
+												</li>
+																					</ul>
+									</div>
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/sitemap/">Sitemap</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/our-experts/">Our Experts</a>
+												</li>
+																							<li>
+													<a href="https://eset.com">ESET</a>
+												</li>
+																					</ul>
+									</div>
+													</div>
+											<div class="mobile-block">
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/research/">Research</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/category/how-to/">How To</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/categories/">Categories</a>
+												</li>
+																					</ul>
+									</div>
+																<div class="col-md-2 ">
+										<ul>
+																							<li>
+													<a href="https://www.welivesecurity.com/rss-configurator/">RSS Configurator</a>
+												</li>
+																							<li>
+													<a href="https://www.welivesecurity.com/news-widget-generator/">News Widget</a>
+												</li>
+																					</ul>
+									</div>
+													</div>
+									</nav>
+			</div>
+			<div class="row">
+				<div class="col-md-12 legal clearfix">
+					<div class="wrap clearfix">
+													<span>
+								<a href="https://www.welivesecurity.com/privacy/">
+									Privacy Policy								</a>
+							</span>
+													<span>
+								<a href="https://www.welivesecurity.com/legal-information/">
+									Legal Information								</a>
+							</span>
+											</div>
+					<span class="copyright pull-right">Copyright &copy; ESET, All Rights Reserved</span>
+				</div>
+							</div>
+		</div>
+	</footer>
+	
+	<button id="back-to-top" class="animated-scroll" data-target="absoluteTop">
+		<span class="icomoon icon-icon_arrow"></span>
+		<span class="text">Back to top</span>
+	</button>
+
+			<div class="social-wrapper-mobile hidden-lg hidden-md hidden-sm" id="mobile-article-sharer">
+			<div class="col-xs-12">
+				<div class="icons" style="text-align: center;">
+											<a class="share-facebook" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Facebook">
+							<span class="icomoon icon-icon_fb"></span>
+						</a>
+											<a class="share-twitter" href="https://twitter.com/intent/tweet?https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Twitter">
+							<span class="icomoon icon-icon_tw"></span>
+						</a>
+											<a class="share-linkedin" href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fwww.welivesecurity.com%2F2022%2F03%2F28%2Funder-hood-wslink-multilayered-virtual-machine%2F" target="blank" data-toggle="tooltip" data-placement="top" data-original-title="Share on Linkedin">
+							<span class="icomoon icon-icon_in"></span>
+						</a>
+									</div>
+			</div>
+		</div>
+	
+	<script>
+		var baseUrl = "https://www.welivesecurity.com/";
+	</script>
+	
+			<script>
+            !function(){if(-1==window.document.cookie.indexOf("user_rec=1")){function e(e,o){var t=document.createElement("img");t.setAttribute("style","display:none"),t.src=e+o,window.document.body.appendChild(t)}function o(){d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=Default%20status&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=defaultStatus&z="+Math.floor(1e6*Math.random(0,1)),e(u,a),e(s,c)}function t(){console.log("GA and GTM are loaded."),d=ga.getAll()[0].get("clientId"),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20loaded,%20GTM%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=11",e(u,a),e(s,c)}function n(){var e=new Date;e.setTime(e.getTime()+63072e6);var o="expires="+e.toUTCString();window.document.cookie="user_rec=1; "+o+"; path=/"}var d,a,c,i,r,l="UA-76266002-27",g=window.location.href,s="https://cdn1.esetstatic.com/ESET/INT/assets/img/check.png",u="https://www.google-analytics.com/collect",w="wls",m=0,h=function e(){i=window.ga&&ga.create?1:0,r=window.google_tag_manager?1:0,m++,console.log("Timer: ",m),h=setTimeout(e,500)};window.document.addEventListener&&(d=1e6*Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=Script%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=scriptLoaded&z="+Math.floor(1e6*Math.random(0,1)),e(u,a),e(s,c),window.addEventListener("beforeunload",o),window.ga&&ga.create&&window.google_tag_manager?(t(),window.removeEventListener("beforeunload",o),n()):(setTimeout(h,500),setTimeout(function(){clearTimeout(h),i&&r?t():i&&!r?(console.log("GA is loaded and GTM is blocked."),d=ga.getAll()[0].get("clientId"),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20loaded,%20GTM%20blocked&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=10",e(u,a),e(s,c)):!i&&r?(console.log("GA is blocked and GTM is loaded."),d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20blocked,%20GTM%20loaded&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=01",e(u,a),e(s,c)):i||r||(console.log("GA is blocked and GTM is blocked."),d||Math.random(1e6,9999999),a="?v=1&cid="+d+"&tid="+l+"&dl="+g+"&t=event&ec=Tracking%20check%20-%20recurring&ea=GA%20blocked,%20GTM%20blocked&ni=1&cd1="+w+"&aip=1&z="+Math.floor(1e6*Math.random(0,1)),c="?country=wls&gcode=00",e(u,a),e(s,c)),window.removeEventListener("beforeunload",o),n()},1e4)))}}();
+		</script>
+	
+	<script src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/js/main.js?id=fef3139dcedd23afc232"></script>
+    <!-- Version: v1.7.3.41514b.pro.awus -->
+    		<script type="text/javascript">
+			var disqus_config = function () { 
+				this.language = "en";
+			};
+			var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":"", "numsVisible": false};
+			var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+		</script>
+		<script src="https://www.welivesecurity.com/wp-content/themes/eset-wls-2018/assets/static/js/crayon.min.js"></script>
+
+			
+		
+    <script>
+    	Main.init();
+    </script>
+
+    <script type='text/javascript'>
+/* <![CDATA[ */
+var countVars = {"disqusShortname":"welivesecurity"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://www.welivesecurity.com/wp-content/plugins/disqus-comment-system/public/js/comment_count.js?ver=3.0.16'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var embedVars = {"disqusConfig":{"integration":"wordpress 3.0.16"},"disqusIdentifier":"160480 https:\/\/backend.welivesecurity.com\/?p=160480","disqusShortname":"welivesecurity","disqusTitle":"Under the hood of Wslink\u2019s multilayered virtual machine","disqusUrl":"https:\/\/www.welivesecurity.com\/2022\/03\/28\/under-hood-wslink-multilayered-virtual-machine\/","postId":"160480"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://www.welivesecurity.com/wp-content/plugins/disqus-comment-system/public/js/comment_embed.js?ver=3.0.16'></script>
+    <script src="https://assets.esetstatic.com/3PR/app.min.js"></script>
+  </body>
+</html>

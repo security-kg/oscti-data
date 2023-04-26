@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Conntrack tales - one thousand and one flows</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="We were wondering - can we just enable Linux &quot;conntrack&quot;? How does it actually work? I volunteered to help the team understand the dark corners of the Linux&#x27;s &quot;conntrack&quot; stateful firewall subsystem." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Conntrack tales - one thousand and one flows" />
+    <meta property="og:description" content="We were wondering - can we just enable Linux &quot;conntrack&quot;? How does it actually work? I volunteered to help the team understand the dark corners of the Linux&#x27;s &quot;conntrack&quot; stateful firewall subsystem." />
+    <meta property="og:url" content="https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/" />
+    <meta property="og:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/04/facebook-Linked_Image___Network-Layer.png" />
+    <meta property="article:published_time" content="2020-04-06T11:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-08-20T16:28:46.000Z" />
+    <meta property="article:tag" content="Conntrack" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Network" />
+    <meta property="article:tag" content="TCP" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Conntrack tales - one thousand and one flows" />
+    <meta name="twitter:description" content="We were wondering - can we just enable Linux &quot;conntrack&quot;? How does it actually work? I volunteered to help the team understand the dark corners of the Linux&#x27;s &quot;conntrack&quot; stateful firewall subsystem." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/" />
+    <meta name="twitter:image" content="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/04/twitter-In-Stream_Wide___Network-Layer.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Conntrack, Linux, Network, TCP" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta property="og:image:width" content="1226" />
+    <meta property="og:image:height" content="642" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": []
+    },
+    "headline": "Conntrack tales - one thousand and one flows",
+    "url": "https://blog.cloudflare.com/conntrack-tales-one-thousand-and-one-flows/",
+    "datePublished": "2020-04-06T11:00:00.000Z",
+    "dateModified": "2020-08-20T16:28:46.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/04/Network-Layer.png",
+    "keywords": "Conntrack, Linux, Network, TCP",
+    "description": "We were wondering - can we just enable Linux &quot;conntrack&quot;? How does it actually work? I volunteered to help the team understand the dark corners of the Linux&#x27;s &quot;conntrack&quot; stateful firewall subsystem.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-conntrack tag-linux tag-network tag-tcp sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-conntrack tag-linux tag-network tag-tcp ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Conntrack tales - one thousand and one flows</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-04-06T12:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">April 06, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>At Cloudflare we develop new products at a great pace. Their needs often challenge the architectural assumptions we made in the past. For example, years ago we decided to avoid using Linux's &quot;conntrack&quot; - stateful firewall facility. This brought great benefits - it simplified our iptables firewall setup, sped up the system a bit and made the inbound packet path easier to understand.</p>
+<p>But eventually our needs changed. One of our new products had a reasonable need for it. But we weren't confident - can we just enable conntrack and move on? How does it actually work? I volunteered to help the team understand the dark corners of the &quot;conntrack&quot; subsystem.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="whatisconntrack">What is conntrack?</h2>
+<p>&quot;Conntrack&quot; is a part of Linux network stack, specifically part of the firewall subsystem. To put that into perspective: early firewalls were entirely stateless. They could express only basic logic, like: allow SYN packets to port 80 and 443, and block everything else.</p>
+<p>The stateless design gave some basic network security, but was quickly deemed insufficient. You see, there are certain things that can't be expressed in a stateless way. The canonical example is assessment of ACK packets - it's impossible to say if an ACK packet is legitimate or part of a port scanning attempt, without tracking the connection state.</p>
+<p>To fill such gaps all the operating systems implemented connection tracking inside their firewalls. This tracking is usually implemented as a big table, with at least 6 columns: protocol (usually TCP or UDP), source IP, source port, destination IP, destination port and connection state. On Linux this subsystem is called &quot;conntrack&quot; and is often enabled by default. Here's how the table looks on my laptop inspected with &quot;conntrack -L&quot; command:</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/04/image5-2.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>The obvious question is how large this state tracking table can be. This setting is under &quot;/proc/sys/net/nf_conntrack_max&quot;:</p>
+<pre><code class="language-.sh">$ cat /proc/sys/net/nf_conntrack_max
+262144
+</code></pre>
+<p>This is a global setting, but the limit is per container. On my system each container, or &quot;network namespace&quot;, can have up to 256K conntrack entries.</p>
+<p>What exactly happens when the number of concurrent connections exceeds the conntrack limit?</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="testingconntrackishard">Testing conntrack is hard</h2>
+<p>In past testing conntrack was hard - it required complex hardware or vm setup. Fortunately, these days we can use modern &quot;user namespace&quot; facilities which do permission magic, allowing an unprivileged user to feel like root. Using the tool &quot;unshare&quot; it's possible to create an isolated environment where we can precisely control the packets going through and experiment with iptables and conntrack without threatening the health of our host system. With appropriate parameters it's possible to create and manage a networking namespace, including access to namespaced iptables and conntrack, from an unprivileged user.</p>
+<p>This script is the heart of our test:</p>
+<pre><code class="language-.bash"># Enable tun interface
+ip tuntap add name tun0 mode tun
+ip link set tun0 up
+ip addr add 192.0.2.1 peer 192.0.2.2 dev tun0
+ip route add 0.0.0.0/0 via 192.0.2.2 dev tun0
+
+# Refer to conntrack at least once to ensure it's enabled
+iptables -t raw -A PREROUTING -j CT
+# Create a counter in mangle table
+iptables -t mangle -A PREROUTING
+# Make sure reverse traffic doesn't affect conntrack state
+iptables -t raw -A OUTPUT -p tcp --sport 80 -j DROP
+
+tcpdump -ni any -B 16384 -ttt &amp;
+...
+./venv/bin/python3 send_syn.py
+
+conntrack -L
+# Show iptables counters
+iptables -nvx -t raw -L PREROUTING
+iptables -nvx -t mangle -L PREROUTING
+</code></pre>
+<p>This bash script is shortened for readability. See the <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2020-04-conntrack-syn/test-1.bash">full version here</a>. The accompanying &quot;send_syn.py&quot; is just sending 10 SYN packets over &quot;tun0&quot; interface. <a href="https://github.com/cloudflare/cloudflare-blog/blob/master/2020-04-conntrack-syn/send_syn.py">Here is the source</a> but allow me to paste it here - showing off &quot;scapy&quot; is always fun:</p>
+<pre><code class="language-.py">tun = TunTapInterface(&quot;tun0&quot;, mode_tun=True)
+tun.open()
+
+for i in range(10000,10000+10):
+    ip=IP(src=&quot;198.18.0.2&quot;, dst=&quot;192.0.2.1&quot;)
+    tcp=TCP(sport=i, dport=80, flags=&quot;S&quot;)
+    send(ip/tcp, verbose=False, inter=0.01, socket=tun)
+</code></pre>
+<p>The bash script above contains a couple of gems. Let's walk through them.</p>
+<p>First, please note that we can't just inject packets into the loopback interface using <a href="http://man7.org/linux/man-pages/man7/raw.7.html">SOCK_RAW sockets</a>. The Linux networking stack is a complex beast. The semantics of sending packets over a SOCK_RAW are different then delivering a packet over a real interface. We'll discuss this later, but for now, to avoid triggering unexpected behaviour, we will deliver packets over a tun/tap device which better emulates a real interface.</p>
+<p>Then we need to make sure the conntrack is active in the network namespace we wish to use for testing. Traditionally, just loading the kernel module would have done that, but in the brave new world of containers and network namespaces, a method had to be found to allow conntrack to be active in some and inactive in other containers. Hence this is tied to usage - rules referencing conntrack must exist in the namespace's iptables for conntrack to be active inside the container.</p>
+<p>As a side note, <a href="https://lwn.net/Articles/740455/">containers triggering host to load kernel modules</a> is an <a href="https://github.com/weaveworks/go-odp/blob/6b0aa22550d9325eb8f43418185859e13dc0de1d/odp/dpif.go#L67-L90">interesting subject</a>.</p>
+<p>After the &quot;-t raw -A PREROUTING&quot; rule, which we added &quot;-t mangle -A PREROUTING&quot; rule, but notice - it doesn't have any action! This syntax is allowed by iptables and it is pretty useful to get iptables to report rule counters. We'll need these counters soon. A careful reader might suggest looking at &quot;policy&quot; counters in iptables to achieve our goal. Sadly, &quot;policy&quot; counters (increased for each packet entering a chain), work only if there is at least one rule inside it.</p>
+<p>The rest of the steps are self-explanatory. We set up &quot;tcpdump&quot; in the background, send 10 SYN packets to 127.0.0.1:80 using the &quot;scapy&quot; Python library. Then we print the conntrack table and iptables counters.</p>
+<p>Let's run this script in action. Remember to run it under networking namespace as fake root with &quot;unshare -Ur -n&quot;:</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/04/image6.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>This is all nice. First we see a &quot;tcpdump&quot; listing showing 10 SYN packets. Then we see the conntrack table state, showing 10 created flows. Finally, we see iptables counters in two rules we created, each showing 10 packets processed.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="canconntracktablefillup">Can conntrack table fill up?</h2>
+<p>Given that the conntrack table is size constrained, what exactly happens when it fills up? Let's check it out. First, we need to drop the conntrack size. As mentioned it's controlled by a global toggle - it's necessary to tune it on the host side. Let's reduce the table size to 7 entries, and repeat our test:</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/04/image4-3.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>This is getting interesting. We still see the 10 inbound SYN packets. We still see that the &quot;-t raw PREROUTING&quot; table received 10 packets, but this is where similarities end. The &quot;-t mangle PREROUTING&quot; table saw only 7 packets. Where did the three missing SYN packets go?</p>
+<p>It turns out they went where all the dead packets go. They were hard dropped. Conntrack on overfill does exactly that. It even complains in the &quot;dmesg&quot;:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2020/04/image1-1.png" alt="image1-1"></p>
+<p>This is confirmed by our iptables counters. Let's review the <a href="https://upload.wikimedia.org/wikipedia/commons/3/37/Netfilter-packet-flow.svg">famous iptables</a> diagram:</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2020/04/image7.png" class="kg-image"><figcaption><a href="https://commons.wikimedia.org/wiki/File:Netfilter-packet-flow.svg">image</a> by <a href="https://commons.wikimedia.org/wiki/User_talk:Jengelh">Jan Engelhardt</a> CC BY-SA 3.0</figcaption></figure><!--kg-card-begin: markdown--><p>As we can see, the &quot;-t raw PREROUTING&quot; happens before conntrack, while &quot;-t mangle PREROUTING&quot; is just after it. This is why we see 10 and 7 packets reported by our iptables counters.</p>
+<p>Let me emphasize the gravity of our discovery. We showed three completely valid SYN packets being implicitly dropped by &quot;conntrack&quot;. There is no explicit &quot;-j DROP&quot; iptables rule. There is no configuration to be toggled. Just the fact of using &quot;conntrack&quot; means that, when it's full, packets creating new flows will be dropped. No questions asked.</p>
+<p>This is the dark side of using conntrack. If you use it, you absolutely must make sure it doesn't get filled.</p>
+<p>We could end our investigation here, but there are a couple of interesting caveats.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="strictvsloose">Strict vs loose</h2>
+<p>Conntrack supports a &quot;strict&quot; and &quot;loose&quot; mode, as configured by &quot;nf_conntrack_tcp_loose&quot; toggle.</p>
+<pre><code>$ cat /proc/sys/net/netfilter/nf_conntrack_tcp_loose
+1
+</code></pre>
+<p>By default, it's set to &quot;loose&quot; which means that stray ACK packets for unseen TCP flows will create new flow entries in the table. We can generalize: &quot;conntrack&quot; will implicitly drop all the packets that create new flow, whether that's SYN or just stray ACK.</p>
+<p>What happens when we clear the &quot;nf_conntrack_tcp_loose=0&quot; setting? This is a subject for another blog post, but suffice to say - it's a mess. First, this setting is not settable in the network namespace scope - although it should be. To test it you need to be in the root network namespace. Then, due to twisted logic the ACK will be dropped on a full conntrack table, even though in this case it doesn't create a flow. If the table is not full, the ACK packet will pass through it, having &quot;-ctstate INVALID&quot; from &quot;mangle&quot; table forward.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="whendoesntaconntrackentrygetcreated">When doesn't a conntrack entry get created?</h2>
+<p>There are important situations when conntrack entry is not created. For example, we could replace these line in our script:</p>
+<pre><code># Make sure reverse traffic doesn't affect conntrack state
+iptables -t raw -A OUTPUT -p tcp --sport 80 -j DROP
+</code></pre>
+<p>With those:</p>
+<pre><code># Make sure inbound SYN packets don't go to networking stack
+iptables -A INPUT -j DROP
+</code></pre>
+<p>Naively we could think dropping SYN packets past the conntrack layer would not interfere with the created flows. This is not correct. In spite of these SYN packets having been seen by conntrack, no flow state is created for them. Packets hitting &quot;-j DROP&quot; will not create new conntrack flows. Pretty magical, isn't it?</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="fullconntrackcauseswitheperm">Full Conntrack causes with EPERM</h2>
+<p>Recently we hit a case when a &quot;sendto()&quot; syscall on UDP socket from one of our applications was erroring with EPERM. This is pretty weird, and not documented in the man page. My colleague had no doubts:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2020/04/image9-1.png" alt="image9-1"></p>
+<p>I'll save you the gruesome details, but indeed, the full conntrack table will do that to your new UDP flows - you will get EPERM. Beware. Funnily enough, it's possible to get EPERM if an outbound packet is dropped on OUTPUT firewall in other ways. For example:</p>
+<pre><code>marek:~$ sudo iptables -I OUTPUT -p udp --dport 53 --dst 192.0.2.8 -j DROP
+marek:~$ strace -e trace=write nc -vu 192.0.2.8 53
+write(3, &quot;X&quot;, 1)                        = -1 EPERM (Operation not permitted)
++++ exited with 1 +++
+</code></pre>
+<p>If you ever receive EPERM from &quot;sendto()&quot;, you might want to treat it as a transient error, if you suspect a filled conntrack problem, or permanent error if you blame iptables configuration.</p>
+<p>This is also why we can't send our SYN packets directly using SOCK_RAW sockets in our test. Let's see what happens on conntrack overfill with standard &quot;hping3&quot; tool:</p>
+<pre><code>$ hping3 -S -i u10000 -c 10 --spoof 192.18.0.2 192.0.2.1 -p 80 -I lo
+HPING 192.0.2.1 (lo 192.0.2.1): S set, 40 headers + 0 data bytes
+[send_ip] sendto: Operation not permitted
+</code></pre>
+<p>&quot;send()&quot; even on a SOCK_RAW socket fails with EPERM when conntrack table is full.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="fullconntrackcanhappenonasynflood">Full conntrack can happen on a SYN flood</h2>
+<p>There is one more caveat. During a SYN flood, the conntrack entries will totally be created for the spoofed flows. Take a look at second test case we prepared, this time correctly listening on port 80, and sending SYN+ACK:</p>
+<!--kg-card-end: markdown--><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/04/image8.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>We can see 7 SYN+ACK's flying out of the port 80 listening socket. The final three SYN's go nowhere as they are dropped by conntrack.</p>
+<p>This has important implications. If you use conntrack on publicly accessible ports, during SYN flood <a href="https://blog.cloudflare.com/syn-packet-handling-in-the-wild/">mitigation technologies like SYN Cookies</a> won't help. You are still at risk of running out of conntrack space and therefore affecting legitimate connections.</p>
+<p>For this reason, as a general rule consider avoiding conntrack on inbound connections (-j NOTRACK). Alternatively having some reasonable rate limits on iptables layer, doing &quot;-j DROP&quot;. This will work well and won't create new flows, as we discussed above. The best method though, would be to trigger SYN Cookies from a layer before conntrack, like XDP. But this is a subject for another time.</p>
+<!--kg-card-end: markdown--><!--kg-card-begin: markdown--><h2 id="summary">Summary</h2>
+<p>Over the years Linux conntrack has gone through many changes and has improved a lot. While performance used to be a major concern, these days it's considered to be very fast. Dark corners remain. Correctly applying conntrack is tricky.</p>
+<p>In this blog post we showed how it's possible to test parts of conntrack with &quot;unshare&quot; and a series of scripts. We showed the behaviour when the conntrack table gets filled - packets might implicitly be dropped. Finally, we mentioned the curious case of SYN floods where incorrectly applied conntrack may cause harm.</p>
+<p>Stay tuned for more horror stories as we dig deeper and deeper into the Linux networking stack guts.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/conntrack/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Conntrack</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/network/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Network</a>
+        <a href="/tag/tcp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TCP</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-04T12:00:00Z">March 04, 2021 12:00PM</p>
+        <a href="/conntrack-turns-a-blind-eye-to-dropped-syns/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Conntrack turns a blind eye to dropped SYNs</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We have been dealing with conntrack, the connection tracking layer in the Linux kernel, for years. And yet, despite the collected know-how, questions about its inner workings occasionally come up. When they do, it is hard to resist the temptation to go digging for answers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jakub/" class="fw5 f2 black no-underline">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/conntrack/" class="no-underline f1 fw2 blue3 underline-hover">Conntrack</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kernel/" class="no-underline f1 fw2 blue3 underline-hover">Kernel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tracing/" class="no-underline f1 fw2 blue3 underline-hover">Tracing</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

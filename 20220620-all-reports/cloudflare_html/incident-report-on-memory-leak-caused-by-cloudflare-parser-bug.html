@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Incident report on memory leak caused by Cloudflare parser bug</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Incident report on memory leak caused by Cloudflare parser bug" />
+    <meta property="og:description" content="Last Friday, Tavis Ormandy from Google’s Project Zero contacted Cloudflare to report a security problem with our edge servers. He was seeing corrupted web pages being returned by some HTTP requests run through Cloudflare." />
+    <meta property="og:url" content="https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/" />
+    <meta property="article:published_time" content="2017-02-23T23:01:06.000Z" />
+    <meta property="article:modified_time" content="2018-08-28T21:41:37.000Z" />
+    <meta property="article:tag" content="Post Mortem" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Privacy" />
+    <meta property="article:tag" content="Bugs" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Incident report on memory leak caused by Cloudflare parser bug" />
+    <meta name="twitter:description" content="Last Friday, Tavis Ormandy from Google’s Project Zero contacted Cloudflare to report a security problem with our edge servers. He was seeing corrupted web pages being returned by some HTTP requests run through Cloudflare." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="John Graham-Cumming" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Post Mortem, Security, Privacy, Bugs" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@jgrahamc" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "John Graham-Cumming",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/url-2.jpg",
+        "url": "https://blog.cloudflare.com/author/john-graham-cumming/",
+        "sameAs": [
+            "https://twitter.com/jgrahamc"
+        ]
+    },
+    "headline": "Incident report on memory leak caused by Cloudflare parser bug",
+    "url": "https://blog.cloudflare.com/incident-report-on-memory-leak-caused-by-cloudflare-parser-bug/",
+    "datePublished": "2017-02-23T23:01:06.000Z",
+    "dateModified": "2018-08-28T21:41:37.000Z",
+    "keywords": "Post Mortem, Security, Privacy, Bugs",
+    "description": "Last Friday, Tavis Ormandy from Google’s Project Zero contacted Cloudflare to report a security problem with our edge servers. He was seeing corrupted web pages being returned by some HTTP requests run through Cloudflare.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-postmortem tag-security tag-privacy tag-bugs sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-postmortem tag-security tag-privacy tag-bugs no-image no-image">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Incident report on memory leak caused by Cloudflare parser bug</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-02-23T23:01:06Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 23, 2017 11:01PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/john-graham-cumming/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/url-2.jpg" alt="John Graham-Cumming" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/john-graham-cumming" class="fw5 f3 no-underline black mr3">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>Last Friday, <a href="https://twitter.com/taviso">Tavis Ormandy</a> from Google’s <a href="https://googleprojectzero.blogspot.co.uk/">Project Zero</a> <a href="https://twitter.com/taviso/status/832744397800214528">contacted</a> Cloudflare to report a security problem with our edge servers. He was seeing corrupted web pages being returned by some HTTP requests run through Cloudflare.</p>
+<p>It turned out that in some unusual circumstances, which I’ll detail below, our edge servers were running past the end of a buffer and returning memory that contained private information such as HTTP cookies, authentication tokens, HTTP POST bodies, and other sensitive data. And some of that data had been cached by search engines.</p>
+<p>For the avoidance of doubt, Cloudflare customer SSL private keys were not leaked. Cloudflare has always terminated SSL connections through an isolated instance of NGINX that was not affected by this bug.</p>
+<p>We quickly identified the problem and turned off three minor Cloudflare features (<a href="https://support.cloudflare.com/hc/en-us/articles/200170016-What-is-Email-Address-Obfuscation-">email obfuscation</a>, <a href="https://support.cloudflare.com/hc/en-us/articles/200170036-What-does-Server-Side-Excludes-SSE-do-">Server-side Excludes</a> and <a href="https://support.cloudflare.com/hc/en-us/articles/227227647-How-do-I-use-Automatic-HTTPS-Rewrites-">Automatic HTTPS Rewrites</a>) that were all using the same HTML parser chain that was causing the leakage. At that point it was no longer possible for memory to be returned in an HTTP response.</p>
+<p>Because of the seriousness of such a bug, a cross-functional team from software engineering, infosec and operations formed in San Francisco and London to fully understand the underlying cause, to understand the effect of the memory leakage, and to work with Google and other search engines to remove any cached HTTP responses.</p>
+<p>Having a global team meant that, at 12 hour intervals, work was handed over between offices enabling staff to work on the problem 24 hours a day. The team has worked continuously to ensure that this bug and its consequences are fully dealt with. One of the advantages of being a service is that bugs can go from reported to fixed in minutes to hours instead of months. The industry standard time allowed to deploy a fix for a bug like this is usually three months; we were completely finished globally in under 7 hours with an initial mitigation in 47 minutes.</p>
+<p>The bug was serious because the leaked memory could contain private information and because it had been cached by search engines. We have also not discovered any evidence of malicious exploits of the bug or other reports of its existence.</p>
+<p>The greatest period of impact was from February 13 and February 18 with around 1 in every 3,300,000 HTTP requests through Cloudflare potentially resulting in memory leakage (that’s about 0.00003% of requests).</p>
+<p>We are grateful that it was found by one of the world’s top security research teams and reported to us.</p>
+<p>This blog post is rather long but, as is our tradition, we prefer to be open and technically detailed about problems that occur with our service.</p>
+<h2 id="parsingandmodifyinghtmlonthefly">Parsing and modifying HTML on the fly</h2>
+<p>Many of Cloudflare’s services rely on parsing and modifying HTML pages as they pass through our edge servers. For example, we can <a href="https://www.cloudflare.com/apps/google-analytics/">insert</a> the Google Analytics tag, safely rewrite http:// links to https://, exclude parts of a page from bad bots, obfuscate email addresses, enable <a href="https://blog.cloudflare.com/accelerated-mobile/">AMP</a>, and more by modifying the HTML of a page.</p>
+<p>To modify the page, we need to read and parse the HTML to find elements that need changing. Since the very early days of Cloudflare, we’ve used a parser written using <a href="https://www.colm.net/open-source/ragel/">Ragel</a>. A single .rl file contains an HTML parser used for all the on-the-fly HTML modifications that Cloudflare performs.</p>
+<p>About a year ago we decided that the Ragel-based parser had become too complex to maintain and we started to write a new parser, named cf-html, to replace it. This streaming parser works correctly with HTML5 and is much, much faster and easier to maintain.</p>
+<p>We first used this new parser for the <a href="https://blog.cloudflare.com/how-we-brought-https-everywhere-to-the-cloud-part-1/">Automatic HTTP Rewrites</a> feature and have been slowly migrating functionality that uses the old Ragel parser to cf-html.</p>
+<p>Both cf-html and the old Ragel parser are implemented as NGINX modules compiled into our NGINX builds. These NGINX filter modules parse buffers (blocks of memory) containing HTML responses, make modifications as necessary, and pass the buffers onto the next filter.</p>
+<p>For the avoidance of doubt: the bug is <em>not</em> in Ragel itself. It is in Cloudflare's use of Ragel. This is our bug and not the fault of Ragel.</p>
+<p>It turned out that the underlying bug that caused the memory leak had been present in our Ragel-based parser for many years but no memory was leaked because of the way the internal NGINX buffers were used. Introducing cf-html subtly changed the buffering which enabled the leakage even though there were no problems in cf-html itself.</p>
+<p>Once we knew that the bug was being caused by the activation of cf-html (but before we knew why) we disabled the three features that caused it to be used. Every feature Cloudflare ships has a corresponding <a href="https://en.wikipedia.org/wiki/Feature_toggle">feature flag</a>, which we call a ‘global kill’. We activated the Email Obfuscation global kill 47 minutes after receiving details of the problem and the Automatic HTTPS Rewrites global kill 3h05m later. The Email Obfuscation feature had been changed on February 13 and was the primary cause of the leaked memory, thus disabling it quickly stopped almost all memory leaks.</p>
+<p>Within a few seconds, those features were disabled worldwide. We confirmed we were not seeing memory leakage via test URIs and had Google double check that they saw the same thing.</p>
+<p>We then discovered that a third feature, Server-Side Excludes, was also vulnerable and did not have a global kill switch (it was so old it preceded the implementation of global kills). We implemented a global kill for Server-Side Excludes and deployed a patch to our fleet worldwide. From realizing Server-Side Excludes were a problem to deploying a patch took roughly three hours. However, Server-Side Excludes are rarely used and only activated for malicious IP addresses.</p>
+<h2 id="rootcauseofthebug">Root cause of the bug</h2>
+<p>The Ragel code is converted into generated C code which is then compiled. The C code uses, in the classic C manner, pointers to the HTML document being parsed, and Ragel itself gives the user a lot of control of the movement of those pointers. The underlying bug occurs because of a pointer error.</p>
+<pre><code>/* generated code */
+if ( ++p == pe )
+    goto _test_eof;
+</code></pre>
+<p>The root cause of the bug was that reaching the end of a buffer was checked using the equality operator and a pointer was able to step past the end of the buffer. This is known as a buffer overrun. Had the check been done using &gt;= instead of == jumping over the buffer end would have been caught. The equality check is generated automatically by Ragel and was not part of the code that we wrote. This indicated that we were not using Ragel correctly.</p>
+<p>The Ragel code we wrote contained a bug that caused the pointer to jump over the end of the buffer and past the ability of an equality check to spot the buffer overrun.</p>
+<p>Here’s a piece of Ragel code used to consume an attribute in an HTML <code>&lt;script&gt;</code> tag. The first line says that it should attempt to find zero or more <code>unquoted_attr_char</code> followed by (that’s the :&gt;&gt; concatenation operator) whitespace, forward slash or then &gt; signifying the end of the tag.</p>
+<pre><code>script_consume_attr := ((unquoted_attr_char)* :&gt;&gt; (space|'/'|'&gt;'))
+&gt;{ ddctx(&quot;script consume_attr&quot;); }
+@{ fhold; fgoto script_tag_parse; }
+$lerr{ dd(&quot;script consume_attr failed&quot;);
+       fgoto script_consume_attr; };
+</code></pre>
+<p>If an attribute is well-formed, then the Ragel parser moves to the code inside the <code>@{ }</code> block. If the attribute fails to parse (which is the start of the bug we are discussing today) then the <code>$lerr{ }</code> block is used.</p>
+<p>For example, in certain circumstances (detailed below) if the web page <em>ended</em> with a broken HTML tag like this:</p>
+<pre><code>&lt;script type=
+</code></pre>
+<p>the <code>$lerr{ }</code> block would get used and the buffer would be overrun. In this case the <code>$lerr</code> does <code>dd(“script consume_attr failed”);</code> (that’s a debug logging statement that is a nop in production) and then does <code>fgoto script_consume_attr;</code> (the state transitions to <code>script_consume_attr</code> to parse the next attribute).<br>
+From our statistics it appears that such broken tags at the end of the HTML occur on about 0.06% of websites.</p>
+<p>If you have a keen eye you may have noticed that the <code>@{ }</code> transition also did a <code>fgoto</code> but right before it did <code>fhold</code> and the <code>$lerr{ }</code> block did not. It’s the missing <code>fhold</code> that resulted in the memory leakage.</p>
+<p>Internally, the generated C code has a pointer named <code>p</code> that is pointing to the character being examined in the HTML document.  <code>fhold</code> is equivalent to <code>p--</code> and is essential because when the error condition occurs <code>p</code> will be pointing to the character that caused the <code>script_consume_attr</code> to fail.</p>
+<p>And it’s doubly important because if this error condition occurs at the end of the buffer containing the HTML document then <code>p</code> will be after the end of the document (<code>p</code> will be <code>pe + 1</code> internally) and a subsequent check that the end of the buffer has been reached will fail and <code>p</code> will run outside the buffer.</p>
+<p>Adding an <code>fhold</code> to the error handler fixes the problem.</p>
+<h2 id="whynow">Why now</h2>
+<p>That explains how the pointer could run past the end of the buffer, but not why the problem suddenly manifested itself. After all, this code had been in production and stable for years.</p>
+<p>Returning to the <code>script_consume_attr</code> definition above:</p>
+<pre><code>script_consume_attr := ((unquoted_attr_char)* :&gt;&gt; (space|'/'|'&gt;'))
+&gt;{ ddctx(&quot;script consume_attr&quot;); }
+@{ fhold; fgoto script_tag_parse; }
+$lerr{ dd(&quot;script consume_attr failed&quot;);
+       fgoto script_consume_attr; };
+</code></pre>
+<p>What happens when the parser runs out of characters to parse while consuming an attribute differs whether the buffer currently being parsed is the last buffer or not. If it’s not the last buffer, then there’s no need to use <code>$lerr</code> as the parser doesn’t know whether an error has occurred or not as the rest of the attribute may be in the next buffer.</p>
+<p>But if this is the last buffer, then the <code>$lerr</code> is executed. Here’s how the code ends up skipping over the end-of-file and running through memory.</p>
+<p>The entry point to the parsing function is <code>ngx_http_email_parse_email</code> (the name is historical, it does much more than email parsing).</p>
+<pre><code>ngx_int_t ngx_http_email_parse_email(ngx_http_request_t *r, ngx_http_email_ctx_t *ctx) {
+    u_char  *p = ctx-&gt;pos;
+    u_char  *pe = ctx-&gt;buf-&gt;last;
+    u_char  *eof = ctx-&gt;buf-&gt;last_buf ? pe : NULL;
+</code></pre>
+<p>You can see that <code>p</code> points to the first character in the buffer, <code>pe</code> to the character after the end of the buffer and <code>eof</code> is set to <code>pe</code> if this is the last buffer in the chain (indicated by the <code>last_buf</code> boolean), otherwise it is NULL.</p>
+<p>When the old and new parsers are both present during request handling a buffer such as this will be passed to the function above:</p>
+<pre><code>(gdb) p *in-&gt;buf
+$8 = {
+  pos = 0x558a2f58be30 &quot;&lt;script type=\&quot;&quot;,
+  last = 0x558a2f58be3e &quot;&quot;,
+
+  [...]
+
+  last_buf = 1,
+
+  [...]
+}
+</code></pre>
+<p>Here there is data and <code>last_buf</code> is 1. When the new parser is not present the final buffer that <em>contains data</em> looks like this:</p>
+<pre><code>(gdb) p *in-&gt;buf
+$6 = {
+  pos = 0x558a238e94f7 &quot;&lt;script type=\&quot;&quot;,
+  last = 0x558a238e9504 &quot;&quot;,
+
+  [...]
+
+  last_buf = 0,
+
+  [...]
+}
+</code></pre>
+<p>A final empty buffer (<code>pos</code> and <code>last</code> both NULL and <code>last_buf = 1</code>) will follow that buffer but <code>ngx_http_email_parse_email</code> is not invoked if the buffer is empty.</p>
+<p>So, in the case where only the old parser is present, the final buffer that contains data has <code>last_buf</code> set to 0. That means that <code>eof</code> will be NULL. Now when trying to handle <code>script_consume_attr</code> with an unfinished tag at the end of the buffer the <code>$lerr</code> will not be executed because the parser believes (because of <code>last_buf</code>) that there may be more data coming.</p>
+<p>The situation is different when both parsers are present. <code>last_buf</code> is 1, <code>eof</code> is set to <code>pe</code> and the <code>$lerr</code> code runs. Here’s the generated code for it:</p>
+<pre><code>/* #line 877 &quot;ngx_http_email_filter_parser.rl&quot; */
+{ dd(&quot;script consume_attr failed&quot;);
+              {goto st1266;} }
+     goto st0;
+
+[...]
+
+st1266:
+    if ( ++p == pe )
+        goto _test_eof1266;
+</code></pre>
+<p>The parser runs out of characters while trying to perform <code>script_consume_attr</code> and <code>p</code> will be <code>pe</code> when that happens. Because there’s no <code>fhold</code> (that would have done <code>p--</code>) when the code jumps to <code>st1266</code> <code>p</code> is incremented and is now past <code>pe</code>.</p>
+<p>It then won’t jump to <code>_test_eof1266</code> (where EOF checking would have been performed) and will carry on past the end of the buffer trying to parse the HTML document.</p>
+<p>So, the bug had been dormant for years until the internal feng shui of the buffers passed between NGINX filter modules changed with the introduction of cf-html.</p>
+<h2 id="goingbughunting">Going bug hunting</h2>
+<p>Research by IBM in the 1960s and 1970s showed that bugs tend to cluster in what became known as “error-prone modules”. Since we’d identified a nasty pointer overrun in the code generated by Ragel it was prudent to go hunting for other bugs.</p>
+<p>Part of the infosec team started <a href="https://en.wikipedia.org/wiki/Fuzzing">fuzzing</a> the generated code to look for other possible pointer overruns. Another team built test cases from malformed web pages found in the wild. A software engineering team began a manual inspection of the generated code looking for problems.</p>
+<p>At that point it was decided to add explicit pointer checks to every pointer access in the generated code to prevent any future problem and to log any errors seen in the wild.  The errors generated were fed to our global error logging infrastructure for analysis and trending.</p>
+<pre><code>#define SAFE_CHAR ({\
+    if (!__builtin_expect(p &lt; pe, 1)) {\
+        ngx_log_error(NGX_LOG_CRIT, r-&gt;connection-&gt;log, 0, &quot;email filter tried to access char past EOF&quot;);\
+        RESET();\
+        output_flat_saved(r, ctx);\
+        BUF_STATE(output);\
+        return NGX_ERROR;\
+    }\
+    *p;\
+})
+</code></pre>
+<p>And we began seeing log lines like this:</p>
+<pre><code>2017/02/19 13:47:34 [crit] 27558#0: *2 email filter tried to access char past EOF while sending response to client, client: 127.0.0.1, server: localhost, request: &quot;GET /malformed-test.html HTTP/1.1”
+</code></pre>
+<p>Every log line indicates an HTTP request that could have leaked private memory. By logging how often the problem was occurring we hoped to get an estimate of the number of times HTTP request had leaked memory while the bug was present.</p>
+<p>In order for the memory to leak the following had to be true:</p>
+<p>The final buffer containing data had to finish with a malformed script or img tag<br>
+The buffer had to be less than 4k in length (otherwise NGINX would crash)<br>
+The customer had to either have Email Obfuscation enabled (because it uses both the old and new parsers as we transition),<br>
+… or Automatic HTTPS Rewrites/Server Side Excludes (which use the new parser) in combination with another Cloudflare feature that uses the old parser.<br>
+… and Server-Side Excludes only execute if the client IP has a poor reputation (i.e. it does not work for most visitors).</p>
+<p>That explains why the buffer overrun resulting in a leak of memory occurred so infrequently.</p>
+<p>Additionally, the Email Obfuscation feature (which uses both parsers and would have enabled the bug to happen on the most Cloudflare sites) was only enabled on February 13 (four days before Tavis’ report).</p>
+<p>The three features implicated were rolled out as follows. The earliest date memory could have leaked is 2016-09-22.</p>
+<p>2016-09-22 Automatic HTTP Rewrites enabled<br>
+2017-01-30 Server-Side Excludes migrated to new parser<br>
+2017-02-13 Email Obfuscation partially migrated to new parser<br>
+2017-02-18 Google reports problem to Cloudflare and leak is stopped</p>
+<p>The greatest potential impact occurred for four days starting on February 13 because Automatic HTTP Rewrites wasn’t widely used and Server-Side Excludes only activate for malicious IP addresses.</p>
+<h2 id="internalimpactofthebug">Internal impact of the bug</h2>
+<p>Cloudflare runs multiple separate processes on the edge machines and these provide process and memory isolation. The memory being leaked was from a process based on NGINX that does HTTP handling. It has a separate heap from processes doing SSL, image re-compression, and caching, which meant that we were quickly able to determine that SSL private keys belonging to our customers could not have been leaked.</p>
+<p>However, the memory space being leaked did still contain sensitive information. One obvious piece of information that had leaked was a private key used to secure connections between Cloudflare machines.</p>
+<p>When processing HTTP requests for customers’ web sites our edge machines talk to each other within a rack, within a data center, and between data centers for logging, caching, and to retrieve web pages from origin web servers.</p>
+<p>In response to heightened concerns about surveillance activities against Internet companies, we decided in 2013 to encrypt all connections between Cloudflare machines to prevent such an attack even if the machines were sitting in the same rack.</p>
+<p>The private key leaked was the one used for this machine to machine encryption. There were also a small number of secrets used internally at Cloudflare for authentication present.</p>
+<h2 id="externalimpactandcacheclearing">External impact and cache clearing</h2>
+<p>More concerning was that fact that chunks of in-flight HTTP requests for Cloudflare customers were present in the dumped memory. That meant that information that should have been private could be disclosed.</p>
+<p>This included HTTP headers, chunks of POST data (perhaps containing passwords), JSON for API calls, URI parameters, cookies and other sensitive information used for authentication (such as API keys and OAuth tokens).</p>
+<p>Because Cloudflare operates a large, shared infrastructure an HTTP request to a Cloudflare web site that was vulnerable to this problem could reveal information about an unrelated other Cloudflare site.</p>
+<p>An additional problem was that Google (and other search engines) had cached some of the leaked memory through their normal crawling and caching processes. We wanted to ensure that this memory was scrubbed from search engine caches before the public disclosure of the problem so that third-parties would not be able to go hunting for sensitive information.</p>
+<p>Our natural inclination was to get news of the bug out as quickly as possible, but we felt we had a duty of care to ensure that search engine caches were scrubbed before a public announcement.</p>
+<p>The infosec team worked to identify URIs in search engine caches that had leaked memory and get them purged. With the help of Google, Yahoo, Bing and others, we found 770 unique URIs that had been cached and which contained leaked memory. Those 770 unique URIs covered 161 unique domains. The leaked memory has been purged with the help of the search engines.</p>
+<p>We also undertook other search expeditions looking for potentially leaked information on sites like Pastebin and did not find anything.</p>
+<h2 id="somelessons">Some lessons</h2>
+<p>The engineers working on the new HTML parser had been so worried about bugs affecting our service that they had spent hours verifying that it did not contain security problems.</p>
+<p>Unfortunately, it was the ancient piece of software that contained a latent security problem and that problem only showed up as we were in the process of migrating away from it. Our internal infosec team is now undertaking a project to fuzz older software looking for potential other security problems.</p>
+<h2 id="detailedtimeline">Detailed Timeline</h2>
+<p>We are very grateful to our colleagues at Google for contacting us about the problem and working closely with us through its resolution.  All of which occurred without any reports that outside parties had identified the issue or exploited it.</p>
+<p>All times are UTC.</p>
+<p>2017-02-18 0011 Tweet from Tavis Ormandy asking for Cloudflare contact information<br>
+2017-02-18 0032 Cloudflare receives details of bug from Google<br>
+2017-02-18 0040 Cross functional team assembles in San Francisco<br>
+2017-02-18 0119 Email Obfuscation disabled worldwide<br>
+2017-02-18 0122 London team joins<br>
+2017-02-18 0424 Automatic HTTPS Rewrites disabled worldwide<br>
+2017-02-18 0722 Patch implementing kill switch for cf-html parser deployed worldwide</p>
+<p>2017-02-20 2159 SAFE_CHAR fix deployed globally</p>
+<p>2017-02-21 1803 Automatic HTTPS Rewrites, Server-Side Excludes and Email Obfuscation re-enabled worldwide</p>
+<p><em>NOTE: This post was updated to reflect updated information.</em></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/postmortem/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Post Mortem</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/privacy/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Privacy</a>
+        <a href="/tag/bugs/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Bugs</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-27T12:00:00Z">November 27, 2020 12:00PM</p>
+        <a href="/a-byzantine-failure-in-the-real-world/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A Byzantine failure in the real world</h2>
+        </a>
+
+        <p class="gray1 lh-copy">When we review design documents at Cloudflare, we are always on the lookout for Single Points of Failure (SPOFs). In this post, we present a timeline of a real-world incident, and how an interesting failure mode known as a Byzantine fault played a role in a cascading series of events....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/tom-lianza/" class="fw5 f2 black no-underline">Tom Lianza</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/chris-snook/" class="fw5 f2 black no-underline">Chris Snook</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/postmortem/" class="no-underline f1 fw2 blue3 underline-hover">Post Mortem</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/postgres/" class="no-underline f1 fw2 blue3 underline-hover">Postgres</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/outage/" class="no-underline f1 fw2 blue3 underline-hover">Outage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/engineering/" class="no-underline f1 fw2 blue3 underline-hover">Engineering</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-18T02:22:00+01:00">July 18, 2020 2:22AM</p>
+        <a href="/cloudflare-outage-on-july-17-2020/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare outage on July 17, 2020</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today a configuration error in our backbone network caused an outage for Internet properties and Cloudflare services that lasted 27 minutes. We saw traffic drop by about 50% across our network....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/postmortem/" class="no-underline f1 fw2 blue3 underline-hover">Post Mortem</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/outage/" class="no-underline f1 fw2 blue3 underline-hover">Outage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/engineering/" class="no-underline f1 fw2 blue3 underline-hover">Engineering</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-07-12T16:45:21+01:00">July 12, 2019 4:45PM</p>
+        <a href="/details-of-the-cloudflare-outage-on-july-2-2019/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Details of the Cloudflare outage on July 2, 2019</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Almost nine years ago, Cloudflare was a tiny company and I was a customer not an employee. Cloudflare had launched a month earlier and one day alerting told me that my little site, jgc.org, didn’t seem to have working DNS any more....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/postmortem/" class="no-underline f1 fw2 blue3 underline-hover">Post Mortem</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/outage/" class="no-underline f1 fw2 blue3 underline-hover">Outage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-07-02T16:50:00+01:00">July 02, 2019 4:50PM</p>
+        <a href="/cloudflare-outage/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare outage caused by bad software deploy (updated)</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Starting at 1342 UTC today we experienced a global outage across our network that resulted in visitors to Cloudflare-proxied domains being shown 502 errors (“Bad Gateway”). The cause of this outage was deployment of a single misconfigured rule within the Cloudflare Web Application Firewall (WAF)...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/john-graham-cumming/" class="fw5 f2 black no-underline">John Graham-Cumming</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/postmortem/" class="no-underline f1 fw2 blue3 underline-hover">Post Mortem</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/outage/" class="no-underline f1 fw2 blue3 underline-hover">Outage</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/deep-dive/" class="no-underline f1 fw2 blue3 underline-hover">Deep Dive</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

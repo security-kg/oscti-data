@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>So you want to expose Go on the Internet</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/exposing-go-on-the-internet/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="So you want to expose Go on the Internet" />
+    <meta property="og:description" content="Back when crypto/tls was slow and net/http young, the general wisdom was to always put Go servers behind a reverse proxy like NGINX. That&#x27;s not necessary anymore!" />
+    <meta property="og:url" content="https://blog.cloudflare.com/exposing-go-on-the-internet/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/Timeouts.png" />
+    <meta property="article:published_time" content="2016-12-26T14:59:01.000Z" />
+    <meta property="article:modified_time" content="2018-08-27T21:23:07.000Z" />
+    <meta property="article:tag" content="Crypto" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="HTTP2" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="So you want to expose Go on the Internet" />
+    <meta name="twitter:description" content="Back when crypto/tls was slow and net/http young, the general wisdom was to always put Go servers behind a reverse proxy like NGINX. That&#x27;s not necessary anymore!" />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/exposing-go-on-the-internet/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/Timeouts.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Filippo Valsorda" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Crypto, TLS, HTTP2, Security, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@filosottile" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Filippo Valsorda",
+        "image": "https://blog.cloudflare.com/content/images/2018/02/K6rX3ZSn_400x400.jpg",
+        "url": "https://blog.cloudflare.com/author/filippo/",
+        "sameAs": [
+            "https://twitter.com/filosottile"
+        ]
+    },
+    "headline": "So you want to expose Go on the Internet",
+    "url": "https://blog.cloudflare.com/exposing-go-on-the-internet/",
+    "datePublished": "2016-12-26T14:59:01.000Z",
+    "dateModified": "2018-08-27T21:23:07.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/Timeouts.png",
+    "keywords": "Crypto, TLS, HTTP2, Security, Programming",
+    "description": "Back when crypto/tls was slow and net/http young, the general wisdom was to always put Go servers behind a reverse proxy like NGINX. That&#x27;s not necessary anymore!",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-crypto tag-tls tag-http2 tag-security tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-crypto tag-tls tag-http2 tag-security tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">So you want to expose Go on the Internet</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2016-12-26T14:59:01Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 26, 2016 2:59PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/filippo/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/02/K6rX3ZSn_400x400.jpg" alt="Filippo Valsorda" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/filippo" class="fw5 f3 no-underline black mr3">Filippo Valsorda</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><em>This piece was <a href="https://blog.gopheracademy.com/advent-2016/exposing-go-on-the-internet/">originally written</a> for the Gopher Academy advent series. We are grateful to them for allowing us to republish it here.</em></p>
+<p>Back when <code>crypto/tls</code> was slow and <code>net/http</code> young, the general wisdom was to always put Go servers behind a reverse proxy like NGINX. That's not necessary anymore!</p>
+<p>At Cloudflare we recently experimented with exposing pure Go services to the hostile wide area network. With the Go 1.8 release, <code>net/http</code> and <code>crypto/tls</code> proved to be stable, performant and flexible.</p>
+<p>However, the defaults are tuned for local services. In this articles we'll see how to tune and harden a Go server for Internet exposure.</p>
+<h3 id="cryptotls"><code>crypto/tls</code></h3>
+<p>You're not running an insecure HTTP server on the Internet in 2016. So you need <code>crypto/tls</code>. The good news is that it's <a href="https://blog.cloudflare.com/go-crypto-bridging-the-performance-gap/">now really fast</a> (as you've seen in a <a href="https://blog.gopheracademy.com/advent-2016/tls-termination-bench/">previous advent article</a>), and its security track record so far is excellent.</p>
+<p>The default settings resemble the <em>Intermediate</em> recommended configuration of the <a href="https://wiki.mozilla.org/Security/Server_Side_TLS">Mozilla guidelines</a>. However, you should still set <code>PreferServerCipherSuites</code> to ensure safer and faster cipher suites are preferred, and <code>CurvePreferences</code> to avoid unoptimized curves: a client using <code>CurveP384</code> would cause up to a second of CPU to be consumed on our machines.</p>
+<pre><code class="language-go">&amp;tls.Config{
+	// Causes servers to use Go's default ciphersuite preferences,
+	// which are tuned to avoid attacks. Does nothing on clients.
+	PreferServerCipherSuites: true,
+	// Only use curves which have assembly implementations
+	CurvePreferences: []tls.CurveID{
+		tls.CurveP256,
+		tls.X25519, // Go 1.8 only
+	},
+}
+</code></pre>
+<p>If you can take the compatibility loss of the <em>Modern</em> configuration, you should then also set <code>MinVersion</code> and <code>CipherSuites</code>.</p>
+<pre><code class="language-go">	MinVersion: tls.VersionTLS12,
+	CipherSuites: []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // Go 1.8 only
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,   // Go 1.8 only
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+
+		// Best disabled, as they don't provide Forward Secrecy,
+		// but might be necessary for some clients
+		// tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		// tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	},
+</code></pre>
+<p>Be aware that the Go implementation of the CBC cipher suites (the ones we disabled in <em>Modern</em> mode above) is vulnerable to the <a href="https://www.imperialviolet.org/2013/02/04/luckythirteen.html">Lucky13 attack</a>, even if <a href="https://github.com/golang/go/commit/f28cf8346c4ce7cb74bf97c7c69da21c43a78034">partial countermeasures were merged in 1.8</a>.</p>
+<p>Final caveat, all these recommendations apply only to the amd64 architecture, for which <a href="https://blog.cloudflare.com/go-crypto-bridging-the-performance-gap/">fast, constant time implementations</a> of the crypto primitives (AES-GCM, ChaCha20-Poly1305, P256) are available. Other architectures are probably not fit for production use.</p>
+<p>Since this server will be exposed to the Internet, it will need a publicly trusted certificate. You can get one easily and for free thanks to Let's Encrypt and the <a href="https://godoc.org/golang.org/x/crypto/acme/autocert"><code>golang.org/x/crypto/acme/autocert</code></a> package’s <code>GetCertificate</code> function.</p>
+<p>Don't forget to redirect HTTP page loads to HTTPS, and consider <a href="https://www.owasp.org/index.php/HTTP_Strict_Transport_Security_Cheat_Sheet">HSTS</a> if your clients are browsers.</p>
+<pre><code class="language-go">srv := &amp;http.Server{
+	ReadTimeout:  5 * time.Second,
+	WriteTimeout: 5 * time.Second,
+	Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set(&quot;Connection&quot;, &quot;close&quot;)
+		url := &quot;https://&quot; + req.Host + req.URL.String()
+		http.Redirect(w, req, url, http.StatusMovedPermanently)
+	}),
+}
+go func() { log.Fatal(srv.ListenAndServe()) }()
+</code></pre>
+<p>You can use the <a href="https://www.ssllabs.com/ssltest/">SSL Labs test</a> to check that everything is configured correctly.</p>
+<h3 id="nethttp"><code>net/http</code></h3>
+<p><code>net/http</code> is a mature HTTP/1.1 and HTTP/2 stack. You probably know how (and have opinions about how) to use the Handler side of it, so that's not what we'll talk about. We will instead talk about the Server side and what goes on behind the scenes.</p>
+<h3 id="timeouts">Timeouts</h3>
+<p>Timeouts are possibly the most dangerous edge case to overlook. Your service might get away with it on a controlled network, but it will not survive on the open Internet, especially (but not only) if maliciously attacked.</p>
+<p>Applying timeouts is a matter of resource control. Even if goroutines are cheap, file descriptors are always limited. A connection that is stuck, not making progress or is maliciously stalling should not be allowed to consume them.</p>
+<p>A server that ran out of file descriptors will fail to accept new connections with errors like</p>
+<pre><code>http: Accept error: accept tcp [::]:80: accept: too many open files; retrying in 1s
+</code></pre>
+<p>A zero/default <code>http.Server</code>, like the one used by the package-level helpers <code>http.ListenAndServe</code> and <code>http.ListenAndServeTLS</code>, comes with no timeouts. You don't want that.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/12/Timeouts.png" alt="HTTP server phases"></p>
+<p>There are three main timeouts exposed in <code>http.Server</code>: <code>ReadTimeout</code>, <code>WriteTimeout</code> and <code>IdleTimeout</code>. You set them by explicitly using a Server:</p>
+<pre><code class="language-go">srv := &amp;http.Server{
+    ReadTimeout:  5 * time.Second,
+    WriteTimeout: 10 * time.Second,
+    IdleTimeout:  120 * time.Second,
+    TLSConfig:    tlsConfig,
+    Handler:      serveMux,
+}
+log.Println(srv.ListenAndServeTLS(&quot;&quot;, &quot;&quot;))
+</code></pre>
+<p><code>ReadTimeout</code> covers the time from when the connection is accepted to when the request body is fully read (if you do read the body, otherwise to the end of the headers). It's implemented in <code>net/http</code> by calling <code>SetReadDeadline</code> <a href="https://github.com/golang/go/blob/3ba31558d1bca8ae6d2f03209b4cae55381175b3/src/net/http/server.go#L750">immediately after Accept</a>.</p>
+<p>The problem with a <code>ReadTimeout</code> is that it doesn't allow a server to give the client more time to stream the body of a request based on the path or the content. Go 1.8 introduces <code>ReadHeaderTimeout</code>, which only covers up to the request headers. However, there's still no clear way to do reads with timeouts from a Handler. Different designs are being discussed in issue <a href="https://golang.org/issue/16100">#16100</a>.</p>
+<p><code>WriteTimeout</code> normally covers the time from the end of the request header read to the end of the response write (a.k.a. the lifetime of the ServeHTTP), by calling <code>SetWriteDeadline</code> <a href="https://github.com/golang/go/blob/3ba31558d1bca8ae6d2f03209b4cae55381175b3/src/net/http/server.go#L753-L755">at the end of readRequest</a>.</p>
+<p>However, when the connection is over HTTPS, <code>SetWriteDeadline</code> is called <a href="https://github.com/golang/go/blob/3ba31558d1bca8ae6d2f03209b4cae55381175b3/src/net/http/server.go#L1477-L1483">immediately after Accept</a> so that it also covers the packets written as part of the TLS handshake. Annoyingly, this means that (in that case only) <code>WriteTimeout</code> ends up including the header read and the first byte wait.</p>
+<p>Similarly to <code>ReadTimeout</code>, <code>WriteTimeout</code> is absolute, with no way to manipulate it from a Handler (<a href="https://golang.org/issue/16100">#16100</a>).</p>
+<p>Finally, Go 1.8 <a href="https://github.com/golang/go/issues/14204">introduces <code>IdleTimeout</code></a> which limits server-side the amount of time a Keep-Alive connection will be kept idle before being reused. Before Go 1.8, the <code>ReadTimeout</code> would start ticking again immediately after a request completed, making it very hostile to Keep-Alive connections: the idle time would consume time the client should have been allowed to send the request, causing unexpected timeouts also for fast clients.</p>
+<p>You should set <code>Read</code>, <code>Write</code> and <code>Idle</code> timeouts when dealing with untrusted clients and/or networks, so that a client can't hold up a connection by being slow to write or read.</p>
+<p>For detailed background on HTTP/1.1 timeouts (up to Go 1.7) read <a href="https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/">my post on the Cloudflare blog</a>.</p>
+<h4 id="http2">HTTP/2</h4>
+<p>HTTP/2 is enabled automatically on any Go 1.6+ server if:</p>
+<ul>
+<li>the request is served over TLS/HTTPS</li>
+<li><code>Server.TLSNextProto</code> is <code>nil</code> (setting it to an empty map is how you disable HTTP/2)</li>
+<li><code>Server.TLSConfig</code> is set and <code>ListenAndServeTLS</code> is used  <strong>or</strong></li>
+<li><code>Serve</code> is used and <code>tls.Config.NextProtos</code> includes <code>&quot;h2&quot;</code> (like <code>[]string{&quot;h2&quot;, &quot;http/1.1&quot;}</code>, since <code>Serve</code> is called <a href="https://github.com/golang/go/issues/15908">too late to auto-modify the TLS Config</a>)</li>
+</ul>
+<p>HTTP/2 has a slightly different meaning since the same connection can be serving different requests at the same time, however, they are abstracted to the same set of Server timeouts in Go.</p>
+<p>Sadly, <code>ReadTimeout</code> breaks HTTP/2 connections in Go 1.7. Instead of being reset for each request it's set once at the beginning of the connection and never reset, breaking all HTTP/2 connections after the <code>ReadTimeout</code> duration. <a href="https://github.com/golang/go/issues/16450">It's fixed in 1.8</a>.</p>
+<p>Between this and the inclusion of idle time in <code>ReadTimeout</code>, my recommendation is to <strong>upgrade to 1.8 as soon as possible</strong>.</p>
+<h4 id="tcpkeepalives">TCP Keep-Alives</h4>
+<p>If you use <code>ListenAndServe</code> (as opposed to passing a <code>net.Listener</code> to <code>Serve</code>, which offers zero protection by default) a TCP Keep-Alive period of three minutes <a href="https://github.com/golang/go/blob/61db2e4efa2a8f558fd3557958d1c86dbbe7d3cc/src/net/http/server.go#L3023-L3039">will be set automatically</a>. That <em>will</em> help with clients that disappear completely off the face of the earth leaving a connection open forever, but I’ve learned not to trust that, and to set timeouts anyway.</p>
+<p>To begin with, three minutes might be too high, which you can solve by implementing your own <a href="https://github.com/golang/go/blob/61db2e4efa2a8f558fd3557958d1c86dbbe7d3cc/src/net/http/server.go#L3023-L3039"><code>tcpKeepAliveListener</code></a>.</p>
+<p>More importantly, a Keep-Alive only makes sure that the client is still responding, but does not place an upper limit on how long the connection can be held. A single malicious client can just open as many connections as your server has file descriptors, hold them half-way through the headers, respond to the rare keep-alives, and effectively take down your service.</p>
+<p>Finally, in my experience connections tend to leak anyway until <a href="https://github.com/FiloSottile/Heartbleed/commit/4a3332ca1dc07aedf24b8540857792f72624cdf7">timeouts are in place</a>.</p>
+<h3 id="servemux">ServeMux</h3>
+<p>Package level functions like <code>http.Handle[Func]</code> (and maybe your web framework) register handlers on the global <code>http.DefaultServeMux</code> which is used if <code>Server.Handler</code> is nil. You should avoid that.</p>
+<p>Any package you import, directly or through other dependencies, has access to <code>http.DefaultServeMux</code> and might register routes you don't expect.</p>
+<p>For example, if any package somewhere in the tree imports <code>net/http/pprof</code> clients will be able to get CPU profiles for your application. You can still use <code>net/http/pprof</code> by registering <a href="https://github.com/golang/go/blob/1106512db54fc2736c7a9a67dd553fc9e1fca742/src/net/http/pprof/pprof.go#L67-L71">its handlers</a> manually.</p>
+<p>Instead, instantiate an <code>http.ServeMux</code> yourself, register handlers on it, and set it as <code>Server.Handler</code>. Or set whatever your web framework exposes as <code>Server.Handler</code>.</p>
+<h3 id="logging">Logging</h3>
+<p><code>net/http</code> does a number of things before yielding control to your handlers: <a href="https://github.com/golang/go/blob/1106512db54fc2736c7a9a67dd553fc9e1fca742/src/net/http/server.go#L2631-L2653"><code>Accept</code>s the connections</a>, <a href="https://github.com/golang/go/blob/1106512db54fc2736c7a9a67dd553fc9e1fca742/src/net/http/server.go#L1718-L1728">runs the TLS Handshake</a>, ...</p>
+<p>If any of these go wrong a line is written directly to <code>Server.ErrorLog</code>. Some of these, like timeouts and connection resets, are expected on the open Internet. It's not clean, but you can intercept most of those and turn them into metrics by matching them with regexes from the Logger Writer, thanks to this guarantee:</p>
+<blockquote>
+<p>Each logging operation makes a single call to the Writer's Write method.</p>
+</blockquote>
+<p>To abort from inside a Handler without logging a stack trace you can either <code>panic(nil)</code> or in Go 1.8 <code>panic(http.ErrAbortHandler)</code>.</p>
+<h3 id="metrics">Metrics</h3>
+<p>A metric you'll want to monitor is the number of open file descriptors. <a href="https://github.com/prometheus/client_golang/blob/575f371f7862609249a1be4c9145f429fe065e32/prometheus/process_collector.go">Prometheus does that by using the <code>proc</code> filesystem</a>.</p>
+<p>If you need to investigate a leak, you can use the <code>Server.ConnState</code> hook to get more detailed metrics of what stage the connections are in. However, note that there is no way to keep a correct count of <code>StateActive</code> connections without keeping state, so you'll need to maintain a <code>map[net.Conn]ConnState</code>.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>The days of needing NGINX in front of all Go services are gone, but you still need to take a few precautions on the open Internet, and probably want to upgrade to the shiny, new Go 1.8.</p>
+<p>Happy serving!</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/http2/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTP2</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-04-09T12:00:00+01:00">April 09, 2020 12:00PM</p>
+        <a href="/internship-experience-cryptography-engineer/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Internship Experience: Cryptography Engineer</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Back in the summer of 2017 I was an intern at Cloudflare. During the scholastic year I was a grad student working on automorphic forms and computational Langlands at Berkeley....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/watson/" class="fw5 f2 black no-underline">Watson Ladd</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/engineering/" class="no-underline f1 fw2 blue3 underline-hover">Engineering</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/internships/" class="no-underline f1 fw2 blue3 underline-hover">Internships</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/careers/" class="no-underline f1 fw2 blue3 underline-hover">Careers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-12-25T17:42:02Z">December 25, 2018 5:42PM</p>
+        <a href="/christmas-cryptography-challenges-2019/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Concise Christmas Cryptography Challenges 2019</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've put together some Christmas Cryptography questions. Do you think you can solve them?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/junade-ali/" class="fw5 f2 black no-underline">Junade Ali</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/louis-poinsignon/" class="fw5 f2 black no-underline">Louis Poinsignon</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cryptography/" class="no-underline f1 fw2 blue3 underline-hover">Cryptography</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/holidays/" class="no-underline f1 fw2 blue3 underline-hover">Holidays</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/fun/" class="no-underline f1 fw2 blue3 underline-hover">Fun</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-08-11T00:00:00+01:00">August 11, 2018 12:00AM</p>
+        <a href="/rfc-8446-aka-tls-1-3/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A Detailed Look at RFC 8446 (a.k.a. TLS 1.3)</h2>
+        </a>
+
+        <p class="gray1 lh-copy">TLS 1.3 (RFC 8446) was published today. This article provides a deep dive into the changes introduced in TLS 1.3 and its impact on the future of internet security....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/encryption/" class="no-underline f1 fw2 blue3 underline-hover">Encryption</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls-1-3/" class="no-underline f1 fw2 blue3 underline-hover">TLS 1.3</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/https/" class="no-underline f1 fw2 blue3 underline-hover">HTTPS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-06-05T15:46:17+01:00">June 05, 2018 3:46PM</p>
+        <a href="/welcome-hidden-resolver/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing DNS Resolver for Tor</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As was mentioned in the original 1.1.1.1 blog post, our policy is to never write client IP addresses to disk and wipe all logs within 24 hours. Still some folks might not want to reveal their IP address to the resolver at all. This is why we are launching a Tor hidden service for our resolver....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/mahrud/" class="fw5 f2 black no-underline">Mahrud Sayrafi</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/1-1-1-1/" class="no-underline f1 fw2 blue3 underline-hover">1.1.1.1</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tor/" class="no-underline f1 fw2 blue3 underline-hover">Tor</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/privacy/" class="no-underline f1 fw2 blue3 underline-hover">Privacy</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

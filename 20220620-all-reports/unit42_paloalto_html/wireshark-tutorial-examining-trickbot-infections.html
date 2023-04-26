@@ -1,0 +1,671 @@
+
+<!doctype html>
+<html >
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-16x16.png">
+	<link rel="manifest" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/site.webmanifest">
+	<link rel="mask-icon" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/safari-pinned-tab.svg" color="#000000">
+	<meta name="msapplication-TileColor" content="#000000">
+	<meta name="theme-color" content="#000">
+  <title>Wireshark Tutorial: Examining Trickbot Infections</title>
+<link rel="alternate" hreflang="en" href="https://unit42.paloaltonetworks.com/wireshark-tutorial-examining-trickbot-infections/" />
+<link rel="alternate" hreflang="ja" href="https://unit42.paloaltonetworks.jp/wireshark-tutorial-examining-trickbot-infections/" />
+
+<!-- This site is optimized with the Yoast SEO plugin v12.6.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<meta name="robots" content="max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<link rel="canonical" href="https://unit42.paloaltonetworks.com/wireshark-tutorial-examining-trickbot-infections/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Wireshark Tutorial: Examining Trickbot Infections" />
+<meta property="og:description" content="A tutorial offering tips on how to identify Trickbot, an information stealer and banking malware that has been infecting victims since 2016." />
+<meta property="og:url" content="https://unit42.paloaltonetworks.com/wireshark-tutorial-examining-trickbot-infections/" />
+<meta property="og:site_name" content="Unit42" />
+<meta property="article:tag" content="banking" />
+<meta property="article:tag" content="infection" />
+<meta property="article:tag" content="malware" />
+<meta property="article:tag" content="pcap" />
+<meta property="article:tag" content="Trickbot" />
+<meta property="article:tag" content="tutorial" />
+<meta property="article:tag" content="Wireshark" />
+<meta property="article:tag" content="Wireshark Tutorial" />
+<meta property="article:section" content="Unit 42" />
+<meta property="article:published_time" content="2019-11-08T14:00:18+00:00" />
+<meta property="article:modified_time" content="2020-08-25T21:20:45+00:00" />
+<meta property="og:updated_time" content="2020-08-25T21:20:45+00:00" />
+<meta property="og:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-1024x512.png" />
+<meta property="og:image:secure_url" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-1024x512.png" />
+<meta property="og:image:width" content="1024" />
+<meta property="og:image:height" content="512" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:description" content="A tutorial offering tips on how to identify Trickbot, an information stealer and banking malware that has been infecting victims since 2016." />
+<meta name="twitter:title" content="Wireshark Tutorial: Examining Trickbot Infections" />
+<meta name="twitter:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2.png" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel='dns-prefetch' href='//www.google.com' />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel="alternate" type="application/rss+xml" title="Unit42 &raquo; Wireshark Tutorial: Examining Trickbot Infections Comments Feed" href="https://unit42.paloaltonetworks.com/wireshark-tutorial-examining-trickbot-infections/feed/" />
+<meta property="og:likes" content="38"/>
+<meta property="og:readtime" content="10"/>
+<meta property="og:views" content="45,942"/>
+<meta property="og:date_created" content="November 8, 2019 at 6:00 AM"/>
+<meta property="og:post_length" content="2172"/>
+<meta property="og:category" content="Unit 42"/>
+<meta property="og:category_link" content="https://unit42.paloaltonetworks.com/category/unit-42/"/>
+<meta property="og:author" content="Brad Duncan"/>
+<meta property="og:authorlink" content="https://unit42.paloaltonetworks.com/author/bduncan/"/>
+<meta property="og:author_image_link" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2017/09/Duncan-bio-picture-1-copy-150x150.jpg"/>
+<meta property="og:post_image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-380x184.png"/>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"BlogPosting","headline":"Wireshark Tutorial: Examining Trickbot Infections","name":"Wireshark Tutorial: Examining Trickbot Infections","description":"A tutorial offering tips on how to identify Trickbot, an information stealer and banking malware that has been infecting victims since 2016. ","url":"https:\/\/unit42.paloaltonetworks.com\/wireshark-tutorial-examining-trickbot-infections\/","mainEntityOfPage":"https:\/\/unit42.paloaltonetworks.com\/wireshark-tutorial-examining-trickbot-infections\/","datePublished":"November 8, 2019","articleBody":"Executive Summary\r\nWhen a host is infected or otherwise compromised, security professionals with access to packet captures (pcaps) of the network traffic need to understand the activity and identify the type of infection.\r\n\r\nThis tutorial offers tips on how to identify Trickbot, an information stealer and banking malware that has been infecting victims since 2016. Trickbot is distributed through malicious spam (malspam), and it is also distributed by other malware such as Emotet, IcedID, or Ursnif.\r\n\r\nTrickbot has distinct traffic patterns. This tutorial reviews pcaps of Trickbot infections caused by two different methods: a Trickbot infection from malspam and Trickbot when it is distributed through other malware.\r\n\r\nNote: Today\u2019s tutorial requires Wireshark with a column display customized according to this previous tutorial. You should already have implemented Wireshark display filters as described here.\r\nTrickbot from malspam\r\nTrickbot is often distributed through malspam. Emails from these campaigns contain links to download malicious files disguised as invoices or documents. These files may be Windows executable files for Trickbot, or they may be some sort of downloader for the Trickbot executable. In some cases, links from these emails return a zip archive that contains a Trickbot executable or downloader.\r\n\r\nFigure 1 shows an example from September 2019. In this example, the email contained a link that returned a zip archive. The zip archive contained a Windows shortcut file that downloaded a Trickbot executable. A pcap for the associated Trickbot infection is available here.\r\n\r\nFigure 1: Flowchart from a Trickbot infection from malspam in September 2019.\r\nDownload the pcap from this page. The pcap is contained in a password-protected zip archive named 2019-09-25-Trickbot-gtag-ono19-infection-traffic.pcap.zip. Extract the pcap from the zip archive using the password infected and open it in Wireshark. Use your basic filter to review the web-based infection traffic as shown in Figure 2.\r\nFigure 2: Pcap of the Trickbot infection viewed in Wireshark.\r\nReview the traffic, and you will find the following activity common in recent Trickbot infections:\r\n\r\n \tAn IP address check by the infected Windows host\r\n \tHTTPS\/SSL\/TLS traffic over TCP ports 447 and 449\r\n \tHTTP traffic over TCP port 8082\r\n \tHTTP requests ending in .png that return Windows executable files\r\n\r\nUnique to this Trickbot infection is an HTTP request to www.dchristjan[.]com that returned a zip archive and an HTTP request to 144.91.69[.]195 that returned a Windows executable file. Follow the HTTP stream for the request to www.dchristjan[.]com as shown in Figure 3 to review the traffic. In the HTTP stream, you will find indicators that a zip archive was returned as shown in Figure 4.\r\nFigure 3: Following the HTTP stream for the request to www.dchristjan[.]com.\r\nFigure 4: Indicators the HTTP request returned a zip archive.\r\nIn Figure 4, you can also see the name of the file contained in the zip archive, InvoiceAndStatement.lnk. You can export the zip archive from the traffic using Wireshark as shown in Figure 5 and Figure 6 using the following path:\r\n\r\n\u00a0 \u00a0 \u00a0File \u2192 Export Objects \u2192 HTTP\u2026\r\nFigure 5: Exporting HTTP objects from the pcap.\r\n\r\nFigure 6: Exporting the zip archive from the pcap.\r\nIn a BSD, Linux, or Mac environment, you can easily confirm the extracted file is a zip archive, get the SHA256 hash of the file, and extract the contents of the archive in a command line environment. In this case, the content is a Windows shortcut file, which you can also confirm and get the SHA256 hash as shown in Figure 7.\r\n\r\nThe command to identify the file type is file [filename], while the command to find the SHA256 hash of the file is shasum -a 256 [filename].\r\nFigure 7: Checking the extracted zip archive and its contents.\r\nAn HTTP request to 144.91.69[.]195 returned a Windows executable file. This is the initial Windows executable for Trickbot. You can follow the HTTP stream for this HTTP request and find indicators this is an executable file as shown in Figure 8 and Figure 9. You can extract the executable file from the pcap as shown in Figure 10.\r\nFigure 8: Following the HTTP stream for the HTTP request to 144.91.69[.]195.\r\nFigure 9: Indicators the returned file is a Windows executable or DLL file.\r\nFigure 10: Exporting the Windows executable from the pcap.\r\nPost infection traffic initially consists of HTTPS\/SSL\/TLS traffic over TCP port 443, 447, or 449 and an IP address check by the infected Windows host. In this infection, shortly after the HTTP request for the Trickbot executable, we can see several attempted TCP connections over port 443 to different IP addresses before the successful TCP connection to 187.58.56[.]26 over TCP port 449. If you use your basic+ filter, you can see these attempted connections as shown in Figure 11 and Figure 12.\r\nFigure 11: Attempted TCP connections over port 443 by the infected Windows host.\r\nFigure 12: Scrolling down to see more TCP connections over port 443 before a successful connection to 187.58.56[.]26 over TCP port 449.\r\nThe HTTPS\/SSL\/TLS traffic to various IP addresses over TCP port 447 and TCP port 449 has unusual certificate data. We can review the certificate issuer by filtering on ssl.handshake.type == 11 when using Wireshark 2.x or tls.handshake.type == 11 when using Wireshark 3.x. Then go to the frame details section and expand the information, finding your way to the certificate issuer data as seen in Figure 13 and Figure 14.\r\nFigure 13: Filtering for the certificate data in the HTTPS\/SSL\/TLS traffic, then expanding lines the frame details for the first result under TCP port 449.\r\nFigure 14: Drilling down to the certificate issuer data on the first result over TCP port 449.\r\nIn Figure 14, we see the following certificate issuer data used in HTTPS\/SSL\/TLS traffic to 187.58.56[.]26 over TCP port 449:\r\n\r\n \tid-at-countryName=AU\r\n \tid-at-stateOrProvinceName=Some-State\r\n \tid-at-organizationName=Internet Widgits Pty Ltd\r\n\r\nThe state or province name (Some-State) and the organization name (Internet Widgits Pty Ltd) are not used for legitimate HTTPS\/SSL\/TLS traffic. This is an indicator of malicious traffic, and this type of unusual certificate issuer data is not limited to Trickbot. What does a normal certificate issuer look like in legitimate HTTPS\/SSL\/TLS traffic? If we look at earlier traffic to Microsoft domains at 72.21.81.200 over TCP port 443, we find the following as seen in Figure 15.\r\n\r\n \tid-at-countryName=US\r\n \tid-at-stateOrProvinceName=Washington\r\n \tid-at-localityName=Redmond\r\n \tid-at-organizationName=Microsoft Corporation\r\n \tid-at-organizationUnitName=Microsoft IT\r\n \tid-at-commonName=Microsoft IT TLS CA 2\r\n\r\nFigure 15: Certificate data from legitimate HTTPS traffic to a Microsoft domain.\r\nThe Trickbot-infected Windows host will check its IP address using a number of different IP address checking sites. These sites are not malicious, and the traffic is not inherently malicious. However, this type of IP address check is common with Trickbot and other families of malware. Various legitimate IP address checking services used by Trickbot include:\r\n\r\n \tapi.ip[.]sb\r\n \tcheckip.amazonaws[.]com\r\n \ticanhazip[.]com\r\n \tident[.]me\r\n \tip.anysrc[.]net\r\n \tipecho[.]net\r\n \tipinfo[.]io\r\n \tmyexternalip[.]com\r\n \twtfismyip[.]com\r\n\r\nAgain, an IP address check by itself is not malicious. However, this type of activity combined with other network traffic can provide indicators of an infection, like we see in this case.\r\nFigure 16: IP address check by the infected Windows host, right after HTTPS\/SSL\/TLS traffic over TCP port 449. Not inherently malicious, but this is part of a Trickbot infection.\r\nA Trickbot infection currently generates HTTP traffic over TCP port 8082 this traffic sends information from the infected host like system information and passwords from the browser cache and email clients. This information is sent from the infected host to command and control servers used by Trickbot.\r\n\r\nTo review this traffic, use the following Wireshark filter:\r\n\r\nhttp.request and tcp.port eq 8082\r\n\r\nThis reveals the following HTTP requests as seen in Figure 17:\r\n\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/81\/\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/83\/\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/81\/\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187:8082 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/81\/\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187:8082 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/90\r\n \t170.238.117[.]187 port 8082 - 170.238.117[.]187:8082 - POST\r\n\/ono19\/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946\r\nE42\/90\r\n\r\nFigure 17: HTTP traffic over TCP port 8082 caused by Trickbot.\r\nHTTP POST requests ending in 81 send cached password data from web browsers, email clients, and other applications. HTTP POST requests ending in 83 send form data submitted by applications like web browsers. We can find system information sent through HTTP POST requests ending in 90. Follow the TCP or HTTP streams for any of these HTTP POST requests to review data stolen by this infection.\r\nFigure 18: Login credentials stolen by Trickbot from the Chrome web browser. This data was sent by the Trickbot-infected host using HTTP traffic over TCP port 8082.\r\nFigure 19: System data sent by a Trickbot-infected host using HTTP traffic over TCP port 8082. It starts with a list of running processes.\r\nFigure 20: More system data sent by a Trickbot-infected host using HTTP traffic over TCP port 8082. This is later from the same HTTP stream that started in Figure 19.\r\nTrickbot sends more Windows executable files over HTTP GET requests ending in .png. These follow-up Trickbot executables are used to infect a vulnerable domain controller (DC) when the infected Windows host is a client in an Active Directory environment.\r\n\r\nYou can find these URLs in the pcap by using the following Wireshark filter:\r\n\r\n\u00a0 \u00a0 \u00a0http.request and ip contains .png\r\nFigure 21: Filtering to find follow-up Trickbot EXE files sent using URLs ending with .png.\r\nFollow the TCP or HTTP stream in each of the three requests as shown in Figure 21. You should see indicators of windows executable files similar to what we saw in Figure 9. However, in this case, the HTTP response headers identify the returned file as image\/png even though it clearly is a Windows executable or DLL file.\r\nFigure 22: Windows executable sent through URL ending in .png.\r\nYou can export these files from Wireshark, confirm they are Windows executable files, and get the SHA256 file hashes as we covered earlier in this tutorial.\r\nTrickbot Distributed Through Other Malware\r\nTrickbot is frequently distributed through other malware. Trickbot is commonly seen as follow-up malware to Emotet infections, but we have also seen it as follow-up malware from IcedID and Ursnif infections\r\n\r\nSince Emotet frequently distributes Trickbot, lets review an Emotet with Trickbot infection in September 2019 documented here. We already covered Emotet with Trickbot infections last year in this Palo Alto Networks blog post, so this tutorial will focus on the Trickbot activity.\r\n\r\nFigure 23: Simplified flow chart for Emotet with Trickbot activity.\r\nDownload the pcap from this page. The pcap is contained in a password-protected zip archive named 2019-09-25-Emotet-infection-with-Trickbot-in-AD-environment.pcap.zip. Extract the pcap from the zip archive using the password infected and open it in Wireshark. Use your basic filter to review the web-based infection traffic as shown in Figure 24.\r\nFigure 24: Filtering on web traffic in an Emotet+Trickbot infection.\r\nExperienced analysts can usually identify the Emotet-generated traffic and the Trickbot-generated traffic. Post-infection Emotet activity consists HTTP traffic with encoded data returned by the server. This is distinctly different than post-infection Trickbot activity which generally relies on HTTPS\/SSL\/TLS traffic for command and control communications. Figure 25 points out the different infection traffic between Emotet and Trickbot for this specific infection.\r\nFigure 25: The differences in Emotet and Trickbot traffic.\r\nThis infection happened in an Active Directory environment with 10.9.25.102 as the infected Windows client and 10.9.25.9 as the DC. Later in the traffic, we see the DC exhibit signs of Trickbot infection as shown in Figure 26.\r\nFigure 26: Trickbot activity on the DC.\r\nHow did the infection move from client to DC? Trickbot uses a version of the EternalBlue exploit to move laterally using Microsoft\u2019s SMB protocol. In this case, the infected Windows client sent information several times over TCP port 445 to the DC at 10.9.25.9, which then retrieved a Trickbot executable from 185.98.87[.]185\/wredneg2.png. Use the basic+ filter to see the SYN segments for the traffic between the client at 10.9.25.102 and the DC at 10.9.25.9 right before the DC calls out to 185.98.87[.]185 as shown in Figure 27\r\nFigure 27: Finding traffic from the client at 10.9.25.102) to the DC at 10.9.25.9 (shown in grey) before the DC retrieved a Trickbot EXE from 196.98.87[.]185\/wredneg2.png.\r\nFollow one of the TCP streams, for example the line with a source as 10.9.25.102 over TCP port 49321 and destination as 10.9.35.9 over TCP port 445. This is highly unusual traffic for a client to send to a DC, so it is likely related to the EternalBlue exploit. See Figure 28 for an example of this traffic\r\nFigure 28: Example of the unusual traffic from a client to DC over TCP port 445, possibly related to an EternalBlue-based exploit.\r\nOther than this unusual SMB traffic and the DC getting infected, any Trickbot-specific activity in this pcap is remarkably similar to our previous example.\r\nConclusion\r\nThis tutorial provided tips for examining Windows infections with Trickbot malware by reviewing two pcaps from September 2019. More pcaps with recent examples of Trickbot activity can be found at malware-traffic-analysis.net.\r\n\r\nFor more help with Wireshark, see our previous tutorials:\r\n\r\n \tCustomizing Wireshark - Changing Your Column Display\r\n \tUsing Wireshark - Display Filter Expressions\r\n \tUsing Wireshark: Identifying Hosts and Users\r\n \tUsing Wireshark: Exporting Objects from a Pcap\r\n\r\n&nbsp;","publisher":{"@type":"Organization","@id":"#panworg"},"image":{"@type":"ImageObject","url":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/uploads\/2019\/10\/Vulnerability-r3d2-150x150.png","width":150,"height":150},"author":[{"@type":"Person","name":"Brad Duncan"}]}</script><link rel='stylesheet' id='crayon-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/css/min/crayon.min.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='wp-block-library-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dist/block-library/style.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='dashicons-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dashicons.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='post-views-counter-frontend-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/post-views-counter/css/frontend.css?ver=1.3.1' type='text/css' media='all' />
+<link rel='stylesheet' id='bodhi-svgs-attachment-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/svg-support/css/svgs-attachment.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-horizontal-list-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-list-horizontal/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-post-translations-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-post-translations/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wordpress-popular-posts-css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/css/wpp.css?ver=5.0.1' type='text/css' media='all' />
+<link rel='stylesheet' id='unit42/css-css'  href='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/styles/main.css' type='text/css' media='all' />
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery.js?ver=1.12.4-wp'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery-migrate.min.js?ver=1.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","ajaxurl":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":""};
+var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/js/min/crayon.min.js?ver=_2.7.2_beta'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpp_params = {"sampling_active":"0","sampling_rate":"100","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-json\/wordpress-popular-posts\/v1\/popular-posts","ID":"100828","token":"b09d8c8c9d","debug":""};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/js/wpp-5.0.0.min.js?ver=5.0.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpml_xdomain_data = {"css_selector":"wpml-ls-item","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","current_lang":"en"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/res/js/xdomain-data.js?ver=4.3.5'></script>
+<link rel='https://api.w.org/' href='https://unit42.paloaltonetworks.com/wp-json/' />
+<link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://unit42.paloaltonetworks.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://unit42.paloaltonetworks.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.4.1" />
+<link rel='shortlink' href='https://unit42.paloaltonetworks.com/?p=100828' />
+<link rel="alternate" type="application/json+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fwireshark-tutorial-examining-trickbot-infections%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fwireshark-tutorial-examining-trickbot-infections%2F&#038;format=xml" />
+<meta name="generator" content="WPML ver:4.3.5 stt:1,28;" />
+<meta name="google-site-verification" content="zHZtYOWm9hm4SZgsH7wqiYcOwmsAsxDUDU4UD1QxB40" /><style>#wpdevart_lb_overlay{background-color:#000000;} #wpdevart_lb_overlay.wpdevart_opacity{opacity:0.8 !important;} #wpdevart_lb_main_desc{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;} #wpdevart_lb_information_content{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;}
+		#wpdevart_lb_information_content{
+			width:100%;	
+		}
+		#wpdevart_info_counter_of_imgs{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_caption{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_title{
+			    display: inline-block;
+				padding-left:5px;
+				padding-right:5px;
+				font-size:15px;
+				color:#000000;
+		}
+		@-webkit-keyframes rotate {
+			to   {-webkit-transform: rotate(360deg);}
+			from  {-webkit-transform: rotate(0deg);}
+		}
+		@keyframes rotate {
+			to   {transform: rotate(360deg);}
+			from  {transform: rotate(0deg);}
+		}
+		#wpdevart_lb_loading_img,#wpdevart_lb_loading_img_first{
+			-webkit-animation: rotate 2s linear  infinite;
+    		animation: rotate 2s linear infinite;
+		}
+	  </style>        <script>var $ = jQuery;</script>
+  
+  
+<script type="text/javascript">
+;(function(win, doc, style, timeout) {
+var STYLE_ID = 'at-body-style';
+function getParent() {
+return doc.getElementsByTagName('head')[0];
+}
+function addStyle(parent, id, def) {
+if (!parent) {
+return;
+}
+var style = doc.createElement('style');
+style.id = id;
+style.innerHTML = def;
+parent.appendChild(style);
+}
+function removeStyle(parent, id) {
+if (!parent) {
+return;
+}
+var style = doc.getElementById(id);
+if (!style) {
+return;
+}
+parent.removeChild(style);
+}
+addStyle(getParent(), STYLE_ID, style);
+setTimeout(function() {
+removeStyle(getParent(), STYLE_ID);
+}, timeout);
+}(window, document, "body {visibility:hidden !important}", 3000));
+</script>
+
+<script src="//assets.adobedtm.com/9273d4aedcd2/0d76ae0322d7/launch-425c423d843b.min.js" async></script>
+<script type="text/javascript" src="https://www.paloaltonetworks.com/content/dam/pan/en_US/includes/attribution.js"></script>
+  </head>
+  <body class="post-template-default single single-post postid-100828 single-format-standard">
+    <!--[if IE]>
+      <div class="alert alert-warning">
+        You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.      </div>
+    <![endif]-->
+    <header class="haeder py-15 position-relative z-index-2">
+  <div class="container px-sm-30 px-35">
+    <div class="row">
+      <div class="first-logo col-sm-auto col-6 mb-sm-0 mb-40 text-sm-center order-1">
+                  <a href="https://www.paloaltonetworks.com/">
+<!--<img src="/wp-content/uploads/2019/07/paloaltonetwork.svg" class="attachment-full size-full" alt="" height="43" width="124" />-->
+<svg width="140" height="26" viewBox="0 0 140 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M59.4802 4.69592C57.6721 4.69592 55.7937 5.18876 53.469 6.43377L54.7605 9.62741C56.7794 8.50019 58.447 8.00735 59.6682 8.00735C61.0538 8.00735 61.6644 8.52395 61.6644 9.20483V9.25133C61.6644 9.72143 61.2883 9.97974 60.3729 10.0738L58.7766 10.238C54.7843 10.6606 53.1404 12.3985 53.1404 14.7934V14.9577C53.1404 17.2359 55.0188 19.0203 57.6721 19.0203C59.4192 19.0203 60.937 18.2826 61.8597 16.9807L62.1572 18.7857H65.7734V10.5904C65.7734 6.71584 63.5428 4.69592 59.4802 4.69592ZM59.1279 15.8969C57.7899 15.8969 57.1555 15.3803 57.1555 14.5816V14.5351C57.1555 13.8305 57.5543 13.3139 59.0101 13.1031L59.6445 13.0091C60.5713 12.8799 61.1406 12.7095 61.6644 12.3923V13.4317C61.6644 15.0052 60.6777 15.8969 59.1279 15.8969Z" fill="white"/>
+<path d="M25.4785 4.78994L20.8528 0.164276L16.2271 4.78994L18.5281 7.09192L6.92828 18.6917L11.5539 23.3174L16.1796 18.6917L13.8787 16.3908L25.4785 4.78994Z" fill="white"/>
+<path d="M11.6001 0.164048L0 11.7642L4.62603 16.3902L16.2262 4.79008L11.6001 0.164048Z" fill="white"/>
+<path d="M27.7794 7.09215L16.1793 18.6923L20.8053 23.3183L32.4054 11.7182L27.7794 7.09215Z" fill="white"/>
+<path d="M72.231 0H68.1219V18.7857H72.231V0Z" fill="white"/>
+<path d="M46.2366 4.69592C44.3685 4.69592 42.8683 5.52249 42.0428 6.81709L41.7287 4.93046H38.1125V23.4806H42.2215V17.051C43.0037 18.2567 44.4832 19.0193 46.2366 19.0193C49.5242 19.0193 52.2013 16.1077 52.2013 12.0916V11.6215C52.2013 7.60853 49.5242 4.69592 46.2366 4.69592ZM47.9744 11.9759C47.9744 14.0888 46.871 15.6159 45.0391 15.6159C43.2072 15.6159 42.1038 14.0898 42.1038 11.9759V11.7414C42.1038 9.62741 43.2072 8.10137 45.0391 8.10137C46.871 8.10137 47.9744 9.62741 47.9744 11.7414V11.9759Z" fill="white"/>
+<path d="M127.672 4.69592C123.469 4.69592 120.51 7.6075 120.51 11.6236V12.0937C120.51 16.1087 123.469 19.0213 127.672 19.0213C131.875 19.0213 134.834 16.1097 134.834 12.0937V11.6236C134.834 7.60853 131.875 4.69592 127.672 4.69592ZM130.607 11.9759C130.607 14.0888 129.504 15.6159 127.672 15.6159C125.84 15.6159 124.736 14.0898 124.736 11.9759V11.7414C124.736 9.62741 125.84 8.10137 127.672 8.10137C129.504 8.10137 130.607 9.62741 130.607 11.7414V11.9759Z" fill="white"/>
+<path d="M138.708 5.54211V5.47185C138.708 5.07304 138.404 4.79097 137.863 4.79097H136.924V6.9514H137.37V6.22299H137.866L138.239 6.9514H138.732L138.274 6.09694C138.552 6.01119 138.708 5.80248 138.708 5.54211ZM137.369 5.18979H137.862C138.144 5.18979 138.261 5.28381 138.261 5.49562V5.51938C138.261 5.70742 138.143 5.82418 137.862 5.82418H137.369V5.18979Z" fill="white"/>
+<path d="M137.769 3.63998C136.502 3.63998 135.539 4.60293 135.539 5.87067C135.539 7.13842 136.502 8.10137 137.769 8.10137C139.037 8.10137 140 7.13842 140 5.87067C140 4.60293 139.037 3.63998 137.769 3.63998ZM137.769 7.79554C136.666 7.79554 135.867 6.99687 135.867 5.86964C135.867 4.74241 136.666 3.94375 137.769 3.94375C138.873 3.94375 139.671 4.74241 139.671 5.86964C139.671 6.99687 138.873 7.79554 137.769 7.79554Z" fill="white"/>
+<path d="M108.416 0H104.307V18.7857H108.416V0Z" fill="white"/>
+<path d="M116.518 15.6159C115.321 15.6159 114.874 15.029 114.874 13.7613V8.10137H119.712V4.93149H114.874V1.76058L110.765 2.37121V14.159C110.765 17.3765 112.409 19.0203 115.697 19.0203C117.153 19.0203 118.867 18.5739 120.276 17.7753L119.102 14.8637C118.279 15.31 117.129 15.6159 116.518 15.6159Z" fill="white"/>
+<path d="M95.6662 4.69592C93.8581 4.69592 91.9797 5.18876 89.655 6.43377L90.9465 9.62741C92.9654 8.50019 94.633 8.00735 95.8542 8.00735C97.2397 8.00735 97.8504 8.52395 97.8504 9.20483V9.25133C97.8504 9.72143 97.4743 9.97974 96.5589 10.0738L94.9626 10.238C90.9702 10.6606 89.3264 12.3985 89.3264 14.7934V14.9577C89.3264 17.2359 91.2048 19.0203 93.8581 19.0203C95.6042 19.0203 97.123 18.2826 98.0456 16.9807L98.3432 18.7857H101.959V10.5904C101.959 6.71584 99.7287 4.69592 95.6662 4.69592ZM95.3138 15.8969C93.9748 15.8969 93.3415 15.3803 93.3415 14.5816V14.5351C93.3415 13.8305 93.7403 13.3139 95.1961 13.1031L95.8304 13.0091C96.7572 12.8799 97.3265 12.7095 97.8493 12.3923V13.4317C97.8493 15.0052 96.8637 15.8969 95.3138 15.8969Z" fill="white"/>
+<path d="M81.225 4.69592C77.022 4.69592 74.0629 7.6075 74.0629 11.6236V12.0937C74.0629 16.1087 77.022 19.0213 81.225 19.0213C85.4281 19.0213 88.3872 16.1097 88.3872 12.0937V11.6236C88.3862 7.60853 85.4281 4.69592 81.225 4.69592ZM84.1593 11.9759C84.1593 14.0888 83.0559 15.6159 81.224 15.6159C79.3921 15.6159 78.2887 14.0898 78.2887 11.9759V11.7414C78.2887 9.62741 79.3921 8.10137 81.224 8.10137C83.0559 8.10137 84.1593 9.62741 84.1593 11.7414V11.9759Z" fill="white"/>
+<path d="M98.0446 22.1168H99.0975L100.551 24.0334H100.566V22.1168H101.532V25.4964H100.513L99.0251 23.5313H99.0107V25.4964H98.0446V22.1168Z" fill="white"/>
+<path d="M102.816 22.1168H105.771L105.81 22.9372H103.825V23.4011H105.385V24.1491H103.825V24.676H105.868L105.829 25.4964H102.816V22.1168Z" fill="white"/>
+<path d="M107.925 22.9857H106.742L106.78 22.1168H110.088L110.127 22.9857H108.944V25.4964H107.925V22.9857Z" fill="white"/>
+<path d="M110.943 22.1168H112.024L112.575 24.4632H112.628L113.342 22.1168H114.333L115.033 24.4632H115.086L115.627 22.1168H116.66L115.771 25.4964H114.444L113.826 23.4589H113.797L113.169 25.4964H111.836L110.943 22.1168Z" fill="white"/>
+<path d="M117.404 23.8071C117.404 22.7057 118.152 22.0155 119.335 22.0155C120.518 22.0155 121.267 22.7057 121.267 23.8071C121.267 24.9085 120.519 25.5987 119.335 25.5987C118.152 25.5987 117.404 24.9075 117.404 23.8071ZM120.257 23.8071C120.257 23.2234 119.92 22.8752 119.335 22.8752C118.75 22.8752 118.412 23.2234 118.412 23.8071C118.412 24.3919 118.75 24.7391 119.33 24.7391C119.914 24.7391 120.257 24.3909 120.257 23.8071Z" fill="white"/>
+<path d="M122.363 22.1168H124.334C125.231 22.1168 125.672 22.5414 125.672 23.3287C125.672 23.8691 125.449 24.2369 125.014 24.4105L125.816 25.4974H124.667L124.044 24.6089H123.378V25.4974H122.363V22.1168ZM124.202 23.8164C124.54 23.8164 124.661 23.6284 124.661 23.3721C124.661 23.1159 124.54 22.933 124.202 22.933H123.377V23.8164H124.202Z" fill="white"/>
+<path d="M126.989 22.1168H128.002V23.3628H128.418L129.408 22.1168H130.547L130.552 22.1209L129.259 23.7389L130.625 25.4923L130.62 25.4964H129.437L128.414 24.1977H128.002V25.4964H126.989V22.1168Z" fill="white"/>
+<path d="M131.402 25.2743V24.3475H131.407C131.972 24.6327 132.523 24.7721 133 24.7721C133.363 24.7721 133.546 24.6853 133.546 24.5159C133.546 24.3465 133.425 24.3031 132.7 24.1873C131.909 24.0623 131.382 23.8247 131.382 23.1438C131.382 22.5115 131.938 22.0238 133.024 22.0238C133.459 22.0238 133.912 22.1158 134.333 22.2945V23.212L134.328 23.2172C133.927 22.9857 133.386 22.84 132.951 22.84C132.565 22.84 132.411 22.932 132.411 23.0859C132.411 23.2843 132.648 23.3029 133.242 23.4052C134.033 23.5406 134.56 23.7627 134.56 24.4777C134.56 25.0325 134.145 25.5884 132.952 25.5884C132.364 25.5884 131.894 25.4675 131.402 25.2743Z" fill="white"/>
+</svg>
+
+</a>
+
+      </div>
+
+      <div class="col-sm-auto col-6 text-sm-center order-sm-2 order-4 second-logo-unit">
+        <a href="https://unit42.paloaltonetworks.com/"><img src="/wp-content/uploads/2019/07/unit42.svg" class="attachment-full size-full" alt="" height="35" width="105" /></a>
+      </div>
+
+      <div class="col-auto d-sm-none ml-auto mb-40 order-2">
+        <button class="btn__search" data-toggle="collapse" data-target="#search"><i class="ui ui-1"></i></button>
+      </div>
+
+      <div id="search" class="collapse d-sm-block col-sm-auto col-12 ml-auto order-3">
+        <div class="pt-sm-0 pt-20 pb-sm-0 pb-40 mt-sm-0 mt-n30">
+                      <input type="search" placeholder="Search Unit 42" id="innerSearch" class="header__search" value="" required>
+                  </div>
+      </div>
+
+      <div class="col-auto d-sm-none d-flex ml-auto align-items-center order-5">
+        <button class="btn__menu rounded" data-toggle="collapse" data-target="#navigation">Menu</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="navigation" class="site-nav collapse d-sm-block pb-20 mt-sm-10">
+  <div class="container px-sm-30">
+    <ul id="menu-primary-navigation" class="main-menu d-sm-flex font-weight-medium"><li id="menu-item-97290" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-97290"><a href="https://unit42.paloaltonetworks.com/tools/">Tools</a></li>
+<li id="menu-item-41" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-41"><a href="https://unit42.paloaltonetworks.com/atoms/">ATOMs</a></li>
+<li id="menu-item-98931" class="menu-item menu-item-type-post_type_archive menu-item-object-events menu-item-98931"><a href="https://unit42.paloaltonetworks.com/events/">Speaking Events</a></li>
+<li id="menu-item-81229" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-81229"><a href="https://unit42.paloaltonetworks.com/about-unit-42/">About Us</a></li>
+</ul>  </div>
+</nav>
+
+  <article class="article overflow-hidden">
+    
+<header class="article__header py-sm-25 pt-40 pb-25 bg-gray-700">
+  <div class="container">
+    
+    <h1 class="article__header__title mb-sm-30 mb-40">Wireshark Tutorial: Examining Trickbot Infections</h1>
+
+    <ul class="article__entry-meta d-flex flex-wrap align-items-center text-black">
+      <li class="mr-10 mb-10 px-20 rounded-pill d-flex bg-gray-200"><div class="post-views post-100828 entry-meta">
+			
+			
+			<span class="post-views-count">45,942</span>
+			</div> <span class="ml-5">people reacted</span></li>
+      <li class="d-sm-none col-12 p-0"></li>
+      <li class="mr-10 mb-10 px-20 rounded-pill bg-gray-200"><span class="ldc-ul_cont idc_ul_cont_not_liked_inner" onclick="alter_ul_post_values(this,'100828','like')"><i class="ui ui-2"></i><span class="ml-5">38</span></span></li>
+      <li class="mb-10 px-20 rounded-pill bg-gray-200"><span class="span-reading-time rt-reading-time"><span class="rt-label rt-prefix"></span> <span class="rt-time"> 10</span> <span class="rt-label rt-postfix"></span></span> min. read</li>
+    </ul>
+
+    <div class="article__share position-relative">
+      <div class="dropdown dropdown-right">
+        <button type="button" class="px-25 text-black bg-white text-uppercase rounded-pill" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Share <i class="ui ui-6 ml-10 align-text-top"></i>
+        </button>
+        <div class="dropdown-menu rounded-pill" role="toolbar">
+          <div class="share-dropdown px-20 py-10 text-black font-size-sm">
+            <div class="row align-items-center flex-nowrap">
+              <div class="col">
+                <div class="d-flex align-items-center">
+                  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Funit42.paloaltonetworks.com%2Fwireshark-tutorial-examining-trickbot-infections%2F" target="_blank"><i class="ui ui-7"></i></a>
+                  <a href="https://twitter.com/home?status=https%3A%2F%2Funit42.paloaltonetworks.com%2Fwireshark-tutorial-examining-trickbot-infections%2F+-+Wireshark+Tutorial%3A+Examining+Trickbot+Infections" target="_blank"><i class="ui ui-8"></i></a>
+                  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Funit42.paloaltonetworks.com%2Fwireshark-tutorial-examining-trickbot-infections%2F&title=Wireshark+Tutorial%3A+Examining+Trickbot+Infections&summary=&source=" target="_blank"><i class="ui ui-9"></i></a>
+                  <a href="//www.reddit.com/submit?url=https://unit42.paloaltonetworks.com/wireshark-tutorial-examining-trickbot-infections/" target="_blank"><i class="ui ui-10"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>    <div class="article__summary py-25 text-gray-500 font-size-sm">
+  <div class="container">
+    <div class="row align-items-center no-gutters">
+      <div class="col-sm-auto col-12 mb-sm-0 mb-35">
+        <i class="ui ui-11 text-gray-700 mr-sm-20"></i>
+      </div>
+  
+      <div class="col-sm col-12">
+        <p>
+          By <a href="https://unit42.paloaltonetworks.com/author/bduncan/" title="Posts by Brad Duncan" class="author url fn" rel="author">Brad Duncan</a>        </p>
+        <p><time datetime="2019-11-08T14:00:18+00:00">November 8, 2019 at 6:00 AM</time></p>
+        <p>Category: <a href="https://unit42.paloaltonetworks.com/category/unit-42/" rel="category tag">Unit 42</a></p>
+        <p>Tags: <a href="https://unit42.paloaltonetworks.com/tag/banking/" rel="tag">banking</a>, <a href="https://unit42.paloaltonetworks.com/tag/infection/" rel="tag">infection</a>, <a href="https://unit42.paloaltonetworks.com/tag/malware/" rel="tag">malware</a>, <a href="https://unit42.paloaltonetworks.com/tag/pcap/" rel="tag">pcap</a>, <a href="https://unit42.paloaltonetworks.com/tag/trickbot/" rel="tag">Trickbot</a>, <a href="https://unit42.paloaltonetworks.com/tag/tutorial/" rel="tag">tutorial</a>, <a href="https://unit42.paloaltonetworks.com/tag/wireshark/" rel="tag">Wireshark</a>, <a href="https://unit42.paloaltonetworks.com/tag/wireshark-tutorial/" rel="tag">Wireshark Tutorial</a></p>
+      </div>
+    </div>
+  </div>
+</div>    <div class="py-30 bg-white">
+      <div class="container">
+        <div class="article__content pb-30">
+                      <figure class="mb-30 text-center">
+              <img width="900" height="450" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-900x450.png" class="attachment-single size-single" alt="" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-900x450.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-300x150.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-768x384.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-1024x512.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/10/Vulnerability-r3d2-370x185.png 370w" sizes="(max-width: 900px) 100vw, 900px" />            </figure>
+                    <p class="wpml-ls-statics-post_translations wpml-ls">This post is also available in: 
+    <span class="wpml-ls-slot-post_translations wpml-ls-item wpml-ls-item-ja wpml-ls-first-item wpml-ls-last-item wpml-ls-item-legacy-post-translations"><a href="https://unit42.paloaltonetworks.jp/wireshark-tutorial-examining-trickbot-infections/" class="wpml-ls-link"><span class="wpml-ls-native" lang="ja">日本語</span><span class="wpml-ls-display"><span class="wpml-ls-bracket"> (</span>Japanese<span class="wpml-ls-bracket">)</span></span></a></span></p><h2><strong>Executive Summary</strong></h2>
+<p>When a host is infected or otherwise compromised, security professionals with access to packet captures (pcaps) of the network traffic need to understand the activity and identify the type of infection.</p>
+<p>This tutorial offers tips on how to identify Trickbot, an information stealer and banking malware that has been <a href="https://www.forbes.com/sites/leemathews/2019/07/14/stealthy-trickbot-malware-has-compromised-250-million-email-accounts-and-is-still-going-strong/#6f92d6d94884">infecting victims since 2016</a>. Trickbot is distributed through malicious spam (malspam), and it is also distributed by other malware such as <a href="https://www.malware-traffic-analysis.net/2019/10/02/index.html">Emotet</a>, <a href="https://www.malware-traffic-analysis.net/2019/10/31/index.html">IcedID</a>, or <a href="https://www.malware-traffic-analysis.net/2019/10/09/index.html">Ursnif</a>.</p>
+<p>Trickbot has distinct traffic patterns. This tutorial reviews pcaps of Trickbot infections caused by two different methods: a Trickbot infection from malspam and Trickbot when it is distributed through other malware.</p>
+<p>Note: Today’s tutorial requires Wireshark with a column display customized according to <a href="https://unit42.paloaltonetworks.com/unit42-customizing-wireshark-changing-column-display/">this previous tutorial</a>. You should already have implemented Wireshark display filters as described <a href="https://unit42.paloaltonetworks.com/using-wireshark-display-filter-expressions/">here</a>.</p>
+<h4><strong>Trickbot from malspam</strong></h4>
+<p>Trickbot is often distributed through malspam. Emails from these campaigns contain links to download malicious files disguised as invoices or documents. These files may be Windows executable files for Trickbot, or they may be some sort of downloader for the Trickbot executable. In some cases, links from these emails return a zip archive that contains a Trickbot executable or downloader.</p>
+<p>Figure 1 shows an example from September 2019. In this example, the email contained a link that returned a zip archive. The zip archive contained a Windows shortcut file that downloaded a Trickbot executable. A pcap for the associated Trickbot infection is available <a href="https://www.malware-traffic-analysis.net/2019/09/25/index.html">here</a>.</p>
+<p style="text-align: center;"><img class="wp-image-100875 size-large aligncenter" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-1024x554.png" alt="" width="1024" height="554" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-1024x554.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-300x162.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-768x416.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-900x487.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-61-370x200.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><br />
+<span style="font-size: 10pt;"><em>Figure 1: Flowchart from a Trickbot infection from malspam in September 2019.</em></span></p>
+<p>Download the pcap <a href="https://www.malware-traffic-analysis.net/2019/09/25/index.html">from this page</a>. The pcap is contained in a password-protected zip archive named <strong><em>2019-09-25-Trickbot-gtag-ono19-infection-traffic.pcap.zip</em></strong>. Extract the pcap from the zip archive using the password <strong><em>infected</em></strong> and open it in Wireshark. Use your <strong><em>basic</em></strong> filter to review the web-based infection traffic as shown in Figure 2.</p>
+<p style="text-align: center;"><em><img class="wp-image-100879 size-large aligncenter" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-1024x570.png" alt="" width="1024" height="570" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-1024x570.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-300x167.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-768x427.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-900x501.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-63-370x206.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 2: Pcap of the Trickbot infection viewed in Wireshark.</span></em></p>
+<p>Review the traffic, and you will find the following activity common in recent Trickbot infections:</p>
+<ul>
+<li>An IP address check by the infected Windows host</li>
+<li>HTTPS/SSL/TLS traffic over TCP ports 447 and 449</li>
+<li>HTTP traffic over TCP port 8082</li>
+<li>HTTP requests ending in <strong><em>.png</em></strong> that return Windows executable files</li>
+</ul>
+<p>Unique to this Trickbot infection is an HTTP request to <strong><em>www.dchristjan[.]com</em></strong> that returned a zip archive and an HTTP request to <strong><em>144.91.69[.]195</em></strong> that returned a Windows executable file. Follow the HTTP stream for the request to <strong><em>www.dchristjan[.]com</em></strong> as shown in Figure 3 to review the traffic. In the HTTP stream, you will find indicators that a zip archive was returned as shown in Figure 4.</p>
+<p style="text-align: center;"><img class="wp-image-100883 size-large aligncenter" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-1024x580.png" alt="" width="1024" height="580" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-1024x580.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-300x170.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-768x435.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-900x509.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-65-370x209.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;"><em>Figure 3: Following the HTTP stream for the request to www.dchristjan[.]com.</em></span></p>
+<p style="text-align: center;"><em><img class="wp-image-100887 size-large aligncenter" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-1024x796.png" alt="" width="1024" height="796" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-1024x796.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-300x233.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-768x597.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-900x700.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-67-370x288.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 4: Indicators the HTTP request returned a zip archive.</span></em></p>
+<p>In Figure 4, you can also see the name of the file contained in the zip archive, <strong><em>InvoiceAndStatement.lnk</em></strong>. You can export the zip archive from the traffic using Wireshark as shown in Figure 5 and Figure 6 using the following path:</p>
+<p><strong><em>     File → Export Objects → HTTP…</em></strong></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100891 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-1024x573.png" alt="" width="1024" height="573" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-1024x573.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-300x168.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-768x430.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-900x504.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-69-370x207.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 5: Exporting HTTP objects from the pcap.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100893 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-1024x477.png" alt="" width="1024" height="477" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-1024x477.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-300x140.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-768x358.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-900x419.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70-370x172.png 370w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-70.png 1468w" sizes="(max-width: 1024px) 100vw, 1024px" /><br />
+<span style="font-size: 10pt;">Figure 6: Exporting the zip archive from the pcap.</span></em></p>
+<p>In a BSD, Linux, or Mac environment, you can easily confirm the extracted file is a zip archive, get the SHA256 hash of the file, and extract the contents of the archive in a command line environment. In this case, the content is a Windows shortcut file, which you can also confirm and get the SHA256 hash as shown in Figure 7.</p>
+<p>The command to identify the file type is <strong>file</strong><em> [<span style="font-family: 'times new roman', times, serif;">filename</span>]</em>, while the command to find the SHA256 hash of the file is <strong>shasum -a 256</strong><em> [<span style="font-family: 'times new roman', times, serif;">filename</span>]</em>.</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100897 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-1024x520.png" alt="" width="1024" height="520" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-1024x520.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-300x152.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-768x390.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-900x457.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-72-370x188.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 7: Checking the extracted zip archive and its contents.</span></em></p>
+<p>An HTTP request to <strong><em>144.91.69[.]195</em></strong> returned a Windows executable file. This is the initial Windows executable for Trickbot. You can follow the HTTP stream for this HTTP request and find indicators this is an executable file as shown in Figure 8 and Figure 9. You can extract the executable file from the pcap as shown in Figure 10.</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100899 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-1024x706.png" alt="" width="1024" height="706" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-1024x706.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-300x207.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-768x530.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-900x621.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-73-370x255.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 8: Following the HTTP stream for the HTTP request to 144.91.69[.]195.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100901 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-1024x755.png" alt="" width="1024" height="755" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-1024x755.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-300x221.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-768x566.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-900x663.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74-370x273.png 370w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-74.png 1954w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 9: Indicators the returned file is a Windows executable or DLL file.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100903 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-1024x546.png" alt="" width="1024" height="546" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-1024x546.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-300x160.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-768x410.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-900x480.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-75-370x197.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 10: Exporting the Windows executable from the pcap.</span></em></p>
+<p>Post infection traffic initially consists of HTTPS/SSL/TLS traffic over TCP port 443, 447, or 449 and an IP address check by the infected Windows host. In this infection, shortly after the HTTP request for the Trickbot executable, we can see several attempted TCP connections over port 443 to different IP addresses before the successful TCP connection to 187.58.56[.]26 over TCP port 449. If you use your <strong><em>basic+</em></strong> filter, you can see these attempted connections as shown in Figure 11 and Figure 12.</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100905 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-1024x704.png" alt="" width="1024" height="704" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-1024x704.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-300x206.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-768x528.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-900x619.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-76-370x254.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 11: Attempted TCP connections over port 443 by the infected Windows host.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100907 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-1024x705.png" alt="" width="1024" height="705" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-1024x705.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-300x207.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-768x529.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-900x620.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-77-370x255.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 12: Scrolling down to see more TCP connections over port 443 before a successful connection to 187.58.56[.]26 over TCP port 449.</span></em></p>
+<p>The HTTPS/SSL/TLS traffic to various IP addresses over TCP port 447 and TCP port 449 has unusual certificate data. We can review the certificate issuer by filtering on <strong><em>ssl.handshake.type == 11</em></strong> when using Wireshark 2.x or <strong><em>tls.handshake.type == 11</em></strong> when using Wireshark 3.x. Then go to the frame details section and expand the information, finding your way to the certificate issuer data as seen in Figure 13 and Figure 14.</p>
+<p style="text-align: center;"><img class="aligncenter wp-image-100909 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-1024x706.png" alt="" width="1024" height="706" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-1024x706.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-300x207.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-768x530.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-900x621.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-78-370x255.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><em><span style="font-size: 10pt;">Figure 13: Filtering for the certificate data in the HTTPS/SSL/TLS traffic, then expanding lines the frame details for the first result under TCP port 449.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100911 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-1024x704.png" alt="" width="1024" height="704" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-1024x704.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-300x206.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-768x528.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-900x619.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-79-370x254.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 14: Drilling down to the certificate issuer data on the first result over TCP port 449.</span></em></p>
+<p>In Figure 14, we see the following certificate issuer data used in HTTPS/SSL/TLS traffic to 187.58.56[.]26 over TCP port 449:</p>
+<ul>
+<li>id-at-countryName=<strong><em>AU</em></strong></li>
+<li>id-at-stateOrProvinceName=<strong><em>Some-State</em></strong></li>
+<li>id-at-organizationName=<strong><em>Internet Widgits Pty Ltd</em></strong></li>
+</ul>
+<p>The state or province name (Some-State) and the organization name (Internet Widgits Pty Ltd) are not used for legitimate HTTPS/SSL/TLS traffic. This is an indicator of malicious traffic, and this type of unusual certificate issuer data is not limited to Trickbot. What does a normal certificate issuer look like in legitimate HTTPS/SSL/TLS traffic? If we look at earlier traffic to Microsoft domains at 72.21.81.200 over TCP port 443, we find the following as seen in Figure 15.</p>
+<ul>
+<li>id-at-countryName=<strong><em>US</em></strong></li>
+<li>id-at-stateOrProvinceName=<strong><em>Washington</em></strong></li>
+<li>id-at-localityName=<strong><em>Redmond</em></strong></li>
+<li>id-at-organizationName=<strong><em>Microsoft Corporation</em></strong></li>
+<li>id-at-organizationUnitName=<strong><em>Microsoft IT</em></strong></li>
+<li>id-at-commonName=<strong><em>Microsoft IT TLS CA 2</em></strong></li>
+</ul>
+<p style="text-align: center;"><img class="aligncenter wp-image-100913 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-1024x586.png" alt="" width="1024" height="586" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-1024x586.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-300x172.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-768x440.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-900x515.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-80-370x212.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><em><span style="font-size: 10pt;">Figure 15: Certificate data from legitimate HTTPS traffic to a Microsoft domain.</span></em></p>
+<p>The Trickbot-infected Windows host will check its IP address using a number of different IP address checking sites. These sites are <strong><em>not</em></strong> malicious, and the traffic is not inherently malicious. However, this type of IP address check is common with Trickbot and other families of malware. Various legitimate IP address checking services used by Trickbot include:</p>
+<ul>
+<li><strong><em>api.ip[.]sb</em></strong></li>
+<li><strong><em>checkip.amazonaws[.]com</em></strong></li>
+<li><strong><em>icanhazip[.]com</em></strong></li>
+<li><strong><em>ident[.]me</em></strong></li>
+<li><strong><em>ip.anysrc[.]net</em></strong></li>
+<li><strong><em>ipecho[.]net</em></strong></li>
+<li><strong><em>ipinfo[.]io</em></strong></li>
+<li><strong><em>myexternalip[.]com</em></strong></li>
+<li><strong><em>wtfismyip[.]com</em></strong></li>
+</ul>
+<p>Again, an IP address check by itself is not malicious. However, this type of activity combined with other network traffic can provide indicators of an infection, like we see in this case.</p>
+<p style="text-align: center;"><img class="aligncenter wp-image-100915 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-1024x585.png" alt="" width="1024" height="585" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-1024x585.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-300x171.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-768x439.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-900x514.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-81-370x211.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><em><span style="font-size: 10pt;">Figure 16: IP address check by the infected Windows host, right after HTTPS/SSL/TLS traffic over TCP port 449. Not inherently malicious, but this is part of a Trickbot infection.</span></em></p>
+<p>A Trickbot infection currently generates HTTP traffic over TCP port 8082 this traffic sends information from the infected host like system information and passwords from the browser cache and email clients. This information is sent from the infected host to command and control servers used by Trickbot.</p>
+<p>To review this traffic, use the following Wireshark filter:</p>
+<p><strong><em>http.request and tcp.port eq 8082</em></strong></p>
+<p>This reveals the following HTTP requests as seen in Figure 17:</p>
+<ul>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/81/</li>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/83/</li>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/81/</li>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187:8082</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/81/</li>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187:8082</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/90</li>
+<li>170.238.117[.]187 port 8082 &#8211; <strong><em>170.238.117[.]187:8082</em></strong> &#8211; POST<br />
+/ono19/BACHMANN-BTO-PC_W617601.AC3B679F4A22738281E6D7B0C5946<br />
+E42/90</li>
+</ul>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100917 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-1024x362.png" alt="" width="1024" height="362" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-1024x362.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-300x106.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-768x271.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-900x318.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-82-370x131.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 17: HTTP traffic over TCP port 8082 caused by Trickbot.</span></em></p>
+<p>HTTP POST requests ending in 81 send cached password data from web browsers, email clients, and other applications. HTTP POST requests ending in 83 send form data submitted by applications like web browsers. We can find system information sent through HTTP POST requests ending in 90. Follow the TCP or HTTP streams for any of these HTTP POST requests to review data stolen by this infection.</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100919 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-1024x804.png" alt="" width="1024" height="804" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-1024x804.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-300x236.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-768x603.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-900x707.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-83-370x291.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 18: Login credentials stolen by Trickbot from the Chrome web browser. This data was sent by the Trickbot-infected host using HTTP traffic over TCP port 8082.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100921 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-1024x806.png" alt="" width="1024" height="806" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-1024x806.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-300x236.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-768x604.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-900x708.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-84-370x291.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 19: System data sent by a Trickbot-infected host using HTTP traffic over TCP port 8082. It starts with a list of running processes.</span></em></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100923 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-1024x802.png" alt="" width="1024" height="802" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-1024x802.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-300x235.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-768x601.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-900x705.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-85-370x290.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 20: More system data sent by a Trickbot-infected host using HTTP traffic over TCP port 8082. This is later from the same HTTP stream that started in Figure 19.</span></em></p>
+<p>Trickbot sends more Windows executable files over HTTP GET requests ending in <strong><em>.png</em></strong>. These follow-up Trickbot executables are used to infect a vulnerable domain controller (DC) when the infected Windows host is a client in an Active Directory environment.</p>
+<p>You can find these URLs in the pcap by using the following Wireshark filter:</p>
+<p><strong><em>     http.request and ip contains .png</em></strong></p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100925 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-1024x304.png" alt="" width="1024" height="304" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-1024x304.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-300x89.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-768x228.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-900x267.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86-370x110.png 370w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-86.png 1982w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 21: Filtering to find follow-up Trickbot EXE files sent using URLs ending with .png.</span></em></p>
+<p>Follow the TCP or HTTP stream in each of the three requests as shown in Figure 21. You should see indicators of windows executable files similar to what we saw in Figure 9. However, in this case, the HTTP response headers identify the returned file as image/png even though it clearly is a Windows executable or DLL file.</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100927 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-1024x747.png" alt="" width="1024" height="747" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-1024x747.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-300x219.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-768x560.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-590x430.png 590w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-900x656.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87-370x270.png 370w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-87.png 1956w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 22: Windows executable sent through URL ending in .png.</span></em></p>
+<p>You can export these files from Wireshark, confirm they are Windows executable files, and get the SHA256 file hashes as we covered earlier in this tutorial.</p>
+<h4>Trickbot Distributed Through Other Malware</h4>
+<p><span style="font-size: 12pt;">Trickbot is frequently distributed through other malware. Trickbot is commonly seen as follow-up malware to Emotet infections, but we have also seen it as follow-up malware from IcedID and Ursnif infections</span></p>
+<p><span style="font-size: 12pt;">Since Emotet frequently distributes Trickbot, lets review an Emotet with Trickbot infection in September 2019 documented <a href="https://www.malware-traffic-analysis.net/2019/09/25/index2.html">here</a>. We already covered Emotet with Trickbot infections last year in <a href="https://unit42.paloaltonetworks.com/unit42-malware-team-malspam-pushing-emotet-trickbot/">this Palo Alto Networks blog post</a>, so this tutorial will focus on the Trickbot activity.</span></p>
+<p style="text-align: center;"><a id="post-100828-_7dlg9csmweu2"></a><img class="aligncenter wp-image-100929 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-1024x382.png" alt="" width="1024" height="382" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-1024x382.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-300x112.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-768x287.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-900x336.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-88-370x138.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><br />
+<span style="font-size: 10pt;"><em>Figure 23: Simplified flow chart for Emotet with Trickbot activity</em>.</span></p>
+<p>Download the pcap <a href="https://www.malware-traffic-analysis.net/2019/09/25/index.html">from this page</a>. The pcap is contained in a password-protected zip archive named <strong><em>2019-09-25-Emotet-infection-with-Trickbot-in-AD-environment.pcap.zip</em></strong>. Extract the pcap from the zip archive using the password <strong><em>infected</em></strong> and open it in Wireshark. Use your <strong><em>basic</em></strong> filter to review the web-based infection traffic as shown in Figure 24.</p>
+<p style="text-align: center;"><img class="aligncenter wp-image-100931 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-1024x588.png" alt="" width="1024" height="588" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-1024x588.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-300x172.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-768x441.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-900x517.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-89-370x212.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><em><span style="font-size: 10pt;">Figure 24: Filtering on web traffic in an Emotet+Trickbot infection.</span></em></p>
+<p>Experienced analysts can usually identify the Emotet-generated traffic and the Trickbot-generated traffic. Post-infection Emotet activity consists HTTP traffic with encoded data returned by the server. This is distinctly different than post-infection Trickbot activity which generally relies on HTTPS/SSL/TLS traffic for command and control communications. Figure 25 points out the different infection traffic between Emotet and Trickbot for this specific infection.</p>
+<p style="text-align: center;"><img class="aligncenter wp-image-100933 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-1024x586.png" alt="" width="1024" height="586" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-1024x586.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-300x172.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-768x440.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-900x515.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-90-370x212.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><em><span style="font-size: 10pt;">Figure 25: The differences in Emotet and Trickbot traffic.</span></em></p>
+<p>This infection happened in an Active Directory environment with 10.9.25.102 as the infected Windows client and 10.9.25.9 as the DC. Later in the traffic, we see the DC exhibit signs of Trickbot infection as shown in Figure 26.</p>
+<p style="text-align: center;"><a id="post-100828-_gzuigut465fi"></a><img class="aligncenter wp-image-100935 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-1024x535.png" alt="" width="1024" height="535" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-1024x535.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-300x157.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-768x401.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-900x470.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-91-370x193.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;"><em>Figure 26: Trickbot activity on the DC.</em></span></p>
+<p>How did the infection move from client to DC? Trickbot uses a version of the <a href="https://www.wired.com/story/eternalblue-leaked-nsa-spy-tool-hacked-world/">EternalBlue</a> exploit to move laterally using Microsoft’s SMB protocol. In this case, the infected Windows client sent information several times over TCP port 445 to the DC at 10.9.25.9, which then retrieved a Trickbot executable from <strong><em>185.98.87[.]185/wredneg2.png</em></strong>. Use the <strong><em>basic+</em></strong> filter to see the SYN segments for the traffic between the client at 10.9.25.102 and the DC at 10.9.25.9 right before the DC calls out to <strong><em>185.98.87[.]185 </em></strong>as shown in Figure 27</p>
+<p style="text-align: center;"><img class="aligncenter wp-image-100937 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-1024x703.png" alt="" width="1024" height="703" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-1024x703.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-300x206.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-768x527.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-900x618.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-92-370x254.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;"><em>Figure 27: Finding traffic from the client at 10.9.25.102) to the DC at 10.9.25.9 (shown in grey) before the DC retrieved a Trickbot EXE from 196.98.87[.]185/wredneg2.png.</em></span></p>
+<p>Follow one of the TCP streams, for example the line with a source as 10.9.25.102 over TCP port 49321 and destination as 10.9.35.9 over TCP port 445. This is highly unusual traffic for a client to send to a DC, so it is likely related to the EternalBlue exploit. See Figure 28 for an example of this traffic</p>
+<p style="text-align: center;"><em><img class="aligncenter wp-image-100939 size-large" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-1024x725.png" alt="" width="1024" height="725" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-1024x725.png 1024w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-300x212.png 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-768x543.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-900x637.png 900w, https://unit42.paloaltonetworks.com/wp-content/uploads/2019/11/word-image-93-370x262.png 370w" sizes="(max-width: 1024px) 100vw, 1024px" /><span style="font-size: 10pt;">Figure 28: Example of the unusual traffic from a client to DC over TCP port 445, possibly related to an EternalBlue-based exploit.</span></em></p>
+<p>Other than this unusual SMB traffic and the DC getting infected, any Trickbot-specific activity in this pcap is remarkably similar to our previous example.</p>
+<h2>Conclusion</h2>
+<p>This tutorial provided tips for examining Windows infections with Trickbot malware by reviewing two pcaps from September 2019. More pcaps with recent examples of Trickbot activity can be found at <a href="https://www.malware-traffic-analysis.net/index.html">malware-traffic-analysis.net</a>.</p>
+<p>For more help with Wireshark, see our previous tutorials:</p>
+<ul>
+<li><a href="https://unit42.paloaltonetworks.com/unit42-customizing-wireshark-changing-column-display/">Customizing Wireshark &#8211; Changing Your Column Display</a></li>
+<li><a href="https://unit42.paloaltonetworks.com/using-wireshark-display-filter-expressions/">Using Wireshark &#8211; Display Filter Expressions</a></li>
+<li><a href="https://unit42.paloaltonetworks.com/using-wireshark-identifying-hosts-and-users/">Using Wireshark: Identifying Hosts and Users</a></li>
+<li><a href="https://unit42.paloaltonetworks.com/using-wireshark-exporting-objects-from-a-pcap/">Using Wireshark: Exporting Objects from a Pcap</a></li>
+</ul>
+<p>&nbsp;</p>
+          <div class="article__subscribe mb-40 text-gray-400 bg-gray-200 rounded-lg">
+  <h4 class="h3 mb-10 text-black">Get updates from <br class="d-sm-none"> Palo Alto<br class="d-sm-none"> Networks!</h4>
+  <p>Sign up to receive the latest news, cyber threat intelligence and research from us</p>
+  <!-- <form action="https://app-guse4001.marketo.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe"> -->
+  <form action="https://start.paloaltonetworks.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe">
+    <input type="hidden" value="1086" name="formid">
+    <!-- <input type="hidden" value="818-CZC-273" name="munchkinId"> -->
+    <input type="hidden" value="531-OCS-018" name="munchkinId">
+    <input type="hidden" value="2141" name="lpId">
+    <input type="hidden" value="1086" name="formVid">
+    <input type="hidden" name="mkto_optinunit42" value="true">
+    <input type="hidden" name="mkto_opt-in" value="true">
+    <div class="row">
+      <div class="col-sm col-12 mb-sm-0 mb-15">
+        <input type="email" name="Email" placeholder="Email address" class="subscribe-field d-block w-100 px-sm-25 px-15 bg-white">
+        <p class="error-mail d-none mt-15 text-danger" style="color: #dc3545">Please enter your email address!</p>
+      </div>
+      <div class="col-sm-auto col-12">
+          <input type="submit" value="Subscribe" class="btn btn--black btn--sm w-100" disabled="disabled">
+      </div>
+    </div>
+
+    <div class="google-recapth mt-15">
+      <div class="g-recaptcha" data-expired-callback="captchaExpires" data-callback="captchaComplete" data-sitekey="6LfKOrwUAAAAAOwgjxrEcx-pcfwe8OquUw6ommTK"></div>
+      <p class="error-recaptcha d-none mt-15 text-danger" style="color: #dc3545">Please mark, I'm not a robot!</p>
+    </div>
+  </form>
+
+  <div class="font-size-ex-sm col-sm-7 p-0">
+    <p>By submitting this form, you agree to our <a href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a> and acknowledge our <a href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy Statement</a>.</p>
+  </div>
+</div>
+
+<script type="text/javascript" src="https://researchcenter.paloaltonetworks.com/wp-content/plugins/google-analyticator/external-tracking.min.js?ver=6.4.9"></script>
+        </div>
+      </div>
+    </div>
+  </article>
+<footer class="site-footer px-sm-0 px-15">
+  <div class="pt-40">
+    <div class="container pt-sm-30">
+      <div class="row justify-content-lg-center">
+        <div class="col-lg-11 col-12">
+          <div class="row">
+            <div class="col-lg-4 col-sm-3 col-12 order-sm-2">
+              <nav class="footer-socials mb-sm-0 mb-25 text-white text-sm-right">
+                                                <a href="https://twitter.com/Unit42_Intel" target="_blank"><span class="ui ui-4"></span></a>
+                <a href="https://github.com/pan-unit42" target="_blank"><span class="ui ui-5"></span></a>
+              </nav>
+            </div>
+
+            <div class="col-lg-8 col-sm-9 col-12 order-sm-1">
+              <div class="row">
+                <div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Popular Resources</h4><div class="menu-footer-company-phase-container"><ul id="menu-footer-company-phase" class="menu"><li id="menu-item-97096" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97096"><a target="_blank" href="https://www.paloaltonetworks.com/resources">Resource Center</a></li>
+<li id="menu-item-97097" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97097"><a target="_blank" href="https://researchcenter.paloaltonetworks.com/">Blog</a></li>
+<li id="menu-item-97098" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97098"><a target="_blank" href="https://www.paloaltonetworks.com/communities">Communities</a></li>
+<li id="menu-item-97099" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97099"><a target="_blank" href="https://docs.paloaltonetworks.com/">Tech Docs</a></li>
+<li id="menu-item-97100" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-home menu-item-97100"><a href="https://unit42.paloaltonetworks.com/">Unit 42</a></li>
+<li id="menu-item-97101" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97101"><a target="_blank" href="https://www.paloaltonetworks.com/sitemap">Sitemap</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Legal Notices</h4><div class="menu-footer-legal-notices-phase-container"><ul id="menu-footer-legal-notices-phase" class="menu"><li id="menu-item-97093" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97093"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy</a></li>
+<li id="menu-item-97094" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97094"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a></li>
+<li id="menu-item-97095" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97095"><a target="_blank" href="https://www.paloaltonetworks.com/legal">Documents</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Account</h4><div class="menu-footer-trending-topics-phase-container"><ul id="menu-footer-trending-topics-phase" class="menu"><li id="menu-item-97102" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97102"><a href="https://start.paloaltonetworks.com/preference-center">Manage Subscriptions</a></li>
+<li id="menu-item-97103" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97103"><a href="#">&nbsp;</a></li>
+<li id="menu-item-97104" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97104"><a href="https://www.paloaltonetworks.com/security-disclosure">Report a Vulnerability</a></li>
+</ul></div></div>              </div>
+            </div>
+          </div>
+
+          
+            <div class="copyrights py-25 mt-40">
+               <p>© 2020 Palo Alto Networks, Inc. All rights reserved.</p>
+            </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+    <script type="text/javascript">
+	var isProcessing = false; 
+    function alter_ul_post_values(obj,post_id,ul_type){
+	
+		if (isProcessing)    
+		return;  
+		isProcessing = true;   
+		
+		jQuery(obj).find("span").html("..");
+                jQuery.ajax({
+                    type: "POST",
+                    url: "https://unit42.paloaltonetworks.com/wp-content/plugins/like-dislike-counter-for-posts-pages-and-comments/ajax_counter.php",
+                    data: "post_id="+post_id+"&up_type="+ul_type,
+                    success: function(msg){
+                            jQuery(obj).find("span").html(msg);
+                            isProcessing = false; 
+                            jQuery(obj).find('svg').children('path').attr('stroke','#0050FF');
+                            jQuery(obj).removeClass('idc_ul_cont_not_liked idc_ul_cont_not_liked_inner');
+                    }
+ 		});
+	}
+	</script>
+            <script type="text/javascript">
+            (function(){
+                document.addEventListener('DOMContentLoaded', function(){
+                    let wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                    if ( wpp_widgets ) {
+                        for (let i = 0; i < wpp_widgets.length; i++) {
+                            let wpp_widget = wpp_widgets[i];
+                            WordPressPopularPosts.theme(wpp_widget);
+                        }
+                    }
+                });
+            })();
+        </script>
+                <script>
+            var WPPImageObserver = null;
+
+            function wpp_load_img(img) {
+                if ( ! 'imgSrc' in img.dataset || ! img.dataset.imgSrc )
+                    return;
+
+                img.src = img.dataset.imgSrc;
+
+                if ( 'imgSrcset' in img.dataset ) {
+                    img.srcset = img.dataset.imgSrcset;
+                    img.removeAttribute('data-img-srcset');
+                }
+
+                img.classList.remove('wpp-lazyload');
+                img.removeAttribute('data-img-src');
+                img.classList.add('wpp-lazyloaded');
+            }
+
+            function wpp_observe_imgs(){
+                let wpp_images = document.querySelectorAll('img.wpp-lazyload'),
+                    wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                if ( wpp_images.length || wpp_widgets.length ) {
+                    if ( 'IntersectionObserver' in window ) {
+                        WPPImageObserver = new IntersectionObserver(function(entries, observer) {
+                            entries.forEach(function(entry) {
+                                if (entry.isIntersecting) {
+                                    let img = entry.target;
+                                    wpp_load_img(img);
+                                    WPPImageObserver.unobserve(img);
+                                }
+                            });
+                        });
+
+                        if ( wpp_images.length ) {
+                            wpp_images.forEach(function(image) {
+                                WPPImageObserver.observe(image);
+                            });
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var i = 0; i < wpp_widgets.length; i++) {
+                                let wpp_widget_images = wpp_widgets[i].querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widgets[i].shadowRoot ) {
+                                    wpp_widget_images = wpp_widgets[i].shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    wpp_widget_images.forEach(function(image) {
+                                        WPPImageObserver.observe(image);
+                                    });
+                                }
+                            }
+                        }
+                    } /** Fallback for older browsers */
+                    else {
+                        if ( wpp_images.length ) {
+                            for (var i = 0; i < wpp_images.length; i++) {
+                                wpp_load_img(wpp_images[i]);
+                                wpp_images[i].classList.remove('wpp-lazyloaded');
+                            }
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var j = 0; j < wpp_widgets.length; j++) {
+                                let wpp_widget = wpp_widgets[j],
+                                    wpp_widget_images = wpp_widget.querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widget.shadowRoot ) {
+                                    wpp_widget_images = wpp_widget.shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    for (var k = 0; k < wpp_widget_images.length; k++) {
+                                        wpp_load_img(wpp_widget_images[k]);
+                                        wpp_widget_images[k].classList.remove('wpp-lazyloaded');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                wpp_observe_imgs();
+
+                // When an ajaxified WPP widget loads,
+                // Lazy load its images
+                document.addEventListener('wpp-onload', function(){
+                    wpp_observe_imgs();
+                });
+            });
+        </script>
+        <link rel='stylesheet' id='wpdevart_lightbox_front_end_css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/wpdevart_lightbox_front.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpdevart_lightbox_effects-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/effects_lightbox.css?ver=5.4.1' type='text/css' media='all' />
+<script type='text/javascript' src='https://www.google.com/recaptcha/api.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/scripts/main.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/wp-embed.min.js?ver=5.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpdevart_lb_variables = {"eneble_lightbox_content":"enable","overlay_transparency_prancent":"80","popup_background_color":"#000000","popup_loading_image":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/popup_loading.png","popup_initial_width":"350","popup_initial_height":"300","popup_youtube_width":"640","popup_youtube_height":"410","popup_vimeo_width":"500","popup_vimeo_height":"410","popup_max_width":"5000","popup_max_height":"5000","popup_position":"5","popup_fixed_position":"true","popup_outside_margin":"0","popup_border_width":"2","popup_border_color":"#000000","popup_border_radius":"10","control_buttons_show":"true","control_buttons_show_in_content":"false","control_buttons_height":"30","control_buttons_line_bg_color":"#000000","control_button_prev_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev.png","control_button_prev_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev_hover.png","control_button_next_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next.png","control_button_next_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next_hover.png","control_button_download_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download.png","control_button_download_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download_hover.png","control_button_innewwindow_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow.png","control_button_innewwindow_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow_hover.png","control_button_fullwidth_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth.png","control_button_fullwidht_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth_hover.png","control_button_fullwidthrest_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset.png","control_button_fullwidhtrest_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset_hover.png","control_button_close_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close.png","control_button_close_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close_hover.png","information_panel_show":"false","information_panel_show_in_content":"false","information_panel_bg_color":"#000000","information_panel_default_transparency":"100","information_panel_hover_trancparency":"100","information_panel_count_image_after_text":"Image","information_panel_count_image_middle_text":"of","information_panel_count_padding_left":"15","information_panel_count_padding_right":"4","information_panel_count_font_size":"20","information_panel_desc_padding_left":"15","information_panel_desc_padding_right":"4","information_panel_desc_font_size":"20","information_panel_desc_show_if_not":"true","information_panel_text_for_no_caption":"No Caption","information_panel_title_padding_left":"5","information_panel_title_padding_right":"5","information_panel_title_font_size":"15","information_panel_title_show_if_not":"true","information_panel_text_for_no_title":"No Title","information_panel_ordering":"{\"count\":[1,\"count\"],\"title\":[0,\"title\"],\"caption\":[0,\"caption\"]}"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/javascript/wpdevart_lightbox_front.js?ver=1.0'></script>
+          
+  </body>
+</html>

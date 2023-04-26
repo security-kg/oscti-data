@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Padding oracles and the decline of CBC-mode cipher suites</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/padding-oracles-and-the-decline-of-cbc-mode-ciphersuites/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Padding oracles and the decline of CBC-mode cipher suites" />
+    <meta property="og:description" content="At CloudFlare, we’re committed to making sure the encrypted web is available to everyone, even those with older browsers. At the same time, we want to make sure that as many people as possible are using the most modern and secure encryption available to them." />
+    <meta property="og:url" content="https://blog.cloudflare.com/padding-oracles-and-the-decline-of-cbc-mode-ciphersuites/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2016/02/image_1-1-1.png" />
+    <meta property="article:published_time" content="2016-02-12T14:00:25.000Z" />
+    <meta property="article:modified_time" content="2018-08-27T21:13:28.000Z" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="Crypto" />
+    <meta property="article:tag" content="Encryption" />
+    <meta property="article:tag" content="Security" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Padding oracles and the decline of CBC-mode cipher suites" />
+    <meta name="twitter:description" content="At CloudFlare, we’re committed to making sure the encrypted web is available to everyone, even those with older browsers. At the same time, we want to make sure that as many people as possible are using the most modern and secure encryption available to them." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/padding-oracles-and-the-decline-of-cbc-mode-ciphersuites/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2016/02/image_1-1-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Nick Sullivan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="TLS, Crypto, Encryption, Security" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@grittygrease" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Nick Sullivan",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg",
+            "width": 400,
+            "height": 400
+        },
+        "url": "https://blog.cloudflare.com/author/nick-sullivan/",
+        "sameAs": [
+            "https://crypto.dance",
+            "https://twitter.com/grittygrease"
+        ]
+    },
+    "headline": "Padding oracles and the decline of CBC-mode cipher suites",
+    "url": "https://blog.cloudflare.com/padding-oracles-and-the-decline-of-cbc-mode-ciphersuites/",
+    "datePublished": "2016-02-12T14:00:25.000Z",
+    "dateModified": "2018-08-27T21:13:28.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2016/02/image_1-1-1.png",
+    "keywords": "TLS, Crypto, Encryption, Security",
+    "description": "At CloudFlare, we’re committed to making sure the encrypted web is available to everyone, even those with older browsers. At the same time, we want to make sure that as many people as possible are using the most modern and secure encryption available to them. ",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-tls tag-crypto tag-encryption tag-security sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-tls tag-crypto tag-encryption tag-security featured ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Padding oracles and the decline of CBC-mode cipher suites</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2016-02-12T14:00:25Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 12, 2016 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/nick-sullivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg" alt="Nick Sullivan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/nick-sullivan" class="fw5 f3 no-underline black mr3">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>At CloudFlare, we’re committed to making sure the encrypted web is available to everyone, even those with older browsers. At the same time, we want to make sure that as many people as possible are using the most modern and secure encryption available to them. Improving the cryptography used by the majority requires a coordinated effort between the organizations building web browsers and API clients and those working on web services like CloudFlare. Cryptography is a two-way street. Even if we support the most secure cryptographic algorithms for our customers, web visitors won’t get the benefit unless their web client supports the same algorithms.</p>
+<p>In this blog post we explore the history of one widely used cryptographic mode that continues to cause problems: cipher block chaining (CBC). We’ll explain why CBC has proven difficult to use safely, and how recent trends in the adoption of secure ciphers by web clients have helped reduce the web’s reliance on this technology. From CloudFlare’s own data, we’ve seen the percentage of web clients that support safer cipher modes (such as AEAD) rise from under 50% to over 70% in six months, a good sign for the Internet.</p>
+<h3 id="whatsinablockcipher">What’s in a block cipher?</h3>
+<p>Ciphers are usually grouped into two categories: stream ciphers and block ciphers. Stream ciphers encrypt data on a bit-by-bit basis. Plaintext and ciphertext are always the same length. Examples of pure stream ciphers are RC4 and ChaCha20. Although RC4 is <a href="https://blog.cloudflare.com/killing-rc4-the-long-goodbye/">no longer considered secure</a>, we can still rely on <a href="https://blog.cloudflare.com/do-the-chacha-better-mobile-performance-with-cryptography/">ChaCha20</a> as a secure stream cipher for use on the web, but it was only <a href="https://tools.ietf.org/html/rfc7539">recently standardized</a> by the IETF and therefore does not have broad adoption.</p>
+<p>Unlike stream ciphers, which can encrypt data of any size, block ciphers can only encrypt data in &quot;blocks&quot; of a fixed size. Examples of block ciphers are DES (8-byte blocks) and AES (16-byte blocks). To encrypt data that is less than one block long using a block cipher, you have several options. You can either turn the block cipher into a stream cipher (using something called counter mode, more on this later), or you can include extra bytes as padding to align the data to the block size. If the data is longer than one block, then the data needs to be split into multiple blocks that are encrypted separately. This splitting process is where things get tricky.</p>
+<p>The naïve approach to encrypting data larger than the block size is called Electronic Code Book (ECB) mode. In ECB mode, you split your data into chunks that match the cipher’s block size and then encrypt each block with the same key. ECB turns out to be a very bad way to encrypt most kinds of data: if the data you are encrypting has redundant portions, say an image with many pixels of the same color, you end up with the &quot;Tux&quot; problem (demonstrated below). If two blocks have the same value, they will be encrypted to the same value. This property lets an attacker know which plaintext blocks match by looking at the ciphertext blocks.</p>
+<p>For example, here’s what a high-resolution version of Linux’s &quot;Tux&quot; looks when encrypted in ECB mode:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_0-1.png" alt="tux"> <img src="https://blog.cloudflare.com/content/images/2016/02/image_1-1.png" alt="ecb tux"><br>
+<small>Image from <a href="https://blog.filippo.io/the-ecb-penguin/">Filippo Valsorda’s blog</a></small></p>
+<p>The fact that identical plaintext blocks are encrypted to identical ciphertext blocks gives an unwanted structure to encrypted data that reveals information about the plaintext.</p>
+<p>One solution to this is to &quot;chain&quot; blocks together by taking the output of one encryption and mixing it into the input for the next block. There are several block cipher modes, but the one that was originally standardized in SSL (and continues to be used in TLS) is Cipher Block Chaining (CBC). In CBC, the plaintext of one block is combined with the ciphertext of the previous block using the <a href="https://en.wikipedia.org/wiki/Exclusive_or">exclusive OR operation (XOR)</a>. The first block is XOR’d with a randomly generated initialization vector (IV).</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_2-1.png" alt="image alt text"></p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_3-1.png" alt="image alt text"></p>
+<p>Decryption works by XORing the previous block of ciphertext (or the IV) into the output of the decryption.</p>
+<p>CBC has some nice properties. The ciphertext produced by a block cipher is encrypted, so it (hopefully) looks random. In CBC, you’re mixing this random looking encrypted data into the plaintext, making it very unlikely that there will be patterns in the output. Another advantage is that decryption can be done in parallel to speed things up. However, CBC has proven to be more trouble than expected when used in the context of the HTTPS and the web.</p>
+<h3 id="howrecordsareencryptedintls">How records are encrypted in TLS</h3>
+<p>TLS provides both encryption—via a cipher—and integrity—via a message authentication code (MAC). When SSL was originally designed, one open question was: should we authenticate the plaintext data, or should we encrypt and then authenticate the encrypted data? This is sometimes stated as MAC-then-encrypt or encrypt-then-MAC? They chose MAC-then-encrypt (encrypt the authenticated data) which has since proven to be the less than ideal choice.</p>
+<p>In cryptographic protocol design, leaving some bytes unauthenticated can lead to unexpected weaknesses (this is known as the <a href="http://www.thoughtcrime.org/blog/the-cryptographic-doom-principle/">Cryptographic Doom Principle</a>). When encrypting data using a block cipher mode like CBC, the last block needs to be padded with extra bytes to align the data to the block size. In TLS, this padding comes <em>after</em> the MAC. (There is a TLS extension, described in <a href="https://tools.ietf.org/html/rfc7366">RFC 7366</a>, that enables encrypt-then-MAC, but it’s rarely implemented.)</p>
+<p>A TLS record has the following format. Each one has an 8-byte sequence number that is stored and incremented on each new one. The encrypted part of a request needs to add up to a multiple of 16 bytes, but for the purposes of this post, let’s assume that this length is 64 bytes (4 blocks).</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_4-1.png" alt="image alt text"></p>
+<p>In TLS, valid padding looks like a number preceded by that number of copies of itself. So, if the number is 0x00, it’s repeated 0 times:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_5.png" alt="image alt text"></p>
+<p>If the number is 0x02, it’s repeated 0x02 times:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_6.png" alt="image alt text"></p>
+<p>To decode a block, decrypt the entire message, look at the last byte, remove it, and remove that many bytes of padding. This gives you the location of the HMAC.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_7.png" alt="image alt text"></p>
+<p>To compute the MAC, take the sequence number, the 5-byte header, and the message, then HMAC them using the shared integrity key.</p>
+<h3 id="paddingoracle">Padding oracle</h3>
+<p>The problem with this construction is that it is susceptible to a technique called the padding oracle attack. This attack was first reported against TLS by <a href="https://www.iacr.org/archive/eurocrypt2002/23320530/cbc02_e02d.pdf">Serge </a><a href="https://www.iacr.org/archive/eurocrypt2002/23320530/cbc02_e02d.pdf">Vaudenay</a><a href="https://www.iacr.org/archive/eurocrypt2002/23320530/cbc02_e02d.pdf"> in 2002</a>. A padding oracle is a way for an attacker with the ability to modify ciphertext sent to a server to extract the value of the plaintext.</p>
+<p>Attackers don’t have to be an ISP or a government to get in the middle of requests. If they are on the same local network as their victim they can use a technique called <a href="https://en.wikipedia.org/wiki/ARP_spoofing">ARP spoofing</a>. By tricking the victim’s machine to forward data to the attacker’s machine instead of the router, they can read, modify and measure the time it takes for every encrypted message sent from the browser to the server. By injecting JavaScript into an unencrypted website the client is visiting, they can get the browser to repeatedly send requests to a target HTTPS site. These requests contain valuable data such as login cookies and CSRF tokens.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_8.png" alt="image alt text"></p>
+<p>If the TLS server behaves differently when decrypting ciphertext that has correct padding vs. incorrect padding, the attacker can carefully craft ciphertexts that provide enough information to reveal the plaintext data.</p>
+<p>This kind of sounds like magic, but it really isn’t. Given a ciphertext, there are three possible ways for the *decrypted data *to look:</p>
+<ol>
+<li>
+<p>Invalid padding</p>
+</li>
+<li>
+<p>Valid padding, wrong HMAC</p>
+</li>
+<li>
+<p>Valid padding, correct HMAC</p>
+</li>
+</ol>
+<p>Originally, the TLS server would return a different error code for cases 1 and 2. Using the structure of CBC, an attacker can construct 256 ciphertexts whose last bytes decrypt to the numbers 0x00 to 0xFF. By looking at the error code, the attacker can tell which one of those ciphertexts decrypted to the value 0x00, a valid 0-byte padding.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_9.png" alt="image alt text"></p>
+<p>With that knowledge, the attacker can then construct 256 guesses where the last byte is 0x01 and the second-to-last byte covers 0-255. The error code lets the attacker know which one decrypts to 0x01, causing the last two bytes to be 0x01 0x01, another valid padding. This process can be continued to decrypt the entire message.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_10.png" alt="image alt text"></p>
+<p>The fact that the padding is unauthenticated and that an attacker can tell the difference between a correct and incorrect guess makes this attack very powerful. This error code provides a tiny bit of information about the plaintext to the attacker for each decryption. This is what’s called a side-channel, information leakage that is visible to a third party.</p>
+<p>The original Vaudenay attack was mitigated by returning the same error code for both cases 1 and 2; however, the attack was revived again using another side channel: <a href="https://crypto.stanford.edu/~dabo/papers/ssl-timing.pdf">timing</a>.</p>
+<p>Consider the amount of work a server has to do in each of these cases:</p>
+<ol>
+<li>
+<p>Invalid padding – Read the padding bytes</p>
+</li>
+<li>
+<p>Valid padding, wrong HMAC – Read the padding bytes, compute the HMAC</p>
+</li>
+<li>
+<p>Valid padding, correct HMAC – Read the padding bytes, compute the HMAC</p>
+</li>
+</ol>
+<p>In Vaudenay’s original attack, the error code gave away the difference between scenarios 1 and 2. In the timing version of the padding oracle, the attacker measures how much time it takes for the server to respond. A fast response means scenario 1 and slow responses mean scenario 2 or 3. Timing attacks are subject to some jitter due to the fact that computers are complex and sometimes requests just take longer than others. However, given enough attempts you can use statistics to determine which case you are in. Once the attacker has this oracle, the full plaintext can be decrypted using the same steps as the original Vaudenay attack described above.</p>
+<p>To fix the timing attack, TLS implementations were changed to perform the HMAC even if the padding is invalid. Now every time invalid padding is found in a decrypted ciphertext, the server would assume zero padding and perform a dummy HMAC on all data. The amount of time spent should be constant for cases 1, 2 and 3. Or so we thought.</p>
+<h3 id="gettinglucky">Getting lucky</h3>
+<p>As it turns out, it’s very difficult to find a heuristic that takes a branching program and making all branches take the same amount of time. In 2013, Nadhem AlFardan and Kenny Paterson <a href="http://www.isg.rhul.ac.uk/~kp/dtls.pdf">found</a> that there was still a timing oracle in TLS, based on the fact that HMAC takes a different amount of time to compute based on how much data is being MAC’d. They called their attack Lucky 13.</p>
+<p>What makes Lucky 13 possible is the fact that an HMAC of 55 bytes takes less time than an HMAC of 56 bytes, and 55 - 13 (of extra data) + 20 (of MAC) = 62, which is… luckily close to a block size multiple (64). This can be exploited to give a small timing difference that can be used as a decryption oracle.</p>
+<p>Say the decryption is 64-bytes long (4 AES blocks), then the data can look like:</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_11.png" alt="image alt text"></p>
+<p>By picking every combination of the last two bytes, you can identify which pair of values result in the padding 0x01 0x01, which can be identified by a slightly faster operation on the server. With this information in hand, you can jump ahead to step 2 of the padding oracle. Guessing two bytes at once takes more guesses (around 2<sup>16</sup> = 65536 rather than 256 for one guess), but it is still practical.</p>
+<p>The fact that the sequence number and header together are 13 bytes long enable this attack to work and inspired the name &quot;Lucky 13&quot;. The authors note how if it were only 12 bytes then they wouldn’t need to guess the last two bytes at once, making it even faster.</p>
+<p>&quot;In some sense, 13 is lucky, but 12 would have been luckier!&quot; - <a href="http://www.isg.rhul.ac.uk/~kp/dtls.pdf">AlFardan &amp; Paterson</a></p>
+<p>Lucky 13 can be mitigated by making sure HMAC takes the same amount of time no matter how much data goes into it. The code to make the HMAC constant time was so complicated and difficult to implement that it took <a href="https://www.imperialviolet.org/2013/02/04/luckythirteen.html">several attempts to fix</a>. Other implementers ran into similar problems mitigating Lucky 13. In 2015, Paterson and Albrecht found that Amazon’s TLS implementation (called <a href="https://blogs.aws.amazon.com/security/post/TxCKZM94ST1S6Y/Introducing-s2n-a-New-Open-Source-TLS-Implementation">s2n</a>) was also <a href="https://eprint.iacr.org/2015/1129">susceptible</a><a href="https://eprint.iacr.org/2015/1129"> to a variant of the attack</a> despite attempts to mitigate it in the code, due to an even more obscure pattern in HMAC timing. Other libraries haven’t yet implemented a fix. For example, Golang’s crypto package is still susceptible to Lucky 13 (CloudFlare’s own Filippo Valsorda <a href="https://go-review.googlesource.com/#/c/18130/">has proposed a fix</a>, but is has yet to be reviewed by the language maintainers). Timing oracles are extremely hard to avoid when implementing CBC ciphers in MAC-then-encrypt mode.</p>
+<p>As soon as the Lucky 13 paper was released, CloudFlare adopted <a href="https://blog.cloudflare.com/staying-on-top-of-tls-attacks/">OpenSSL’s server-side fix</a>. This helps prevent visitors to sites on CloudFlare from being affected by Lucky 13 when they use CBC mode, however the preferred solution would be to move to a cipher mode that is not susceptible to this kind of attack.</p>
+<h3 id="whattouseifnotcbc">What to use if not CBC?</h3>
+<p>Timing oracles are not the only vulnerabilities that CBC mode ciphers suffer from. Both <a href="https://blog.cloudflare.com/taming-beast-better-ssl-now-available-across/">BEAST</a> and <a href="https://blog.cloudflare.com/sslv3-support-disabled-by-default-due-to-vulnerability/">POODLE</a> were high-profile TLS vulnerabilities that only affected CBC mode ciphers. There are still valid uses of CBC mode (such as for encrypting static content), but in the context of TLS, MAC-then-encrypt with CBC has had too many issues to be ignored.</p>
+<p>The attacks on RC4 and CBC have left us with very few choices for cryptographic algorithms that are safe from attack in the context of TLS. In fact, there are no ciphers supported by TLS 1.1 or earlier that are safe. The only options are CBC mode ciphers or RC4. In TLS 1.2, a new cipher construction was introduced called <a href="https://blog.cloudflare.com/tag/aead/">AEAD (Authenticated Encryption with Associated Data)</a>. AEAD takes a stream cipher and mixes in the authentication step along the way rather than computing the MAC at the end. CloudFlare implements two such cipher modes, <a href="https://blog.cloudflare.com/go-crypto-bridging-the-performance-gap/">AES-GCM</a> and <a href="https://blog.cloudflare.com/do-the-chacha-better-mobile-performance-with-cryptography/">ChaCha20-Poly1305</a>. ChaCha20 is a stream cipher, and Poly1305 a MAC scheme. AES-GCM instead uses counter mode to turn the block cipher AES into a stream cipher and adds authentication using a construction called <a href="https://en.wikipedia.org/wiki/Galois/Counter_Mode">GMAC</a>.</p>
+<p>Since communication requires two parties, both the web client and web server need to support the same ciphers and cipher modes. Luckily, adoption of AEAD cipher modes in clients is growing.</p>
+<h3 id="clientsupportforaeadciphermodes">Client support for AEAD cipher modes</h3>
+<p>Most modern browsers and operating systems have adopted at least one AEAD cipher suite in their TLS software. The most popular is AES-GCM, however some browsers (Google Chrome in particular) support both AES-GCM and ChaCha20-Poly1305. Until late 2015, the major exception to this rule was Apple, whose iOS and Mac OS X operating systems only supported AES in CBC mode and never supported ChaCha20-Poly1305, making both Safari and iOS Apps susceptible to Lucky 13.</p>
+<p>The following graph shows the ciphersuites negotiated between web clients and sites using CloudFlare over the last six months of 2015. Both iOS 9 and Mac OS 10.11 were released in September 2015, helping push the percentage of AEAD ciphers used in connections to CloudFlare over 60%. The increased adoption of modern versions of Microsoft’s Edge browser has also contributed to the growth.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2016/02/image_12.png" alt="image alt text"></p>
+<h3 id="conclusions">Conclusions</h3>
+<p>Even the most well-intentioned cryptographic constructions can turn out to cause more problems than they’re worth. This is what happened with CBC-mode block ciphers over the years as more problems with MAC-then-Encrypt were discovered. The cryptographic community is constantly working on new algorithms, but only those with the most vetting end up making it to mainstream protocols like TLS. In choosing cryptographic algorithms for an ecosystem like the web, it’s best to follow the advice of standards bodies like the IETF and implement what works and is secure.</p>
+<p>As a company that provides HTTPS for a large portion of the Internet, it’s our responsibility to keep our customers secure by implementing the latest standards, like AEAD cipher suites. We have a team of talented cryptographers who stay on pulse of things, and are able to handle everything from 0-day vulnerabilities to adherence to latest standards to keep customers safe. However, keeping servers up to date is only half of the equation. Web clients also need to keep up to date, and web users need to keep using the latest browsers. The good news is that our data shows that web clients are rapidly moving toward secure AEAD-based ciphers, but we still have a long way to go to keep everyone secure.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+        <a href="/tag/encryption/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Encryption</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-07-26T16:04:36+01:00">July 26, 2018 4:04PM</p>
+        <a href="/the-road-to-quic/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The Road to QUIC</h2>
+        </a>
+
+        <p class="gray1 lh-copy">QUIC (Quick UDP Internet Connections) is a new encrypted-by-default Internet transport protocol, that provides a number of improvements designed to accelerate HTTP traffic as well as make it more secure, with the intended goal of eventually replacing TCP and TLS on the web....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alessandro-ghedini/" class="fw5 f2 black no-underline">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-05-16T18:28:07+01:00">May 16, 2018 6:28PM</p>
+        <a href="/you-get-tls-1-3-you-get-tls-1-3-everyone-gets-tls-1-3/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">You get TLS 1.3! You get TLS 1.3! Everyone gets TLS 1.3!</h2>
+        </a>
+
+        <p class="gray1 lh-copy">It's no secret that Cloudflare has been a big proponent of TLS 1.3, the newest edition of the TLS protocol that improves both speed and security, since we have made it available to our customers starting in 2016....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alessandro-ghedini/" class="fw5 f2 black no-underline">Alessandro Ghedini</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls-1-3/" class="no-underline f1 fw2 blue3 underline-hover">TLS 1.3</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-03-12T16:00:47Z">March 12, 2018 4:00PM</p>
+        <a href="/deprecating-old-tls-versions-on-cloudflare-dashboard-and-api/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Deprecating TLS 1.0 and 1.1 on api.cloudflare.com</h2>
+        </a>
+
+        <p class="gray1 lh-copy">On June 4, Cloudflare will be dropping support for TLS 1.0 and 1.1 on api.cloudflare.com. Additionally, the dashboard will be moved from www.cloudflare.com/a to dash.cloudflare.com and will require a browser that supports TLS 1.2 or higher....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/patrick/" class="fw5 f2 black no-underline">Patrick R. Donahue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-07-03T17:21:24+01:00">July 03, 2017 5:21PM</p>
+        <a href="/pal-a-container-identity-bootstrapping-tool/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A container identity bootstrapping tool</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Everybody has secrets. Software developers have many. Often these secrets—API tokens, TLS private keys, database passwords, SSH keys, and other sensitive data—are needed to make a service run properly and interact securely with other services....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/github/" class="no-underline f1 fw2 blue3 underline-hover">GitHub</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

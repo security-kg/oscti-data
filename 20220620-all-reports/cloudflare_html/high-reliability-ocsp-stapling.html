@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>High-reliability OCSP stapling and why it matters</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/high-reliability-ocsp-stapling/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="High-reliability OCSP stapling and why it matters" />
+    <meta property="og:description" content="At Cloudflare our focus is making the internet faster and more secure. Today we are announcing a new enhancement to our HTTPS service: High-Reliability OCSP stapling." />
+    <meta property="og:url" content="https://blog.cloudflare.com/high-reliability-ocsp-stapling/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/Swingline-stapler.jpg" />
+    <meta property="article:published_time" content="2017-07-10T12:43:30.000Z" />
+    <meta property="article:modified_time" content="2018-08-29T01:29:41.000Z" />
+    <meta property="article:tag" content="Crypto" />
+    <meta property="article:tag" content="OCSP" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="HTTPS" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="High-reliability OCSP stapling and why it matters" />
+    <meta name="twitter:description" content="At Cloudflare our focus is making the internet faster and more secure. Today we are announcing a new enhancement to our HTTPS service: High-Reliability OCSP stapling." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/high-reliability-ocsp-stapling/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/Swingline-stapler.jpg" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Nick Sullivan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Crypto, OCSP, TLS, HTTPS, Security, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@grittygrease" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Nick Sullivan",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg",
+            "width": 400,
+            "height": 400
+        },
+        "url": "https://blog.cloudflare.com/author/nick-sullivan/",
+        "sameAs": [
+            "https://crypto.dance",
+            "https://twitter.com/grittygrease"
+        ]
+    },
+    "headline": "High-reliability OCSP stapling and why it matters",
+    "url": "https://blog.cloudflare.com/high-reliability-ocsp-stapling/",
+    "datePublished": "2017-07-10T12:43:30.000Z",
+    "dateModified": "2018-08-29T01:29:41.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/Swingline-stapler.jpg",
+    "keywords": "Crypto, OCSP, TLS, HTTPS, Security, Programming",
+    "description": "At Cloudflare our focus is making the internet faster and more secure. Today we are announcing a new enhancement to our HTTPS service: High-Reliability OCSP stapling.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-crypto tag-ocsp tag-tls tag-https tag-security tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-crypto tag-ocsp tag-tls tag-https tag-security tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">High-reliability OCSP stapling and why it matters</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2017-07-10T13:43:30+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 10, 2017 1:43PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/nick-sullivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg" alt="Nick Sullivan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/nick-sullivan" class="fw5 f3 no-underline black mr3">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>At Cloudflare our focus is making the internet faster and more secure. Today we are announcing a new enhancement to our HTTPS service: High-Reliability OCSP stapling. This feature is a step towards enabling an important security feature on the web: certificate revocation checking. Reliable OCSP stapling also improves connection times by up to 30% in some cases. In this post, we’ll explore the importance of certificate revocation checking in HTTPS, the challenges involved in making it reliable, and how we built a robust OCSP stapling service.</p>
+<h3 id="whyrevocationishard">Why revocation is hard</h3>
+<p>Digital certificates are the cornerstone of trust on the web. A digital certificate is like an identification card for a website. It contains identity information including the website’s hostname along with a cryptographic public key. In public key cryptography, each public key has an associated private key. This private key is kept secret by the site owner. For a browser to trust an HTTPS site, the site’s server must provide a certificate that is valid for the site’s hostname and a proof of control of the certificate’s private key. If someone gets access to a certificate’s private key, they can impersonate the site. Private key compromise is a serious risk to trust on the web.</p>
+<p>Certificate revocation is a way to mitigate the risk of key compromise. A website owner can revoke a compromised certificate by informing the certificate issuer that it should no longer be trusted. For example, back in 2014, <a href="https://blog.cloudflare.com/the-heartbleed-aftermath-all-cloudflare-certificates-revoked-and-reissued/">Cloudflare revoked</a> all managed certificates after it was shown that the Heartbleed vulnerability could be <a href="https://blog.cloudflare.com/the-results-of-the-cloudflare-challenge/">used to steal private keys</a>. There are other reasons to revoke, but key compromise is the most common.</p>
+<p>Certificate revocation has a spotty history. Most of the revocation checking mechanisms implemented today don’t protect site owners from key compromise. If you know about why revocation checking is broken, feel free to skip ahead to the OCSP stapling section <a href="#ocspstapling">below</a>.</p>
+<h3 id="revocationcheckingahistoryoffailure">Revocation checking: a history of failure</h3>
+<p>There are several ways a web browser can check whether a site’s certificate is revoked or not. The most well-known mechanisms are Certificate Revocation Lists (CRL) and Online Certificate Status Protocol (OCSP). A CRL is a signed list of serial numbers of certificates revoked by a CA. OCSP is a protocol that can be used to query a CA about the revocation status of a given certificate. An OCSP response contains signed assertions that a certificate is not revoked.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image1-1.jpg" alt="CRL"><br>
+<img src="https://blog.cloudflare.com/content/images/2017/07/image8.jpg" alt="OCSP"></p>
+<p>Certificates that support OCSP contain the responder's URL and those that support CRLs contain a URLs where the CRL can be obtained. When a browser is served a certificate as part of an HTTPS connection, it can use the embedded URL to download a CRL or an OCSP response and check that the certificate hasn't been revoked before rendering the web page. The question then becomes: what should the browser do if the request for a CRL or OCSP response fails? As it turns out, both answers to that question are problematic.</p>
+<h3 id="hardfaildoesntwork">Hard-fail doesn’t work</h3>
+<p>When browsers encounter a web page and there’s a problem fetching revocation information, the safe option is to block the page and show a security warning. This is called a hard-fail strategy. This strategy is conservative from a security standpoint, but prone to false positives. For example, if the proof of non-revocation could not be obtained for a valid certificate, a hard-fail strategy will show a security warning. Showing a security warning when no security issue exists is dangerous because it can lead to <a href="http://www.wired.co.uk/article/cybersecurity-warnings-fatigue">warning fatigue</a> and teach users to click through security warnings, which is a bad idea.</p>
+<p>In the real world, false positives are unavoidable. OCSP and CRL endpoints subject to service outages and network errors. There are also common situations where these endpoints are completely inaccessible to the browser, such as when the browser is behind a captive portal. For some access points used in hotels and airplanes, unencrypted traffic (like OCSP endpoints) are blocked. A hard-fail strategy force users behind captive portals and other networks that block OCSP requests to click through unnecessary security warnings. This reality is unpalatable to browser vendors.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image3-1.png" alt=""></p>
+<p>Another drawback to a hard-fail strategy is that it puts an increased burden on certificate authorities to keep OCSP and CRL endpoints available and online. A broken OCSP or CRL server becomes a central point of failure for all certificates issued by a certificate authority. If browsers followed a hard-fail strategy, an OCSP outage would be an Internet outage. Certificate authorities are organizations optimized to provide trust and accountability, not necessarily resilient infrastructure. In a hard-fail world, the availability of the web as a whole would be limited by the ability for CAs to keep their OCSP services online at all times; a dangerous systemic risk to the internet as a whole.</p>
+<h3 id="anamesoftfailasoftfailitsnotmuchbetter"><a name="softfail"></a>Soft-fail: it’s not much better</h3>
+<p>To avoid the downsides of a hard-fail strategy, most browsers take another approach to certificate revocation checking. Upon seeing a new certificate, the browser will attempt to fetch the revocation information from the CRL or OCSP endpoint embedded in the certificate. If the revocation information is available, they rely on it, and otherwise they assume the certificate is not revoked and display the page without any errors. This is called a “soft-fail” strategy.</p>
+<p>The soft-fail strategy has a critical security flaw. An attacker with network position can block the OCSP request. If this attacker also has the private key of a revoked certificate, they can intercept the outgoing connection for the site and present the revoked certificate to the browser. Since the browser doesn’t know the certificate is revoked and is following a soft-fail strategy, the page will load without alerting the user. As Adam Langley <a href="https://www.imperialviolet.org/2012/02/05/crlsets.html">described</a>: “soft-fail revocation checks are like a seat-belt that snaps when you crash. Even though it works 99% of the time, it's worthless because it only works when you don't need it.”</p>
+<p>A soft-fail strategy also makes connections slower. If revocation information for a certificate is not already cached, the browser will block the rendering of the page until the revocation information is retrieved, or a timeout occurs. This additional step causes a noticeable and unwelcome delay, with marginal security benefits. This tradeoff is a hard sell for the performance-obsessed web. Because of the limited benefit, some browsers have eliminated live revocation checking for at least <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1366100">some subset of certificates</a>.</p>
+<p>Live OCSP checking has an additional downside: it leaks private browsing information. OCSP requests are sent over unencrypted HTTP and are tied to a specific certificate. Sending an OCSP request tells the certificate authority which websites you are visiting. Furthermore, everyone on the network path between your browser and the OCSP server will also know which sites you are browsing.</p>
+<h3 id="alternativerevocationchecking">Alternative revocation checking</h3>
+<p>Some client still perform soft-fail OCSP checking, but it’s becoming less common due to the performance and privacy downsides described above. To protect high-value certificates, some browsers have explored alternative mechanisms for revocation checking.</p>
+<p>One technique is to pre-package a list of revoked certificates and distribute them through browser updates. Because the list of all revoked certificates is so large, only a few high-impact certificates are included in this list. This technique is called <a href="https://blog.mozilla.org/security/2015/03/03/revoking-intermediate-certificates-introducing-onecrl/">OneCRL</a> by Firefox and <a href="https://www.imperialviolet.org/2012/02/05/crlsets.html">CRLSets</a> by Chrome. This has been effective for some high-profile revocations, but it is by no means a complete solution. Not only are not all certificates covered, this technique leaves a window of vulnerability between the time the certificate is revoked and the certificate list gets to browsers.</p>
+<h3 id="anameocspstaplingaocspstapling"><a name="ocspstapling"></a> OCSP Stapling</h3>
+<p>OCSP stapling is a technique to get revocation information to browsers that fixes some of the performance and privacy issues associated with live OCSP fetching. In OCSP stapling, the server includes a current OCSP response for the certificate included (or &quot;stapled&quot;) into the initial HTTPS connection. That removes the need for the browser to request the OCSP response itself. OCSP stapling is widely supported by modern browsers.</p>
+<p>Not all servers support OCSP stapling, so browsers still take a soft-fail approach to warning the user when the OCSP response is not stapled. Some browsers (such as Safari, Edge and Firefox <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1366100">for now</a>) check certificate revocation for certificates, so OCSP stapling can provide a performance boost of <a href="https://blog.cloudflare.com/ocsp-stapling-how-cloudflare-just-made-ssl-30/">up to 30%</a>. For browsers like Chrome that don’t check for revocation for all certificates, OCSP stapling provides a proof of non-revocation that they would not have otherwise.</p>
+<h3 id="highreliabilityocspstapling">High-reliability OCSP stapling</h3>
+<p>Cloudflare <a href="https://blog.cloudflare.com/ocsp-stapling-how-cloudflare-just-made-ssl-30/">started offering OCSP stapling in 2012</a>. Cloudflare’s original implementation relied on code from <a href="https://www.nginx.com/press/globalsign-digicert-and-comodo-collaborate-nginx-improve-online/">nginx</a> that was able to provide OCSP stapling for a some, but not all connections. As Cloudflare’s network grew, the implementation wasn’t able to scale with it, resulting in a drop in the percentage of connections with OCSP responses stapled. The architecture we had chosen had served us well, but we could definitely do better.</p>
+<p>In the last year we redesigned our OCSP stapling infrastructure to make it much more robust and reliable. We’re happy to announce that we now provide reliable OCSP stapling connections to Cloudflare. As long as the certificate authority has set up OCSP for a certificate, Cloudflare will serve a valid OCSP stapled response. All Cloudflare customers now benefit from much more reliable OCSP stapling.</p>
+<h3 id="ocspstaplingpast">OCSP stapling past</h3>
+<p>In Cloudflare’s original implementation of OCSP stapling, OCSP responses were fetched opportunistically. Given a connection that required a certificate, Cloudflare would check to see if there was a fresh OCSP response to staple. If there was, it would be included in the connection. If not, then the client would not be sent an OCSP response, and Cloudflare would send a request to refresh the OCSP response in the cache in preparation for the next request.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image2-1.jpg" alt=""></p>
+<p>If a fresh OCSP response wasn’t cached, the connection wouldn’t get an OCSP staple. The next connection for that same certificate would get a OCSP staple, because the cache will have been populated.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image7.jpg" alt=""></p>
+<p>This architecture was elegant, but not robust. First, there are several situations in which the client is guaranteed to not get an OCSP response. For example, the first request in every cache region and the first request after an OCSP response expires are guaranteed to not have an OCSP response stapled. With Cloudflare’s expansion to more locations, these failures were more common. Less popular sites would have their OCSP responses fetched less often resulting in an even lower ratio of stapled connections. Another reason that connections could be missing OCSP responses is if the OCSP request from Cloudflare to fill the cache failed. There was a lot of room for improvement.</p>
+<h3 id="oursolutionocspprefetching">Our solution: OCSP pre-fetching</h3>
+<p>In order to be able to reliably include OCSP staples in all connection, we decided to change the model. Instead of fetching the OCSP response when a request came in, we would fetch it in a centralized location and distribute valid responses to all our servers. When a response started getting close to expiration, we’d fetch a new one. If the OCSP request fails, we put it into a queue to re-fetch at a later time. Since most OCSP staples are valid for around 7 days, there is a lot of flexibility in term of refreshing expiring responses.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image5.jpg" alt=""></p>
+<p>To keep our cache of OCSP responses fresh, we created an OCSP fetching service. This service ensures that there is a valid OCSP response for every certificate managed by Cloudflare. We constantly crawl our cache of OCSP responses and refresh those that are close to expiring. We also make sure to never cache invalid OCSP responses, as this can have <a href="https://www.theregister.co.uk/2017/05/29/certificate_snafu_sees_azure_portal_reject_firefox/">bad consequences</a>. This system has been running for several months now, and we are now reliably including OCSP staples for almost every HTTPS request.</p>
+<p>Reliable stapling improves performance for browsers that would have otherwise fetched OCSP, but it also changes the optimal failure strategy for browsers. If a browser can reliably get an OCSP staple for a certificate, why not switch back from a soft-fail to a hard-fail strategy?</p>
+<h3 id="ocspmuststaple">OCSP must-staple</h3>
+<p>As <a href="#softfail">described above</a>, the soft-fail strategy for validating OCSP responses opens up a security hole. An attacker with a revoked certificate can simply neglect to provide an OCSP response when a browser connects to it and the browser will accept their revoked certificate.</p>
+<p>In the OCSP fetching case, a soft-fail approach makes sense. There many reasons the browser would not be able to obtain an OCSP: captive portals, broken OCSP servers, network unreliability and more. However, as we have shown with our high-reliability OCSP fetching service, it is possible for a server to fetch OCSP responses without any of these problems. OCSP responses are re-usable and are valid for several days. When one is close to expiring, the server can fetch a new one out-of-band and be able to reliably serve OCSP staples for all connections.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/Swingline-stapler.jpg" alt=""><br>
+<small><a href="https://commons.wikimedia.org/wiki/File:Swingline-stapler.jpg">Public Domain</a></small></p>
+<p>If the client knows that a server will always serve OCSP staples for every connection, it can apply a hard-fail approach, failing a connection if the OCSP response is missing. This closes the security hole introduced by the soft-fail strategy. This is where OCSP must-staple fits in.</p>
+<p>OCSP must-staple is an extension that can be added to a certificate that tells the browser to expect an OCSP staple whenever it sees the certificate. This acts as an explicit signal to the browser that it’s safe to use the more secure hard-fail strategy.</p>
+<p>Firefox enforces OCSP must-staple, returning the following error if such a certificate is presented without a stapled OCSP response.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image4.jpg" alt=""></p>
+<p>Chrome provides the ability to mark a domain as “Expect-Staple”. If Chrome sees a certificate for the domain without a staple, it will send a report to a pre-configured report endpoint.</p>
+<h3 id="reliability">Reliability</h3>
+<p>As a part of our push to provide reliable OCSP stapling, we put our money where our mouths are and put an OCSP must-staple certificate on blog.cloudflare.com. Now if we ever don’t serve an OCSP staple, this page will fail to load on browsers like Firefox that enforce must-staple. You can identify a certificate by looking at the certificate details for the “1.3.6.1.5.5.7.1.24” OID.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2017/07/image6.jpg" alt=""></p>
+<p>Cloudflare customers can choose to upload must-staple custom certificates, but we encourage them not to do so yet because there may be a multi-second delay between the certificate being installed and our ability to populate the OCSP response cache. This will be fixed in the coming months. Other than the first few seconds after uploading the certificate, Cloudflare’s new OCSP fetching is robust enough to offer OCSP staples for every connection thereafter.</p>
+<p>As of today, an attacker with access to the private key for a revoked certificate can still hijack the connection. All they need to do is to place themselves on the network path of the connection and block the OCSP request. OCSP must-staple prevents that, since an attacker will not be able to obtain an OCSP response that says the certificate has not been revoked.</p>
+<h3 id="theweirdworldofocspresponders">The weird world of OCSP responders</h3>
+<p>For browsers, an OCSP failure is not the end of the world. Most browsers are configured to soft-fail when an OCSP responder returns an error, so users are unaffected by OCSP server failures. Some Certificate Authorities have had <a href="https://community.letsencrypt.org/t/may-19-2017-ocsp-and-issuance-outage-postmortem/34922">massive multi-day outages</a> in their OCSP servers without affecting the availability of sites that use their certificates.</p>
+<p>There’s no strong feedback mechanism for broken or slow OCSP servers. This lack of feedback has led to an ecosystem of faulty or unreliable OCSP servers. We experienced this first-hand while developing high-reliability OCSP stapling. In this section, we’ll outline half a dozen unexpected behaviors we found when deploying high-reliability OCSP stapling. A big thanks goes out to all the CAs who fixed the issues we pointed out. CA names redacted to preserve their identities.</p>
+<h4 id="ca1nonoverlappingperiods">CA #1: Non-overlapping periods</h4>
+<p>We noticed CA #1 certificates frequently missing their refresh-deadline, and during debugging we were lucky enough to see this:</p>
+<pre><code>$ date -u
+Sat Mar  4 02:45:35 UTC 2017
+$ ocspfetch &lt;redacted, customer ID&gt;
+This Update: 2017-03-04 01:45:49 +0000 UTC
+Next Update: 2017-03-04 02:45:49 +0000 UTC
+$ date -u
+Sat Mar  4 02:45:48 UTC 2017
+$ ocspfetch &lt;redacted, customer ID&gt;
+This Update: 2017-03-04 02:45:49 +0000 UTC
+Next Update: 2017-03-04 03:45:49 +0000 UTC
+</code></pre>
+<p>It shows that CA #1 had configured their OCSP responders to use an incredibly short validity period with almost no overlap between validity periods, which makes it functionally impossible to always have a fresh OCSP response for their certificates. We contacted them, and they reconfigured the responder to produce new responses every half-interval.</p>
+<h4 id="ca2wrongsignaturealgorithm">CA #2: Wrong signature algorithm</h4>
+<p>Several certificates from CA #2 started failing with this error:</p>
+<pre><code> bad OCSP signature: crypto/rsa: verification error
+</code></pre>
+<p>The issue is that the OCSP claims to be signed with SHA256-RSA, when it is actually signed with SHA1-RSA (and the reverse: indicates SHA1-RSA, actually signed with SHA256-RSA).</p>
+<h4 id="ca3malformedocspresponses">CA #3: Malformed OCSP responses</h4>
+<p>When we first started the project, our tool was unable to parse dozens of certificates in our database because of this error</p>
+<pre><code>asn1: structure error: integer not minimally-encoded
+</code></pre>
+<p>and many OCSP responses that we fetched from the same CA:</p>
+<pre><code>parsing ocsp response: bad OCSP signature: asn1: structure error: integer not minimally-encoded
+</code></pre>
+<p>What happened was that this CA had begun issuing &lt;1% of certificates with a minor formatting error that rendered them unparseable by Golang’s x509 package. After contacting them directly, they quickly fixed the issue but then we had to patch Golang's parser to be more lenient about encoding bugs.</p>
+<h4 id="ca4failedresponderbehindaloadbalancer">CA #4: Failed responder behind a load balancer</h4>
+<p>A small number of CA #4’s OCSP responders fell into a &quot;bad state&quot; without them knowing, and would return 404 on every request. Since the CA used load balancing to round-robin requests to a number of responders,  it looked like 1 in 6 requests would fail inexplicably.</p>
+<p>Two times between Jan 2017 and May 2017, this CA also experienced some kind of large data-loss event that caused them to return persistent &quot;Try Later&quot; responses for a large number of requests.</p>
+<h4 id="ca5delaybetweencertificateandocspresponder">CA #5: Delay between certificate and OCSP responder</h4>
+<p>When a certificate is issued by CA #5, there is a large delay between the time a certificate is issued and the OCSP responder is able to start returning signed responses. This results in a delay between certificate issance and the availability of OCSP. It has mostly been resolved, but this general pattern is dangerous for OCSP must-staple. There have been some <a href="https://github.com/sleevi/cabforum-docs/pull/2">changes discussed</a> by the <a href="https://cabforum.org/">CA/B Forum</a>, an organization that regulates the issuance and management of certificates, to require CAs to offer OCSP soon after issuance.</p>
+<h4 id="ca6extracertificates">CA #6: Extra certificates</h4>
+<p>It is typical to embed only one certificate in an OCSP response, if any. The one embedded certificate is supposed to be a leaf specially issued for signing an intermediate's OCSP responses. However, several CAs embed multiple certificates: the leaf they use for signing OCSP responses, the intermediate itself, and sometimes all the intermediates up to the root certificate.</p>
+<h3 id="conclusions">Conclusions</h3>
+<p>We made OCSP stapling better and more reliable for Cloudflare customers. Despite the various strange behaviors we found in OCSP servers, we’ve been able to consistently serve OCSP responses for over 99.9% of connections since we’ve moved over to the new system. This great work was done by Brendan McMillion and Alessandro Ghedini. This is an important step in protecting the web community from attackers who have compromised certificate private keys.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+        <a href="/tag/ocsp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">OCSP</a>
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/https/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">HTTPS</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-04-09T12:00:00+01:00">April 09, 2020 12:00PM</p>
+        <a href="/internship-experience-cryptography-engineer/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Internship Experience: Cryptography Engineer</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Back in the summer of 2017 I was an intern at Cloudflare. During the scholastic year I was a grad student working on automorphic forms and computational Langlands at Berkeley....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/watson/" class="fw5 f2 black no-underline">Watson Ladd</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/engineering/" class="no-underline f1 fw2 blue3 underline-hover">Engineering</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/internships/" class="no-underline f1 fw2 blue3 underline-hover">Internships</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/careers/" class="no-underline f1 fw2 blue3 underline-hover">Careers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-12-25T17:42:02Z">December 25, 2018 5:42PM</p>
+        <a href="/christmas-cryptography-challenges-2019/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Concise Christmas Cryptography Challenges 2019</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've put together some Christmas Cryptography questions. Do you think you can solve them?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/junade-ali/" class="fw5 f2 black no-underline">Junade Ali</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/louis-poinsignon/" class="fw5 f2 black no-underline">Louis Poinsignon</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cryptography/" class="no-underline f1 fw2 blue3 underline-hover">Cryptography</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/holidays/" class="no-underline f1 fw2 blue3 underline-hover">Holidays</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/fun/" class="no-underline f1 fw2 blue3 underline-hover">Fun</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-08-11T00:00:00+01:00">August 11, 2018 12:00AM</p>
+        <a href="/rfc-8446-aka-tls-1-3/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A Detailed Look at RFC 8446 (a.k.a. TLS 1.3)</h2>
+        </a>
+
+        <p class="gray1 lh-copy">TLS 1.3 (RFC 8446) was published today. This article provides a deep dive into the changes introduced in TLS 1.3 and its impact on the future of internet security....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/encryption/" class="no-underline f1 fw2 blue3 underline-hover">Encryption</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls/" class="no-underline f1 fw2 blue3 underline-hover">TLS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tls-1-3/" class="no-underline f1 fw2 blue3 underline-hover">TLS 1.3</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/https/" class="no-underline f1 fw2 blue3 underline-hover">HTTPS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-06-05T15:46:17+01:00">June 05, 2018 3:46PM</p>
+        <a href="/welcome-hidden-resolver/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Introducing DNS Resolver for Tor</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As was mentioned in the original 1.1.1.1 blog post, our policy is to never write client IP addresses to disk and wipe all logs within 24 hours. Still some folks might not want to reveal their IP address to the resolver at all. This is why we are launching a Tor hidden service for our resolver....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/mahrud/" class="fw5 f2 black no-underline">Mahrud Sayrafi</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/1-1-1-1/" class="no-underline f1 fw2 blue3 underline-hover">1.1.1.1</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tor/" class="no-underline f1 fw2 blue3 underline-hover">Tor</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/privacy/" class="no-underline f1 fw2 blue3 underline-hover">Privacy</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

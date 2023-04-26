@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Building fast interpreters in Rust</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="We created a Rust library for writing and executing Wireshark®-like filters in different parts of our stack." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/building-fast-interpreters-in-rust/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Building fast interpreters in Rust" />
+    <meta property="og:description" content="In the previous post we described the Firewall Rules architecture and how the different components are integrated together. We created a configurable Rust library for writing and executing Wireshark®-like filters in different parts of our stack written in Go, Lua, C, C++ and JavaScript Workers." />
+    <meta property="og:url" content="https://blog.cloudflare.com/building-fast-interpreters-in-rust/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/02/pasted-image-0.png" />
+    <meta property="article:published_time" content="2019-03-04T16:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-08-13T15:19:42.000Z" />
+    <meta property="article:tag" content="Rust" />
+    <meta property="article:tag" content="JavaScript" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="IPv4" />
+    <meta property="article:tag" content="IPv6" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="API" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Building fast interpreters in Rust" />
+    <meta name="twitter:description" content="In the previous post we described the Firewall Rules architecture and how the different components are integrated together. We created a configurable Rust library for writing and executing Wireshark®-like filters in different parts of our stack written in Go, Lua, C, C++ and JavaScript Workers." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/building-fast-interpreters-in-rust/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/02/pasted-image-0.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ingvar Stepanyan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Rust, JavaScript, Cloudflare Workers, Serverless, IPv4, IPv6, Security, Programming, API" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ingvar Stepanyan",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/rYPVgOqN.jpg",
+        "url": "https://blog.cloudflare.com/author/ingvar-stepanyan/",
+        "sameAs": []
+    },
+    "headline": "Building fast interpreters in Rust",
+    "url": "https://blog.cloudflare.com/building-fast-interpreters-in-rust/",
+    "datePublished": "2019-03-04T16:00:00.000Z",
+    "dateModified": "2019-08-13T15:19:42.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/02/pasted-image-0.png",
+    "keywords": "Rust, JavaScript, Cloudflare Workers, Serverless, IPv4, IPv6, Security, Programming, API",
+    "description": "In the previous post we described the Firewall Rules architecture and how the different components are integrated together. We created a configurable Rust library for writing and executing Wireshark®-like filters in different parts of our stack written in Go, Lua, C, C++ and JavaScript Workers.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-rust tag-javascript tag-workers tag-serverless tag-ipv4 tag-ipv6 tag-security tag-programming tag-api sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-rust tag-javascript tag-workers tag-serverless tag-ipv4 tag-ipv6 tag-security tag-programming tag-api ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Building fast interpreters in Rust</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-03-04T16:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">March 04, 2019 4:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ingvar-stepanyan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/rYPVgOqN.jpg" alt="Ingvar Stepanyan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ingvar-stepanyan" class="fw5 f3 no-underline black mr3">Ingvar Stepanyan</a>
+                </div>
+            </li>
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/andrew-galloni/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/02/4Dzpw0TrQAmQGEaubqch_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg" alt="Andrew Galloni" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/andrew-galloni" class="fw5 f3 no-underline black mr3">Andrew Galloni</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>In the <a href="https://blog.cloudflare.com/how-we-made-firewall-rules/">previous post</a> we described the Firewall Rules architecture and how the different components are integrated together. We also mentioned that we created a configurable Rust library for writing and executing <a href="https://www.wireshark.org/">Wireshark</a>®-like filters in different parts of our stack written in Go, Lua, C, C++ and JavaScript Workers.</p><blockquote>With a mixed set of requirements of performance, memory safety, low memory use, and the capability to be part of other products that we’re working on like Spectrum, Rust stood out as the strongest option.</blockquote><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/08/Langs.png" class="kg-image"></figure><p>We have now open-sourced this library under our Github account: <a href="https://github.com/cloudflare/wirefilter">https://github.com/cloudflare/wirefilter</a>. This post will dive into its design, explain why we didn’t use a parser generator and how our execution engine balances security, runtime performance and compilation cost for the generated filters.</p><h3 id="parsing-wireshark-syntax">Parsing Wireshark syntax</h3><p>When building a custom Domain Specific Language (DSL), the first thing we need to be able to do is parse it. This should result in an intermediate representation (usually called an Abstract Syntax Tree) that can be inspected, traversed, analysed and, potentially, serialised.</p><p>There are different ways to perform such conversion, such as:</p><ol><li>Manual char-by-char parsing using state machines, regular expression and/or native string APIs.</li><li>Parser combinators, which use higher-level functions to combine different parsers together (in Rust-land these are represented by <a href="https://github.com/Geal/nom">nom</a>, <a href="https://github.com/m4rw3r/chomp">chomp</a>, <a href="https://github.com/Marwes/combine">combine</a> and <a href="https://crates.io/keywords/parser-combinators">others</a>).</li><li>Fully automated generators which, provided with a grammar, can generate a fully working parser for you (examples are <a href="https://github.com/kevinmehall/rust-peg">peg</a>, <a href="https://github.com/pest-parser/pest">pest</a>, <a href="https://github.com/lalrpop/lalrpop">LALRPOP</a>, etc.).</li></ol><h4 id="wireshark-syntax">Wireshark syntax</h4><p>But before trying to figure out which approach would work best for us, let’s take a look at some of the simple <a href="https://wiki.wireshark.org/DisplayFilters">official Wireshark examples</a>, to understand what we’re dealing with:</p><ul><li><code>ip.len le 1500</code></li><li><code>udp contains 81:60:03</code></li><li><code>sip.To contains "a1762"</code></li><li><code>http.request.uri matches "gl=se$"</code></li><li><code>eth.dst == ff:ff:ff:ff:ff:ff</code></li><li><code>ip.addr == 192.168.0.1</code></li><li><code>ipv6.addr == ::1</code></li></ul><p>You can see that the right hand side of a comparison can be a number, an IPv4 / IPv6 address, a set of bytes or a string. They are used interchangeably, without any special notion of a type, which is fine given that they are easily distinguishable… or are they?</p><p>Let’s take a look at some <a href="https://en.wikipedia.org/wiki/IPv6#Address_representation">IPv6 forms</a> on Wikipedia:</p><ul><li><code>2001:0db8:0000:0000:0000:ff00:0042:8329</code></li><li><code>2001:db8:0:0:0:ff00:42:8329</code></li><li><code>2001:db8::ff00:42:8329</code></li></ul><p>So IPv6 can be written as a set of up to 8 colon-separated hexadecimal numbers, each containing up to 4 digits with leading zeros omitted for convenience. This appears suspiciously similar to the syntax for byte sequences. Indeed, if we try writing out a sequence like <code>2f:31:32:33:34:35:36:37</code>, it’s simultaneously a valid IPv6 and a byte sequence in terms of Wireshark syntax.</p><p>There is no way of telling what this sequence actually represents without looking at the type of the field it’s being compared with, and if you try using this sequence in Wireshark, you’ll notice that it does just that:</p><ul><li><code>ipv6.addr == 2f:31:32:33:34:35:36:37</code>: right hand side is parsed and used as an IPv6 address</li><li><code>http.request.uri == 2f:31:32:33:34:35:36:37</code>: right hand side is parsed and used as a byte sequence (will match a URL <code>"/1234567"</code>)</li></ul><p>Are there other examples of such ambiguities? Yup - for example, we can try using a single number with two decimal digits:</p><ul><li><code>tcp.port == 80</code>: matches any traffic on the port 80 (HTTP)</li><li><code>http.file_data == 80</code>: matches any HTTP request/response with body containing a single byte (0x80)</li></ul><p>We could also do the same with ethernet address, defined as a separate type in Wireshark, but, for simplicity, we represent it as a regular byte sequence in our implementation, so there is no ambiguity here.</p><h4 id="choosing-a-parsing-approach">Choosing a parsing approach</h4><p>This is an interesting syntax design decision. It means that we need to store a mapping between field names and types ahead of time - a Scheme, as we call it - and use it for contextual parsing. This restriction also immediately rules out many if not most parser generators.</p><p>We could still use one of the more sophisticated ones (like LALRPOP) that allow replacing the default regex-based lexer with your own custom code, but at that point we’re so close to having a full parser for our DSL that the complexity outweighs any benefits of using a black-box parser generator.</p><p>Instead, we went with a manual parsing approach. While (for a good reason) this might sound scary in unsafe languages like C / C++, in Rust all strings are bounds checked by default. Rust also provides a rich string manipulation API, which we can use to build more complex helpers, eventually ending up with a full parser.</p><p>This approach is, in fact, pretty similar to parser combinators in that the parser doesn’t have to keep state and only passes the unprocessed part of the input down to smaller, narrower scoped functions. Just as in parser combinators, the absence of mutable state also allows to easily test and maintain each of the parsers for different parts of the syntax independently of the others.</p><p>Compared with popular parser combinator libraries in Rust, one of the differences is that our parsers are not standalone functions but rather types that implement common traits:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">pub trait Lex&lt;'i&gt;: Sized {
+   fn lex(input: &amp;'i str) -&gt; LexResult&lt;'i, Self&gt;;
+}
+pub trait LexWith&lt;'i, E&gt;: Sized {
+   fn lex_with(input: &amp;'i str, extra: E) -&gt; LexResult&lt;'i, Self&gt;;
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>The <code>lex</code> method or its contextual variant <code>lex_with</code> can either return a successful pair of <code>(instance of the type, rest of input)</code> or a pair of <code>(error kind, relevant input span)</code>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/08/parse.png" class="kg-image"></figure><p>The <code>Lex</code> trait is used for target types that can be parsed independently of the context (like field names or literals), while <code>LexWith</code> is used for types that need a <code>Scheme</code> or a part of it to be parsed unambiguously.</p><p>A bigger difference is that, instead of relying on higher-level functions for parser combinators, we use the usual imperative function call syntax. For example, when we want to perform sequential parsing, all we do is call several parsers in a row, using tuple destructuring for intermediate results:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">let input = skip_space(input);
+let (op, input) = CombinedExpr::lex_with(input, scheme)?;
+let input = skip_space(input);
+let input = expect(input, &quot;)&quot;)?;
+</code></pre>
+<!--kg-card-end: markdown--><p>And, when we want to try different alternatives, we can use native pattern matching and ignore the errors:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">if let Ok(input) = expect(input, &quot;(&quot;) {
+   ...
+   (SimpleExpr::Parenthesized(Box::new(op)), input)
+} else if let Ok((op, input)) = UnaryOp::lex(input) {
+   ...
+} else {
+   ...
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Finally, when we want to automate parsing of some more complicated common cases - say, enums - Rust provides a powerful macro syntax:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">lex_enum!(#[repr(u8)] OrderingOp {
+   &quot;eq&quot; | &quot;==&quot; =&gt; Equal = EQUAL,
+   &quot;ne&quot; | &quot;!=&quot; =&gt; NotEqual = LESS | GREATER,
+   &quot;ge&quot; | &quot;&gt;=&quot; =&gt; GreaterThanEqual = GREATER | EQUAL,
+   &quot;le&quot; | &quot;&lt;=&quot; =&gt; LessThanEqual = LESS | EQUAL,
+   &quot;gt&quot; | &quot;&gt;&quot; =&gt; GreaterThan = GREATER,
+   &quot;lt&quot; | &quot;&lt;&quot; =&gt; LessThan = LESS,
+});
+</code></pre>
+<!--kg-card-end: markdown--><p>This gives an experience similar to parser generators, while still using native language syntax and keeping us in control of all the implementation details.</p><h3 id="execution-engine">Execution engine</h3><p>Because our grammar and operations are fairly simple, initially we used direct AST interpretation by requiring all nodes to implement a trait that includes an <code>execute</code> method.</p><!--kg-card-begin: markdown--><pre><code class="language-rust">trait Expr&lt;'s&gt; {
+    fn execute(&amp;self, ctx: &amp;ExecutionContext&lt;'s&gt;) -&gt; bool;
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>The <code>ExecutionContext</code> is pretty similar to a <code>Scheme</code>, but instead of mapping arbitrary field names to their types, it maps them to the runtime input values provided by the caller.</p><p>As with <code>Scheme</code>, initially <code>ExecutionContext</code> used an internal <code>HashMap</code> for registering these arbitrary <code>String</code> -&gt; <code>RhsValue</code> mappings. During the <code>execute</code> call, the AST implementation would evaluate itself recursively, and look up each field reference in this map, either returning a value or raising an error on missing slots and type mismatches.</p><p>This worked well enough for an initial implementation, but using a <code>HashMap</code> has a non-trivial cost which we would like to eliminate. We already used a more efficient hasher - <code><a href="https://github.com/servo/rust-fnv">Fnv</a></code> - because we are in control of all keys and so are not worried about hash DoS attacks, but there was still more we could do.</p><h4 id="speeding-up-field-access">Speeding up field access</h4><p>If we look at the data structures involved, we can see that the scheme is always well-defined in advance, and all our runtime values in the execution engine are expected to eventually match it, even if the order or a precise set of fields is not guaranteed:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/08/fieldaccess.png" class="kg-image"></figure><p>So what if we ditch the second map altogether and instead use a fixed-size array of values? Array indexing should be much cheaper than looking up in a map, so it might be well worth the effort.</p><p>How can we do it? We already know the number of items (thanks to the predefined scheme) so we can use that for the size of the backing storage, and, in order to simulate <code>HashMap</code> “holes” for unset values, we can wrap each item an <code>Option&lt;...&gt;</code>:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">pub struct ExecutionContext&lt;'e&gt; {
+    scheme: &amp;'e Scheme,
+    values: Box&lt;[Option&lt;LhsValue&lt;'e&gt;&gt;]&gt;,
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>The only missing piece is an index that could map both structures to each other. As you might remember, <code>Scheme</code> still uses a <code>HashMap</code> for field registration, and a <code>HashMap</code> is normally expected to be randomised and indexed only by the predefined key.</p><p>While we could wrap a value and an auto-incrementing index together into a custom struct, there is already a better solution: <code><a href="https://github.com/bluss/indexmap">IndexMap</a></code>. <code>IndexMap</code> is a drop-in replacement for a <code>HashMap</code> that preserves ordering and provides a way to get an index of any element and vice versa - exactly what we needed.</p><p>After replacing a <code>HashMap</code> in the Scheme with <code>IndexMap</code>, we can change parsing to resolve all the parsed field names to their indices in-place and store that in the AST:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">impl&lt;'i, 's&gt; LexWith&lt;'i, &amp;'s Scheme&gt; for Field&lt;'s&gt; {
+   fn lex_with(mut input: &amp;'i str, scheme: &amp;'s Scheme) -&gt; LexResult&lt;'i, Self&gt; {
+       ...
+       let field = scheme
+           .get_field_index(name)
+           .map_err(|err| (LexErrorKind::UnknownField(err), name))?;
+       Ok((field, input))
+   }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>After that, in the <code>ExecutionContext</code> we allocate a fixed-size array and use these indices for resolving values during runtime:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">impl&lt;'e&gt; ExecutionContext&lt;'e&gt; {
+   /// Creates an execution context associated with a given scheme.
+   ///
+   /// This scheme will be used for resolving any field names and indices.
+   pub fn new&lt;'s: 'e&gt;(scheme: &amp;'s Scheme) -&gt; Self {
+       ExecutionContext {
+           scheme,
+           values: vec![None; scheme.get_field_count()].into(),
+       }
+   }
+   ...
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>This gave significant (~2x) speed ups on our standard benchmarks:</p><p><em>Before:</em></p><pre><code>test matching ... bench:       2,548 ns/iter (+/- 98)
+test parsing  ... bench:     192,037 ns/iter (+/- 21,538)</code></pre><p><em>After<strong>:</strong></em></p><pre><code>test matching ... bench:       1,227 ns/iter (+/- 29)
+test parsing  ... bench:     197,574 ns/iter (+/- 16,568)</code></pre><p>This change also improved the usability of our API, as any type errors are now detected and reported much earlier, when the values are just being set on the context, and not delayed until filter execution.</p><h4 id="-not-jit-compilation">[not] JIT compilation</h4><p>Of course, as with any respectable DSL, one of the other ideas we had from the beginning was “...at some point we’ll add native compilation to make everything super-fast, it’s just a matter of time...”.</p><p>In practice, however, native compilation is a complicated matter, but not due to lack of tools.</p><p>First of all, there is question of storage for the native code. We could compile each filter statically into some sort of a library and publish to a key-value store, but that would not be easy to maintain:</p><ul><li>We would have to compile each filter to several platforms (x86-64, ARM, WASM, …).</li><li>The overhead of native library formats would significantly outweigh the useful executable size, as most filters tend to be small.</li><li>Each time we’d like to change our execution logic, whether to optimise it or to fix a bug, we would have to recompile and republish all the previously stored filters.</li><li>Finally, even if/though we’re sure of the reliability of the chosen store, executing dynamically retrieved native code on the edge as-is is not something that can be taken lightly.</li></ul><p>The usual flexible alternative that addresses most of these issues is Just-in-Time (JIT) compilation.</p><p>When you compile code directly on the target machine, you get to re-verify the input (still expressed as a restricted DSL), you can compile it just for the current platform in-place, and you never need to republish the actual rules.</p><p>Looks like a perfect fit? Not quite. As with any technology, there are tradeoffs, and you only get to choose those that make more sense for your use cases. JIT compilation is no exception.</p><p>First of all, even though you’re not loading untrusted code over the network, you still need to generate it into the memory, mark that memory as executable and trust that it will always contain valid code and not garbage or something worse. Depending on your choice of libraries and complexity of the DSL, you might be willing to trust it or put heavy sandboxing around, but, either way, it’s a risk that one must explicitly be willing to take.</p><p>Another issue is the cost of compilation itself. Usually, when measuring the speed of native code vs interpretation, the cost of compilation is not taken into the account because it happens out of the process.</p><p>With JIT compilers though, it’s different as you’re now compiling things the moment they’re used and cache the native code only for a limited time. Turns out, generating native code can be rather expensive, so you must be absolutely sure that the compilation cost doesn’t offset any benefits you might gain from the native execution speedup.</p><p>I’ve talked a bit more about this at <a href="https://www.meetup.com/rust-atx/">Rust Austin meetup</a> and, I believe, this topic deserves a separate blog post so won’t go into much more details here, but feel free to check out the slides: <a href="https://www.slideshare.net/RReverser/building-fast-interpreters-in-rust">https://www.slideshare.net/RReverser/building-fast-interpreters-in-rust</a>. Oh, and if you’re in Austin, you should pop into our office for the next meetup!</p><p>Let’s get back to our original question: is there anything else we can do to get the best balance between security, runtime performance and compilation cost? Turns out, there is.</p><h4 id="dynamic-dispatch-and-closures-to-the-rescue">Dynamic dispatch and closures to the rescue </h4><p>Introducing <code>Fn</code> trait!</p><p>In Rust, the <code>Fn</code> trait and friends (<code>FnMut</code>, <code>FnOnce</code>) are automatically implemented on eligible functions and closures. In case of a simple <code>Fn</code> case the restriction is that they must not modify their captured environment and can only borrow from it.</p><p>Normally, you would want to use it in generic contexts to support arbitrary callbacks with given argument and return types. This is important because in Rust, each function and closure implements a unique type and any generic usage would compile down to a specific call just to that function.</p><!--kg-card-begin: markdown--><pre><code class="language-rust">fn just_call(me: impl Fn(), maybe: bool) {
+  if maybe {
+    me()
+  }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Such behaviour (called static dispatch) is the default in Rust and is preferable for performance reasons.</p><p>However, if we don’t know all the possible types at compile-time, Rust allows us to opt-in for a dynamic dispatch instead:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">fn just_call(me: &amp;dyn Fn(), maybe: bool) {
+  if maybe {
+    me()
+  }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Dynamically dispatched objects don't have a statically known size, because it depends on the implementation details of particular type being passed. They need to be passed as a reference or stored in a heap-allocated <code>Box</code>, and then used just like in a generic implementation.</p><p>In our case, this allows to create, return and store arbitrary closures, and later call them as regular functions:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">trait Expr&lt;'s&gt; {
+    fn compile(self) -&gt; CompiledExpr&lt;'s&gt;;
+}
+
+pub(crate) struct CompiledExpr&lt;'s&gt;(Box&lt;dyn 's + Fn(&amp;ExecutionContext&lt;'s&gt;) -&gt; bool&gt;);
+
+impl&lt;'s&gt; CompiledExpr&lt;'s&gt; {
+   /// Creates a compiled expression IR from a generic closure.
+   pub(crate) fn new(closure: impl 's + Fn(&amp;ExecutionContext&lt;'s&gt;) -&gt; bool) -&gt; Self {
+       CompiledExpr(Box::new(closure))
+   }
+
+   /// Executes a filter against a provided context with values.
+   pub fn execute(&amp;self, ctx: &amp;ExecutionContext&lt;'s&gt;) -&gt; bool {
+       self.0(ctx)
+   }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>The closure (an <code>Fn</code> box) will also automatically include the environment data it needs for the execution.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/08/box.png" class="kg-image"></figure><p>This means that we can optimise the runtime data representation as part of the “compile” process without changing the AST or the parser. For example, when we wanted to optimise IP range checks by splitting them for different IP types, we could do that without having to modify any existing structures:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">RhsValues::Ip(ranges) =&gt; {
+   let mut v4 = Vec::new();
+   let mut v6 = Vec::new();
+   for range in ranges {
+       match range.clone().into() {
+           ExplicitIpRange::V4(range) =&gt; v4.push(range),
+           ExplicitIpRange::V6(range) =&gt; v6.push(range),
+       }
+   }
+   let v4 = RangeSet::from(v4);
+   let v6 = RangeSet::from(v6);
+   CompiledExpr::new(move |ctx| {
+       match cast!(ctx.get_field_value_unchecked(field), Ip) {
+           IpAddr::V4(addr) =&gt; v4.contains(addr),
+           IpAddr::V6(addr) =&gt; v6.contains(addr),
+       }
+   })
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>Moreover, boxed closures can be part of that captured environment, too. This means that we can convert each simple comparison into a closure, and then combine it with other closures, and keep going until we end up with a single top-level closure that can be invoked as a regular function to evaluate the entire filter expression.</p><p>It’s <s>turtles</s> closures all the way down:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">let items = items
+   .into_iter()
+   .map(|item| item.compile())
+   .collect::&lt;Vec&lt;_&gt;&gt;()
+   .into_boxed_slice();
+
+match op {
+   CombiningOp::And =&gt; {
+       CompiledExpr::new(move |ctx| items.iter().all(|item| item.execute(ctx)))
+   }
+   CombiningOp::Or =&gt; {
+       CompiledExpr::new(move |ctx| items.iter().any(|item| item.execute(ctx)))
+   }
+   CombiningOp::Xor =&gt; CompiledExpr::new(move |ctx| {
+       items
+           .iter()
+           .fold(false, |acc, item| acc ^ item.execute(ctx))
+   }),
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>What’s nice about this approach is:</p><ul><li>Our execution is no longer tied to the AST, and we can be as flexible with optimising the implementation and data representation as we want without affecting the parser-related parts of code or output format.</li><li>Even though we initially “compile” each node to a single closure, in future we can pretty easily specialise certain combinations of expressions into their own closures and so improve execution speed for common cases. All that would be required is a separate <code>match</code> branch returning a closure optimised for just that case.</li><li>Compilation is very cheap compared to real code generation. While it might seem that allocating many small objects (one <code>Box</code>ed closure per expression) is not very efficient and that it would be better to replace it with some sort of a memory pool, in practice we saw a negligible performance impact.</li><li>No native code is generated at runtime, which means that we execute only code that was statically verified by Rust at compile-time and compiled down to a static function. All that we do at the runtime is call existing functions with different values.</li><li>Execution turns out to be faster too. This initially came as a surprise, because dynamic dispatch is widely believed to be costly and we were worried that it would get slightly worse than AST interpretation. However, it showed an immediate ~10-15% runtime improvement in benchmarks and on real examples.</li></ul><p>The only obvious downside is that each level of AST requires a separate dynamically-dispatched call instead of a single inlined code for the entire expression, like you would have even with a basic template JIT.</p><p>Unfortunately, such output could be achieved only with real native code generation, and, for our case, the mentioned downsides and risks would outweigh runtime benefits, so we went with the safe &amp; flexible closure approach.</p><h3 id="bonus-webassembly-support">Bonus: WebAssembly support</h3><p>As was mentioned earlier, we chose Rust as a safe high-level language that allows easy integration with other parts of our stack written in Go, C and Lua via C FFI. But Rust has one more target it invests in and supports exceptionally well: WebAssembly.</p><p>Why would we be interested in that? Apart from the parts of the stack where our rules would run, and the API that publishes them, we also have users who like to write their own rules. To do that, they use a UI editor that allows either writing raw expressions in Wireshark syntax or as a WYSIWYG builder.</p><p>We thought it would be great to expose the parser - the same one as we use on the backend - to the frontend JavaScript for a consistent real-time editing experience. And, honestly, we were just looking for an excuse to play with WASM support in Rust.</p><p>WebAssembly could be targeted via regular C FFI, but in that case you would need to manually provide all the glue for the JavaScript side to hold and convert strings, arrays and objects forth and back.</p><p>In Rust, this is all handled by <a href="https://github.com/rustwasm/wasm-bindgen">wasm-bindgen</a>. While it provides various attributes and methods for direct conversions, the simplest way to get started is to activate the “serde” feature which will automatically convert types using <code>JSON.parse</code>, <code>JSON.stringify</code> and <code><a href="https://docs.serde.rs/serde_json/">serde_json</a></code> under the hood.</p><p>In our case, creating a wrapper for the parser with only 20 lines of code was enough to get started and have all the WASM code + JavaScript glue required:</p><!--kg-card-begin: markdown--><pre><code class="language-rust">#[wasm_bindgen]
+pub struct Scheme(wirefilter::Scheme);
+
+fn into_js_error(err: impl std::error::Error) -&gt; JsValue {
+   js_sys::Error::new(&amp;err.to_string()).into()
+}
+
+#[wasm_bindgen]
+impl Scheme {
+   #[wasm_bindgen(constructor)]
+   pub fn try_from(fields: &amp;JsValue) -&gt; Result&lt;Scheme, JsValue&gt; {
+       fields.into_serde().map(Scheme).map_err(into_js_error)
+   }
+
+   pub fn parse(&amp;self, s: &amp;str) -&gt; Result&lt;JsValue, JsValue&gt; {
+       let filter = self.0.parse(s).map_err(into_js_error)?;
+       JsValue::from_serde(&amp;filter).map_err(into_js_error)
+   }
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>And by using a higher-level tool called <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>, we also got automated npm package generation and publishing, for free.</p><p>This is not used in the production UI yet because we still need to figure out some details for unsupported browsers, but it’s great to have all the tooling and packages ready with minimal efforts. Extending and reusing the same package, it should be even possible to run filters in Cloudflare Workers too (which <a href="https://blog.cloudflare.com/webassembly-on-cloudflare-workers/">also support WebAssembly</a>).</p><h3 id="the-future">The future</h3><p>The code in the current state is already doing its job well in production and we’re happy to share it with the open-source Rust community.</p><p>This is definitely not the end of the road though - we have many more fields to add, features to implement and planned optimisations to explore. If you find this sort of work interesting and would like to help us by working on firewalls, parsers or just any Rust projects at scale, give us a shout!</p>
+            </div>
+        </section>
+
+        <a href="/tag/rust/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Rust</a>
+        <a href="/tag/javascript/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">JavaScript</a>
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+        <a href="/tag/ipv4/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">IPv4</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-29T08:00:00Z">November 29, 2019 8:00AM</p>
+        <a href="/html-parsing-2/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A History of HTML Parsing at Cloudflare: Part 2</h2>
+        </a>
+
+        <p class="gray1 lh-copy">The second blog post in the series on HTML rewriters picks up the story in 2017 after the launch of the Cloudflare edge compute platform Cloudflare Workers. It became clear that the developers using workers wanted the same HTML rewriting capabilities that we used internally,...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/ivan-nikulin/" class="fw5 f2 black no-underline">Ivan Nikulin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-sites/" class="no-underline f1 fw2 blue3 underline-hover">Workers Sites</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-11-28T08:44:00Z">November 28, 2019 8:44AM</p>
+        <a href="/html-parsing-1/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">A History of HTML Parsing at Cloudflare: Part 1</h2>
+        </a>
+
+        <p class="gray1 lh-copy">To coincide with the launch of streaming HTML rewriting functionality for Cloudflare Workers we are open sourcing the Rust HTML rewriter (LOL  HTML) used to back the Workers HTMLRewriter API. We also thought it was about time to review the history of HTML rewriting at Cloudflare....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andrew-galloni/" class="fw5 f2 black no-underline">Andrew Galloni</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/ingvar-stepanyan/" class="fw5 f2 black no-underline">Ingvar Stepanyan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers-sites/" class="no-underline f1 fw2 blue3 underline-hover">Workers Sites</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-03-27T13:43:27Z">March 27, 2019 1:43PM</p>
+        <a href="/boringtun-userspace-wireguard-rust/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">BoringTun, a userspace WireGuard implementation in Rust</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we are happy to release the source code of a project we’ve been working on for the past few months. It is called BoringTun, and is a userspace implementation of the WireGuard® protocol written in Rust....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/vlad-krasnov/" class="fw5 f2 black no-underline">Vlad Krasnov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-04-06T15:00:00+01:00">April 06, 2018 3:00PM</p>
+        <a href="/cloudflare-argo-tunnel-with-rust-and-raspberry-pi/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare Argo Tunnel with Rust+Raspberry Pi</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Serving content from a Rust web server running on a Raspberry Pi from your home to the world, with a Cloudflare Argo Tunnels....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/stevenpack/" class="fw5 f2 black no-underline">Steven Pack</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/argo/" class="no-underline f1 fw2 blue3 underline-hover">Argo Smart Routing</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/argo-tunnel/" class="no-underline f1 fw2 blue3 underline-hover">Argo Tunnel</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/raspberry-pi/" class="no-underline f1 fw2 blue3 underline-hover">Raspberry Pi</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

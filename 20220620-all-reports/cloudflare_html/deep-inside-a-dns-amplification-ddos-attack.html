@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Deep Inside a DNS Amplification DDoS Attack</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/deep-inside-a-dns-amplification-ddos-attack/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Deep Inside a DNS Amplification DDoS Attack" />
+    <meta property="og:description" content="A few weeks ago I wrote about DNS Amplification Attacks. These attacks are some of the largest, as measured by the number of Gigabits per second (Gbps), that we see directed toward our network." />
+    <meta property="og:url" content="https://blog.cloudflare.com/deep-inside-a-dns-amplification-ddos-attack/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/amplification.gif.scaled500.gif" />
+    <meta property="article:published_time" content="2012-10-30T07:54:00.000Z" />
+    <meta property="article:modified_time" content="2018-08-08T19:37:56.000Z" />
+    <meta property="article:tag" content="DNS" />
+    <meta property="article:tag" content="DDoS" />
+    <meta property="article:tag" content="Attacks" />
+    <meta property="article:tag" content="Reliability" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Deep Inside a DNS Amplification DDoS Attack" />
+    <meta name="twitter:description" content="A few weeks ago I wrote about DNS Amplification Attacks. These attacks are some of the largest, as measured by the number of Gigabits per second (Gbps), that we see directed toward our network." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/deep-inside-a-dns-amplification-ddos-attack/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/amplification.gif.scaled500.gif" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Matthew Prince" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="DNS, DDoS, Attacks, Reliability" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@eastdakota" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Matthew Prince",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/49221151a644a624a8ddff8aebe89e8f?d=404&s=250",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/matthew-prince/",
+        "sameAs": [
+            "https://twitter.com/eastdakota"
+        ]
+    },
+    "headline": "Deep Inside a DNS Amplification DDoS Attack",
+    "url": "https://blog.cloudflare.com/deep-inside-a-dns-amplification-ddos-attack/",
+    "datePublished": "2012-10-30T07:54:00.000Z",
+    "dateModified": "2018-08-08T19:37:56.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/amplification.gif.scaled500.gif",
+    "keywords": "DNS, DDoS, Attacks, Reliability",
+    "description": "A few weeks ago I wrote about DNS Amplification Attacks. These attacks are some of the largest, as measured by the number of Gigabits per second (Gbps), that we see directed toward our network.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-dns tag-ddos tag-attacks tag-reliability sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-dns tag-ddos tag-attacks tag-reliability ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Deep Inside a DNS Amplification DDoS Attack</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2012-10-30T07:54:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">October 30, 2012 7:54AM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/matthew-prince/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/49221151a644a624a8ddff8aebe89e8f?d&#x3D;404&amp;s&#x3D;250" alt="Matthew Prince" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/matthew-prince" class="fw5 f3 no-underline black mr3">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><img alt="Deep Inside a DNS Amplification DDoS
+Attack" src="https://blog.cloudflare.com/content/images/amplification.gif.scaled500.gif" title="Deep Inside a DNS Amplification DDoS Attack"><noscript><img alt="Deep Inside a DNS Amplification DDoS Attack" src="https://blog.cloudflare.com/content/images/amplification.gif.scaled500.gif" title="Deep Inside a DNS Amplification DDoS Attack"></noscript>\</p>
+<p>A few weeks ago I wrote about <a href="http://blog.cloudflare.com/65gbps-ddos-no-problem">DNS Amplification Attacks</a>. These attacks are some of the largest, as measured by the number of Gigabits per second (Gbps), that we see directed toward our network. For the last three weeks, one persistent attacker has been sending at least 20Gbps twenty-four hours a day as an attack against one of our customers.</p>
+<p>That size of an attack is enough to cripple even a large web host. For CloudFlare, the nature of our network means that the attack, which gets diluted across all of our <a href="http://www.cloudflare.com/network-map">global data centers</a>, doesn't cause us harm. Even from a cost perspective, the attack doesn't end up adding to our bandwidth bill because of the way in which we're charged for wholesale bandwidth.</p>
+<p>We buy a lot of bandwidth and we pay for the higher of our ingress (in-bound) or egress (out-bound) averaged over a month. Since we act as a caching proxy, under normal circumstances egress always exceeds ingress. When there's an attack, the two lines get closer together but rarely is an attack large enough to add to our overall bandwidth costs.</p>
+<p>Given that the latest attack wasn't impacting us or any of our customers, we decided to let it run for a while and see what we could learn.</p>
+<h3 id="amplificationattacks">Amplification Attacks</h3>
+<p>DNS Amplification Attacks are a way for an attacker to magnify the amount of bandwidth they can target at a potential victim. Imagine you are an attacker and you control a botnet capable of sending out 100Mbps of traffic. While that may be sufficient to knock some sites offline, it is a relatively trivial amount of traffic in the world of DDoS. In order to increase your attack's volume, you could try and add more compromised machines to your botnet. That is becoming increasingly difficult. Alternatively, you could find a way to amplify your 100Mbps into something much bigger.</p>
+<p><img alt="Deep Inside a DNS Amplification DDoS Attack" src="https://blog.cloudflare.com/content/images/jokey_smurf_attack.jpg.scaled500.jpg" title="Deep Inside a DNS Amplification DDoS Attack"><noscript><img alt="Deep Inside a DNS Amplification DDoS Attack" src="https://blog.cloudflare.com/content/images/jokey_smurf_attack.jpg.scaled500.jpg" title="Deep Inside a DNS Amplification DDoS Attack"></noscript></p>
+<p>The original amplification attack was known as a <a href="http://en.wikipedia.org/wiki/Smurf_attack">SMURF attack</a>. A SMURF attack involves an attacker sending ICMP requests (i.e., ping requests) to the network's broadcast address (i.e., X.X.X.255) of a router configured to relay ICMP to all devices behind the router. The attacker spoofs the source of the ICMP request to be the IP address of the intended victim. Since ICMP does not include a handshake, the destination has no way of verifying if the source IP is legitimate. The router receives the request and passes it on to all the devices that sit behind it. All those devices then respond back to the ping. The attacker is able to amplify the attack by a multiple of how ever many devices are behind the router (i.e., if you have 5 devices behind the router then the attacker is able to amplify the attack 5x, see the diagram below).</p>
+<p><img alt="Deep Inside a DNS Amplification DDoS Attack" src="https://blog.cloudflare.com/content/images/smurf_attack_diagram.png.scaled500.png" title="Deep Inside a DNS Amplification DDoS Attack"><noscript><img alt="Deep Inside a DNS Amplification DDoS Attack" src="https://blog.cloudflare.com/content/images/smurf_attack_diagram.png.scaled500.png" title="Deep Inside a DNS Amplification DDoS Attack"></noscript></p>
+<p>SMURF attacks are largely a thing of the past. For the most part, network operators have configured their routers to not relay ICMP requests sent to a network's broadcast address. However, even as that amplification attack vector has closed, others remain wide open.</p>
+<h3 id="dnsamplification">DNS Amplification</h3>
+<p>There are two criteria for a good amplification attack vector: 1) query can be set with a spoofed source address (e.g., via a protocol like ICMP or UDP that does not require a handshake); and 2) the response to the query is significantly larger than the query itself. DNS is a core, ubiquitous Internet platform that meets these criteria and therefore has become the largest source of amplification attacks.</p>
+<p>DNS queries are typically transmitted over UDP, meaning that, like ICMP queries used in a SMURF attack, they are fire and forget. As a result, their source attribute can be spoofed and the receiver has no way of determining its veracity before responding. DNS also is capable of generating a much larger response than query. For example, you can send the following (tiny) query (where x.x.x.x is the IP of an open DNS resolver):</p>
+<pre>dig ANY isc.org @x.x.x.x
+</pre>
+<p>And get back the following (gigantic) response:</p>
+<pre>; &lt;&lt;&gt;&gt; DiG 9.7.3 &lt;&lt;&gt;&gt; ANY isc.org @x.x.x.x
+;; global options: +cmd
+;; Got answer:
+;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: NOERROR, id: 5147
+;; flags: qr rd ra; QUERY: 1, ANSWER: 27, AUTHORITY: 4, ADDITIONAL: 5
+
+;; QUESTION SECTION:
+;isc.org.                        IN        ANY
+
+;; ANSWER SECTION:
+isc.org.                4084       IN        SOA          ns-int.isc.org. hostmaster.isc.org. 2012102700 7200 3600 24796800 3600
+isc.org.                4084       IN        A            149.20.64.42
+isc.org.                4084       IN        MX           10 mx.pao1.isc.org.
+isc.org.                4084       IN        MX           10 mx.ams1.isc.org.
+isc.org.                4084       IN        TXT          &quot;v=spf1 a mx ip4:204.152.184.0/21 ip4:149.20.0.0/16 ip6:2001:04F8::0/32 ip6:2001:500:60::65/128 ~all&quot;
+isc.org.                4084       IN        TXT          &quot;$Id: isc.org,v 1.1724 2012-10-23 00:36:09 bind Exp $&quot;
+isc.org.                4084       IN        AAAA         2001:4f8:0:2::d
+isc.org.                4084       IN        NAPTR        20 0 &quot;S&quot; &quot;SIP+D2U&quot; &quot;&quot; _sip._udp.isc.org.
+isc.org.                484        IN        NSEC         _kerberos.isc.org. A NS SOA MX TXT AAAA NAPTR RRSIG NSEC DNSKEY SPF
+isc.org.                4084       IN        DNSKEY       256 3 5 BQEAAAAB2F1v2HWzCCE9vNsKfk0K8vd4EBwizNT9KO6WYXj0oxEL4eOJ aXbax/BzPFx+3qO8B8pu8E/JjkWH0oaYz4guUyTVmT5Eelg44Vb1kssy q8W27oQ+9qNiP8Jv6zdOj0uCB/N0fxfVL3371xbednFqoECfSFDZa6Hw jU1qzveSsW0=
+isc.org.                4084       IN        DNSKEY       257 3 5 BEAAAAOhHQDBrhQbtphgq2wQUpEQ5t4DtUHxoMVFu2hWLDMvoOMRXjGr hhCeFvAZih7yJHf8ZGfW6hd38hXG/xylYCO6Krpbdojwx8YMXLA5/kA+ u50WIL8ZR1R6KTbsYVMf/Qx5RiNbPClw+vT+U8eXEJmO20jIS1ULgqy3 47cBB1zMnnz/4LJpA0da9CbKj3A254T515sNIMcwsB8/2+2E63/zZrQz Bkj0BrN/9Bexjpiks3jRhZatEsXn3dTy47R09Uix5WcJt+xzqZ7+ysyL KOOedS39Z7SDmsn2eA0FKtQpwA6LXeG2w+jxmw3oA8lVUgEf/rzeC/bB yBNsO70aEFTd
+isc.org.                4084       IN        SPF          &quot;v=spf1 a mx ip4:204.152.184.0/21 ip4:149.20.0.0/16 ip6:2001:04F8::0/32 ip6:2001:500:60::65/128 ~all&quot;
+isc.org.                484        IN        RRSIG        NS 5 2 7200 20121125230752 20121026230752 4442 isc.org. oFeNy69Pn+/JnnltGPUZQnYzo1YGglMhS/SZKnlgyMbz+tT2r/2v+X1j AkUl9GRW9JAZU+x0oEj5oNAkRiQqK+D6DC+PGdM2/JHa0X41LnMIE2NX UHDAKMmbqk529fUy3MvA/ZwR9FXurcfYQ5fnpEEaawNS0bKxomw48dcp Aco=
+isc.org.                484        IN        RRSIG        SOA 5 2 7200 20121125230752 20121026230752 4442 isc.org. S+DLHzE/8WQbnSl70geMYoKvGlIuKARVlxmssce+MX6DO/J1xdK9xGac XCuAhRpTMKElKq2dIhKp8vnS2e+JTZLrGl4q/bnrrmhQ9eBS7IFmrQ6s 0cKEEyuijumOPlKCCN9QX7ds4siiTIrEOGhCaamEgRJqVxqCsg1dBUrR hKk=
+isc.org.                484        IN        RRSIG        MX 5 2 7200 20121125230752 20121026230752 4442 isc.org. VFqFWRPyulIT8VsIdXKMpMRJTYpdggoGgOjKJzKJs/6ZrxmbJtmAxgEu /rkwD6Q9JwsUCepNC74EYxzXFvDaNnKp/Qdmt2139h/xoZsw0JVA4Z+b zNQ3kNiDjdV6zl6ELtCVDqj3SiWDZhYB/CR9pNno1FAF2joIjYSwiwbS Lcw=
+isc.org.                484        IN        RRSIG        TXT 5 2 7200 20121125230752 20121026230752 4442 isc.org. Ojj8YCZf3jYL9eO8w4Tl9HjWKP3CKXQRFed8s9xeh5TR3KI3tQTKsSeI JRQaCXkADiRwHt0j7VaJ3xUHa5LCkzetcVgJNPmhovVa1w87Hz4DU6q9 k9bbshvbYtxOF8xny/FCiR5c6NVeLmvvu4xeOqSwIpoo2zvIEfFP9deR UhA=
+isc.org.                484        IN        RRSIG        AAAA 5 2 7200 20121125230752 20121026230752 4442 isc.org. hutAcro0NBMvKU/m+2lF8sgIYyIVWORTp/utIn8KsF1WOwwM2QMGa5C9 /rH/ZQBQgN46ZMmiEm4LxH6mtaKxMsBGZwgzUEdfsvVtr+fS5NUoA1rF wg92eBbInNdCvT0if8m1Sldx5/hSqKn8EAscKfg5BMQp5YDFsllsTauA 8Y4=
+isc.org.                484        IN        RRSIG        NAPTR 5 2 7200 20121125230752 20121026230752 4442 isc.org. ZD14qEHR7jVXn5uJUn6XR9Lvt5Pa7YTEW94hNAn9Lm3Tlnkg11AeZiOU 3woQ1pg+esCQepKCiBlplPLcag3LHlQ19OdACrHGUzzM+rnHY50Rn/H4 XQTqUWHBF2Cs0CvfqRxLvAl5AY6P2bb/iUQ6hV8Go0OFvmMEkJOnxPPw 5i4=
+isc.org.                484        IN        RRSIG        NSEC 5 2 3600 20121125230752 20121026230752 4442 isc.org. rY1hqZAryM045vv3bMY0wgJhxHJQofkXLeRLk20LaU1mVTyu7uair7jb MwDVCVhxF7gfRdgu8x7LPSvJKUl6sn731Y80CnGwszXBp6tVpgw6oOcr Pi0rsnzC6lIarXLwNBFmLZg2Aza6SSirzOPObnmK6PLQCdmaVAPrVJQs FHY=
+isc.org.                484        IN        RRSIG        DNSKEY 5 2 7200 20121125230126 20121026230126 4442 isc.org. i0S2MFqvHB3wOhv2IPozE/IQABM/eDDCV2D7dJ3AuOwi1A3sbYQ29XUd BK82+mxxsET2U6hv64crpbGTNJP3OsMxNOAFA0QYphoMnt0jg3OYg+AC L2j92kx8ZdEhxKiE6pm+cFVBHLLLmXGKLDaVnffLv1GQIl5YrIyy4jiw h0A=
+isc.org.                484        IN        RRSIG        DNSKEY 5 2 7200 20121125230126 20121026230126 12892 isc.org. j1kgWw+wFFw01E2z2kXq+biTG1rrnG1XoP17pIOToZHElgpy7F6kEgyj fN6e2C+gvXxOAABQ+qr76o+P+ZUHrLUEI0ewtC3v4HziMEl0Z2/NE0MH qAEdmEemezKn9O1EAOC7gZ4nU5psmuYlqxcCkUDbW0qhLd+u/8+d6L1S nlrD/vEi4R1SLl2bD5VBtaxczOz+2BEQLveUt/UusS1qhYcFjdCYbHqF JGQziTJv9ssbEDHT7COc05gG+A1Av5tNN5ag7QHWa0VE+Ux0nH7JUy0N ch1kVecPbXJVHRF97CEH5wCDEgcFKAyyhaXXh02fqBGfON8R5mIcgO/F DRdXjA==
+isc.org.                484        IN        RRSIG        SPF 5 2 7200 20121125230752 20121026230752 4442 isc.org. IB/bo9HPjr6aZqPRkzf9bXyK8TpBFj3HNQloqhrguMSBfcMfmJqHxKyD ZoLKZkQk9kPeztau6hj2YnyBoTd0zIVJ5fVSqJPuNqxwm2h9HMs140r3 9HmbnkO7Fe+Lu5AD0s6+E9qayi3wOOwunBgUkkFsC8BjiiGrRKcY8GhC kak=
+isc.org.                484        IN        RRSIG        A 5 2 7200 20121125230752 20121026230752 4442 isc.org. ViS+qg95DibkkZ5kbL8vCBpRUqI2/M9UwthPVCXl8ciglLftiMC9WUzq Ul3FBbri5CKD/YNXqyvjxyvmZfkQLDUmffjDB+ZGqBxSpG8j1fDwK6n1 hWbKf7QSe4LuJZyEgXFEkP16CmVyZCTITUh2TNDmRgsoxrvrOqOePWhp 8+E=
+isc.org.                4084       IN        NS           ns.isc.afilias-nst.info.
+isc.org.                4084       IN        NS           ams.sns-pb.isc.org.
+isc.org.                4084       IN        NS           ord.sns-pb.isc.org.
+isc.org.                4084       IN        NS           sfba.sns-pb.isc.org.
+
+;; AUTHORITY SECTION:
+isc.org.                4084       IN        NS           ns.isc.afilias-nst.info.
+isc.org.                4084       IN        NS           ams.sns-pb.isc.org.
+isc.org.                4084       IN        NS           ord.sns-pb.isc.org.
+isc.org.                4084       IN        NS           sfba.sns-pb.isc.org.
+
+;; ADDITIONAL SECTION:
+mx.ams1.isc.org.        484        IN        A            199.6.1.65
+mx.ams1.isc.org.        484        IN        AAAA         2001:500:60::65
+mx.pao1.isc.org.        484        IN        A            149.20.64.53
+mx.pao1.isc.org.        484        IN        AAAA         2001:4f8:0:2::2b
+_sip._udp.isc.org.      4084       IN        SRV          0 1 5060 asterisk.isc.org.
+
+;; Query time: 176 msec
+;;SERVER: x.x.x.x#53(x.x.x.x)
+;; WHEN: Tue Oct 30 01:14:32 2012
+;; MSG SIZE  rcvd: 3223
+</pre>
+<p>That's a 64 byte query that resulted in a 3,223 byte response. In other words, an attacker is able to achieve a 50x amplification over whatever traffic they can initiate to an open DNS resolver. Note, ironically, how the effectiveness of the attack based on the size of the response is made worse by the inclusion of the huge DNSSEC keys -- a protocol designed to make the DNS system more secure.</p>
+<h3 id="opendnsresolversbaneoftheinternet">Open DNS Resolvers: Bane of the Internet</h3>
+<p>The key term that I used a couple times so far is &quot;open DNS resolver.&quot; The best practice, if you're running a recursive DNS resolver is to ensure that it only responds to queries from authorized clients. In other words, if you're running a recursive DNS server for your company and your company's IP space is 5.5.5.0/24 (i.e., 5.5.5.0 - 5.5.5.255) then it should only respond to queries from that range. If a query<br>
+arrives from 9.9.9.9 then it should not respond.</p>
+<p>The problem is, many people running DNS resolvers leave them open and willing to respond to any IP address that queries them. This is a known problem that is at least 10 years old. What has happened recently is a number of distinct botnets appear to have enumerated the Internet's IP space in order to discover open resolvers. Once discovered, they can be used to launch significant DNS Amplification Attacks.</p>
+<p>If you look at the geographic data on attack origins, the US dominates the list, but that is largely skewed by the number of networks present within the country. Per capita, the worst country is Taiwan where the country's HINET is the second largest source of open resolvers of any network in the world. We've also published a <a href="http://graphs.peskey.info/dns-networks.txt">list of the top networks from which we're seeing abused open DNS resolvers</a>. Below is a sample of the top-ten worst offenders:</p></p>
+<table>
+<thead>
+<tr>
+<th><p><strong># of Open Resolvers</strong></th>
+<th><strong>AS Number</strong></th>
+<th><strong>Network Name</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3359</td>
+<td>45595</td>
+<td>PKTELECOM-AS-PK Pakistan Telecom Company Limited</td>
+</tr>
+<tr>
+<td>2992</td>
+<td>3462</td>
+<td>HINET Data Communication Business Group</td>
+</tr>
+<tr>
+<td>1431</td>
+<td>9394</td>
+<td>CRNET CHINA RAILWAY Internet(CRNET)</td>
+</tr>
+<tr>
+<td>1403</td>
+<td>21844</td>
+<td>THEPLANET-AS - ThePlanet.com Internet Services, Inc.</td>
+</tr>
+<tr>
+<td>1323</td>
+<td>4134</td>
+<td>CHINANET-BACKBONE No.31, Jin-rong Street</td>
+</tr>
+<tr>
+<td>1120</td>
+<td>36351</td>
+<td>SOFTLAYER - SoftLayer Technologies Inc.</td>
+</tr>
+<tr>
+<td>1112</td>
+<td>4713</td>
+<td>OCN NTT Communications Corporation</td>
+</tr>
+<tr>
+<td>1039</td>
+<td>26496</td>
+<td>AS-26496-GO-DADDY-COM-LLC - GoDaddy.com, LLC</td>
+</tr>
+<tr>
+<td>980</td>
+<td>7018</td>
+<td>ATT-INTERNET4 - AT&amp;T Services, Inc.</td>
+</tr>
+<tr>
+<td>852</td>
+<td>32613</td>
+<td>IWEB-AS - iWeb Technologies Inc.</td>
+</tr>
+<tr>
+<td>--------------------------</td>
+<td>---------------</td>
+<td>------------------------------------------------------</td>
+</tr>
+</tbody>
+</table>
+<p>Wonder why there's been an increase in big DDoS attacks? It's in large part because the network operators listed above have continued to allow open resolvers to run on their networks and the attackers have begun abusing them. While we're reluctant to publish the list of the actual IP address of the open resolvers for fear that they may be misused, if you are one of the operators of one of the networks listed above, we're happy to share data with you in order to help you get your network cleaned up. Organizations such as Team Cymru publish <a href="http://www.team-cymru.org/Services/Resolvers/">more extensive lists</a> and also work with<br>
+network operators to get their networks cleaned up.</p>
+<p>If you are running an open recursor, you should close it now. Leaving it open means you will continue to aid in these attacks. If you're running BIND, you can include one or more of the following in your configuration file in order to limit attackers abusing your network:</p>
+<pre>// Disable recursion for the DNS service
+//options {    recursion no;};
+
+// Permit DNS queries for DNS messages with source addresses
+// in the 192.168.1.0/24 netblock. The &apos;allow-query-cache&apos;
+// options configuration can also be used to limit the IP
+// addresses permitted to obtain answers from the cache of
+// the DNS server. Substitute with your own network range.
+//options {    allow-query {192.168.1.0/24;};};
+</pre>
+<p>CloudFlare itself is designed to automatically learn from the traffic to our network, whether the traffic is good or bad. While this size of attack would be crippling for most networks, it has been relatively trivial for us to identify the sources of the attack, route them so they don't affect any of our customers, and study their behavior over the last three weeks. Now that we've enumerated the sources of the attack, we've begun to null route the traffic upstream to fully neuter the attack.</p>
+<p>We will continue to work with the networks listed above in order to get their networks cleaned up. And, as new threats emerge, we'll continue to share information on them in order to ensure the Internet can remain fast and safe.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/dns/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS</a>
+        <a href="/tag/ddos/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DDoS</a>
+        <a href="/tag/attacks/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Attacks</a>
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-20T14:00:00Z">March 20, 2021 2:00PM</p>
+        <a href="/moving-k8s-communication-to-grpc/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Moving k8s communication to gRPC</h2>
+        </a>
+
+        <p class="gray1 lh-copy">How we use gRPC in combination with Kubernetes to improve the performance and usability of internal APIs....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-fattouche/" class="fw5 f2 black no-underline">Alex Fattouche</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/grpc/" class="no-underline f1 fw2 blue3 underline-hover">gRPC</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/kubernetes/" class="no-underline f1 fw2 blue3 underline-hover">Kubernetes</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/http2/" class="no-underline f1 fw2 blue3 underline-hover">HTTP2</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/quic/" class="no-underline f1 fw2 blue3 underline-hover">QUIC</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2021-03-08T14:00:00Z">March 08, 2021 2:00PM</p>
+        <a href="/the-benefits-of-serving-stale-dns-entries-when-using-consul/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The benefits of serving stale DNS entries when using Consul</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We use Consul for service discovery, and we’ve deployed a cluster that spans several of our data centers. We were aware from the start that the DNS query latencies were not great from certain parts of the world that were furthest away from these data centers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/andre-cruz/" class="fw5 f2 black no-underline">André Cruz</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/cache/" class="no-underline f1 fw2 blue3 underline-hover">Cache</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/unbound/" class="no-underline f1 fw2 blue3 underline-hover">Unbound</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-30T13:14:40Z">November 30, 2020 1:14PM</p>
+        <a href="/improving-the-resiliency-of-our-infrastructure-dns-zone/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving the Resiliency of Our Infrastructure DNS Zone</h2>
+        </a>
+
+        <p class="gray1 lh-copy">We've improved the resiliency and management of our infrastructure DNS zone. In this post, we guide you through some of the "whats", "whys" and "hows" we encountered along the way....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-timken/" class="fw5 f2 black no-underline">Ryan Timken</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/kiran/" class="fw5 f2 black no-underline">Kiran Naidoo</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/availability/" class="no-underline f1 fw2 blue3 underline-hover">Availability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/octodns/" class="no-underline f1 fw2 blue3 underline-hover">OctoDNS</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-13T19:06:13Z">November 13, 2020 7:06PM</p>
+        <a href="/sad-dns-explained/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">SAD DNS Explained</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Researchers from UC Riverside and Tsinghua University found a new way to revive a decade-old DNS cache poisoning attack. Read our deep dive into how the SAD DNS attack on DNS resolvers works, how we protect against this attack in 1.1.1.1, and what the future holds for DNS cache poisoning attacks....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek/" class="fw5 f2 black no-underline">Marek Vavruša</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns-poisoning/" class="no-underline f1 fw2 blue3 underline-hover">DNS Poisoning</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/side-channels/" class="no-underline f1 fw2 blue3 underline-hover">Side Channels</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

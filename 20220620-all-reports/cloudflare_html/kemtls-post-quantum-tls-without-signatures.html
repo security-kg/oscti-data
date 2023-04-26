@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>KEMTLS: Post-quantum TLS without signatures</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="The TLS 1.3 protocol has been around for quite some time, but it will be broken once quantum computers arrive. What can we do? In this blog post, we will examine a technique for achieving full post-quantum security for TLS 1.3 in the face of quantum computers: KEMTLS." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/kemtls-post-quantum-tls-without-signatures/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="KEMTLS: Post-quantum TLS without signatures" />
+    <meta property="og:description" content="The TLS 1.3 protocol has been around for quite some time, but it will be broken once quantum computers arrive. What can we do? In this blog post, we will examine a technique for achieving full post-quantum security for TLS 1.3 in the face of quantum computers: KEMTLS." />
+    <meta property="og:url" content="https://blog.cloudflare.com/kemtls-post-quantum-tls-without-signatures/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/01/facebook-link-image-8.png" />
+    <meta property="article:published_time" content="2021-01-15T12:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-01-15T12:31:00.000Z" />
+    <meta property="article:tag" content="Cryptography" />
+    <meta property="article:tag" content="TLS" />
+    <meta property="article:tag" content="KEMs" />
+    <meta property="article:tag" content="Post Quantum" />
+    <meta property="article:tag" content="Signatures" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="KEMTLS: Post-quantum TLS without signatures" />
+    <meta name="twitter:description" content="The TLS 1.3 protocol has been around for quite some time, but it will be broken once quantum computers arrive. What can we do? In this blog post, we will examine a technique for achieving full post-quantum security for TLS 1.3 in the face of quantum computers: KEMTLS." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/kemtls-post-quantum-tls-without-signatures/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/01/twitter-shared-link-8.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Sofía Celi" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Cryptography, TLS, KEMs, Post Quantum, Signatures" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@claucece" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Sofía Celi",
+        "image": "https://blog.cloudflare.com/content/images/2021/01/me.jpg",
+        "url": "https://blog.cloudflare.com/author/sofia/",
+        "sameAs": [
+            "http://claucece.github.io/",
+            "https://twitter.com/claucece"
+        ]
+    },
+    "headline": "KEMTLS: Post-quantum TLS without signatures",
+    "url": "https://blog.cloudflare.com/kemtls-post-quantum-tls-without-signatures/",
+    "datePublished": "2021-01-15T12:00:00.000Z",
+    "dateModified": "2021-01-15T12:31:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/01/KEMTLS--Post-quantum-TLS-without-signatures-blog-home.png",
+    "keywords": "Cryptography, TLS, KEMs, Post Quantum, Signatures",
+    "description": "The TLS 1.3 protocol has been around for quite some time, but it will be broken once quantum computers arrive. What can we do? In this blog post, we will examine a technique for achieving full post-quantum security for TLS 1.3 in the face of quantum computers: KEMTLS.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-cryptography tag-tls tag-kems tag-post-quantum tag-signatures sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-cryptography tag-tls tag-kems tag-post-quantum tag-signatures ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">KEMTLS: Post-quantum TLS without signatures</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-01-15T12:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">January 15, 2021 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/sofia/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2021/01/me.jpg" alt="Sofía Celi" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/sofia" class="fw5 f3 no-underline black mr3">Sofía Celi</a>
+                </div>
+            </li>
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/thom/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2021/01/thom.jpeg" alt="Thom Wiggers" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/thom" class="fw5 f3 no-underline black mr3">Thom Wiggers</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/01/KEMTLS--Post-quantum-TLS-without-signatures-blog-home-2.png" class="kg-image"></figure><p>The Transport Layer Security protocol (TLS), which secures most Internet connections, has mainly been a protocol consisting of a key exchange authenticated by digital signatures used to encrypt data at transport<sup>[1]</sup>. Even though it has undergone major changes since 1994, when SSL 1.0 was introduced by Netscape, its main mechanism has remained the same. The key exchange was first based on RSA, and later on traditional Diffie-Hellman (DH) and Elliptic-curve Diffie-Hellman (ECDH). The signatures used for authentication have almost always been RSA-based, though in recent years other kinds of signatures have been adopted, mainly ECDSA and Ed25519. This recent change to elliptic curve cryptography in both at the key exchange and at the signature level has resulted in considerable speed and bandwidth benefits in comparison to traditional Diffie-Hellman and RSA.</p><p>TLS is the main protocol that protects the connections we use everyday. It’s everywhere: we use it when we buy products online, when we register for a newsletter — when we access any kind of website, IoT device, API for mobile apps and more, really. But with the imminent threat of the arrival of <a href="https://blog.cloudflare.com/securing-the-post-quantum-world/">quantum computers</a> (a threat that seems to be getting closer and closer), we need to reconsider the future of TLS once again. <a href="https://blog.cloudflare.com/the-tls-post-quantum-experiment/">A wide-scale post-quantum experiment</a> was carried out by Cloudflare and Google: two post-quantum key exchanges were integrated into our TLS stack and deployed at our edge servers as well as in Chrome Canary clients. The goal of that experiment was to evaluate the performance and feasibility of deployment of two post-quantum key exchanges in TLS.</p><p>Similar experiments have been proposed for introducing post-quantum algorithms into the TLS handshake itself. Unfortunately, it seems infeasible to replace both the key exchange and signature with post-quantum primitives, because post-quantum cryptographic primitives are bigger, or slower (or both), than their predecessors. The proposed algorithms under consideration in the <a href="https://csrc.nist.gov/Projects/post-quantum-cryptography/round-3-submissions">NIST post-quantum standardization process</a> use mathematical objects that are larger than the ones used for elliptic curves, traditional Diffie-Hellman, or RSA. As a result, the overall size of public keys, signatures and key exchange material is much bigger than those from elliptic curves, Diffie-Hellman, or RSA.</p><p>How can we solve this problem? How can we use post-quantum algorithms as part of the TLS handshake without making the material too big to be transmitted? In this blogpost, we will introduce a new mechanism for making this happen. We’ll explain how it can be integrated into the handshake and we’ll cover implementation details. The key observation in this mechanism is that, while post-quantum algorithms have bigger communication size than their predecessors, post-quantum <em>key exchanges</em> have somewhat smaller sizes than post-quantum <em>signatures</em>, so we can try to replace signatures with key exchanges in some places to save space.  We will only focus on the TLS 1.3 handshake as it is the TLS version that should be currently used.</p><h3 id="past-experiments-making-the-tls-1-3-handshake-post-quantum">Past experiments: making the TLS 1.3 handshake post-quantum</h3><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/01/image2-5.png" class="kg-image"></figure><p><a href="https://tools.ietf.org/html/rfc8446">TLS 1.3</a> was introduced in August 2018, and it brought many security and performance improvements (notably, having only one round-trip to complete the handshake). But TLS 1.3 is designed for a world with classical computers, and some of its functionality will be broken by quantum computers when they do arrive.</p><p>The primary goal of TLS 1.3 is to provide authentication (the server side of the channel is always authenticated, the client side is optionally authenticated), confidentiality, and integrity by using a handshake protocol and a record protocol. The handshake protocol, the one of interest for us today, establishes the cryptographic parameters for securing and authenticating a connection. It can be thought of as having three main phases, as defined in <a href="https://tools.ietf.org/html/rfc8446">RFC8446</a>:</p><p>-  The <strong>Parameter Negotiation</strong> phase (referred to as ‘Server Parameters’ in RFC8446), which establishes other handshake parameters (whether the client is authenticated, application-layer protocol support, etc).</p><p>-  The <strong>Key Exchange</strong> phase, which establishes shared keying material and selects the cryptographic parameters to be used. Everything after this phase will be encrypted.</p><p>-  The <strong>Authentication</strong> phase, which authenticates the server (and, optionally, the client) and provides key confirmation and handshake integrity.</p><p>The main idea of past experiments that introduced post-quantum algorithms into the handshake of TLS 1.3 was to use them in place of classical algorithms by advertising them as part of the <a href="https://tools.ietf.org/html/rfc8446#section-4.2.7">supported groups</a><sup>[2]</sup> and <a href="https://tools.ietf.org/html/rfc8446#section-4.2.8">key share</a><sup>[3]</sup> extensions, and, therefore, establishing with them the negotiated connection parameters. Key encapsulation mechanisms (KEMs) are an abstraction of the basic key exchange primitive, and were used to generate the shared secrets. When using a <a href="https://tools.ietf.org/html/rfc8446#section-4.2.11">pre-shared key</a>, its symmetric algorithms can be easily replaced by post-quantum KEMs as well; and, in the case of password-authenticated TLS, some <a href="https://eprint.iacr.org/2017/1192.pdf">ideas</a> have been proposed on how to use post-quantum algorithms with them.</p><p>Most of the above ideas only provide what is often defined as ‘transitional security’, because its main focus is to provide quantum-resistant confidentiality, and not to take quantum-resistant authentication into account. It is possible to use post-quantum signatures for TLS authentication, but the post-quantum signatures are larger than traditional ones. Furthermore, it is <a href="https://csrc.nist.gov/Presentations/2019/the-2nd-round-of-the-nist-pqc-standardization-proc">worth noting</a> that using post-quantum signatures is much more expensive than using post-quantum KEMs.</p><p>We can estimate the impact of such a replacement on network traffic by simply looking at the sum of the cryptographic objects that are transmitted during the handshake. A typical TLS 1.3 handshake using elliptic curve X25519 and RSA-2048 would transmit 1,376 bytes, which would correspond to the public keys for key exchange, the certificate, the signature of the handshake, and the certificate chain. If we were to replace X25519 by the post-quantum KEM <a href="https://pq-crystals.org/kyber/">Kyber512</a> and RSA by the post-quantum signature <a href="https://pq-crystals.org/dilithium/">Dilithium II</a>, two of the more efficient proposals, the size transmitted data would increase to 10,036 bytes<sup>[4]</sup>. The increase is mostly due to the size of the post-quantum signature algorithm.</p><p>The question then is: how can we achieve full post-quantum security and give a handshake that is efficient to be used?</p><h3 id="a-more-efficient-proposal-kemtls">A more efficient proposal: KEMTLS</h3><p>There is a long history of other mechanisms, besides signatures, being used for authentication. Modern protocols, such as the Signal protocol, the Noise framework, or WireGuard, rely on key exchange mechanisms for authentication; but they are unsuitable for the TLS 1.3 case as they expect the long-term key material to be known in advance by the interested parties.</p><p>The <a href="https://eprint.iacr.org/2015/978.pdf">OPTLS proposal</a> by Krawczyk and Wee authenticates the TLS handshake without signatures by using a non-interactive key exchange (NIKE). However, the only somewhat efficient construction for a post-quantum NIKE is CSIDH, the security of which is the subject of an ongoing debate. But we can build on this idea, and use KEMs for authentication. KEMTLS, the current proposed experiment, replaces the handshake signature by a post-quantum KEM key exchange. It was designed and introduced by Peter Schwabe, Douglas Stebila and Thom Wiggers in the publication <a href="https://thomwiggers.nl/publication/kemtls/kemtls.pdf">‘Post-Quantum TLS Without Handshake Signatures’</a>.</p><p>KEMTLS, therefore, achieves the same goals as TLS 1.3 (authentication, confidentiality and integrity) in the face of quantum computers. But there’s one small difference compared to the TLS 1.3 handshake. KEMTLS allows the client to send encrypted application data in the second client-to-server TLS message flow when client authentication is not required, and in the third client-to-server TLS message flow when mutual authentication is required. Note that with TLS 1.3, the server is able to send encrypted and authenticated application data in its first response message (although, in most uses of TLS 1.3, this feature is not actually used). With KEMTLS, when client authentication is not required, the client is able to send its first encrypted application data after the same number of handshake round trips as in TLS 1.3.</p><p>Intuitively, the handshake signature in TLS 1.3 proves possession of the private key corresponding to the public key certified in the TLS 1.3 server certificate. For these signature schemes, this is the straightforward way to prove possession; another way to prove possession is through key exchanges. By carefully considering the key derivation sequence, a server can decrypt any messages sent by the client only if it holds the private key corresponding to the certified public key. Therefore, implicit authentication is fulfilled. It is worth noting that KEMTLS still relies on signatures by certificate authorities to authenticate the long-term KEM keys.</p><p>With KEMTLS, application data transmitted during the handshake is implicitly authenticated rather than explicitly (as in TLS 1.3), and has slightly weaker downgrade resilience and forward secrecy; but full downgrade resilience and forward secrecy are achieved once the KEMTLS handshake completes.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/01/image1-7.png" class="kg-image"></figure><p>By replacing the handshake signature by a KEM key exchange, we reduce the size of the data transmitted in the example handshake to 8,344 bytes, using Kyber512 and Dilithium II — a significant reduction. We can reduce the handshake size even for algorithms such as the NTRU-assumption based KEM NTRU and signature algorithm Falcon, which have a less-pronounced size gap. Typically, KEM operations are computationally much lighter than signing operations, which makes the reduction even more significant.</p><p>KEMTLS was presented at ACM CCS 2020. You can read more about its details in <a href="https://thomwiggers.nl/publication/kemtls/kemtls.pdf">the paper</a>. It was initially <a href="https://github.com/thomwiggers/kemtls-experiment">implemented in the RustTLS library</a> by Thom Wiggers using optimized C/assembly implementations of the post-quantum algorithms provided by the <a href="https://github.com/PQClean/PQClean">PQClean</a> and <a href="https://openquantumsafe.org/">Open Quantum Safe</a> projects.</p><h3 id="cloudflare-and-kemtls-the-implementation">Cloudflare and KEMTLS: the implementation</h3><p>As part of our effort to show that TLS can be completely post-quantum safe, we implemented the full KEMTLS handshake in Golang’s TLS 1.3 suite. The implementation was done in several steps:</p><ol><li>We first needed to clone our own version of Golang, so we could add different post-quantum algorithms to it. You can find our own version <a href="https://github.com/cloudflare/go/">here</a>. This code gets constantly updated with every release of Golang, following <a href="https://github.com/cloudflare/go/wiki/Starting-out">these steps</a>.</li><li>We needed to implement post-quantum algorithms in Golang, which we did on our own cryptographic library, <a href="https://github.com/cloudflare/circl/tree/master/kem">CIRCL</a>.</li><li>As we cannot force certificate authorities to use certificates with long-term post-quantum KEM keys, we decided to use <a href="https://blog.cloudflare.com/keyless-delegation/">Delegated Credentials</a>. A delegated credential is a short-lasting key that the certificate’s owner has delegated for use in TLS. Therefore, they can be used for post-quantum KEM keys. See its implementation in our Golang code <a href="https://github.com/cloudflare/go/tree/cf-delegated-credentials">here</a>.</li><li>We implemented mutual auth (client and server authentication) KEMTLS by using <a href="https://blog.cloudflare.com/keyless-delegation/">Delegated Credentials</a> for the authentication process. See its implementation in our Golang code <a href="https://github.com/cloudflare/go/tree/cf-pq-kemtls">here</a>. You can also check its <a href="https://github.com/cloudflare/go/blob/cf-pq-kemtls/src/crypto/tls/delegated_credentials_test.go#L774">test</a> for an overview of how it works.</li></ol><p>Implementing KEMTLS was a straightforward process, although it did require changes to the way Golang handles a TLS 1.3 handshake and how the key schedule works.</p><p>A “regular” TLS 1.3 handshake in Golang (from the server perspective) looks like this:</p><!--kg-card-begin: markdown--><pre><code class="language-golang">func (hs *serverHandshakeStateTLS13) handshake() error {
+    c := hs.c
+
+    // For an overview of the TLS 1.3 handshake, see RFC 8446, Section 2.
+    if err := hs.processClientHello(); err != nil {
+   	 return err
+    }
+    if err := hs.checkForResumption(); err != nil {
+   	 return err
+    }
+    if err := hs.pickCertificate(); err != nil {
+   	 return err
+    }
+    c.buffering = true
+    if err := hs.sendServerParameters(); err != nil {
+   	 return err
+    }
+    if err := hs.sendServerCertificate(); err != nil {
+   	 return err
+    }
+    if err := hs.sendServerFinished(); err != nil {
+   	 return err
+    }
+    // Note that at this point we could start sending application data without
+    // waiting for the client's second flight, but the application might not
+    // expect the lack of replay protection of the ClientHello parameters.
+    if _, err := c.flush(); err != nil {
+   	 return err
+    }
+    if err := hs.readClientCertificate(); err != nil {
+   	 return err
+    }
+    if err := hs.readClientFinished(); err != nil {
+   	 return err
+    }
+
+    atomic.StoreUint32(&amp;c.handshakeStatus, 1)
+
+    return nil
+}
+</code></pre>
+<!--kg-card-end: markdown--><p>We had to interrupt the process when the server sends the Certificate (<code>sendServerCertificate()</code>) in order to send the KEMTLS specific messages. In the same way, we had to add the appropriate KEM TLS messages to the client’s handshake. And, as we didn’t want to change so much the way Golang handles TLS 1.3, we only added one new constant to the configuration that can be used by a server in order to ask for the Client’s Certificate (the constant is <code>serverConfig.ClientAuth = RequestClientKEMCert</code>).</p><p>The implementation is easy to work with: if a delegated credential or a certificate has a public key of a supported post-quantum KEM algorithm, the handshake will proceed with KEMTLS. If the server requests a Client KEMTLS Certificate, the handshake will use client KEMTLS authentication.</p><h3 id="running-the-experiment">Running the Experiment </h3><p>So, what’s next? We’ll take the code we have produced and run it on actual Cloudflare infrastructure to measure how efficiently it works.</p><h3 id="thanks">Thanks</h3><p>Many thanks to everyone involved in the project: Chris Wood, Armando Faz-Hernández, Thom Wiggers, Bas Westerbaan, Peter Wu, Peter Schwabe, Goutam Tamvada, Douglas Stebila, Thibault Meunier, and the whole Cloudflare Research team.</p><!--kg-card-begin: markdown--><p><sup>1</sup>It is worth noting that the RSA key transport in TLS ≤1.2 has the server only authenticated by RSA public key encryption, although the server's RSA public key is certified using RSA signatures by Certificate Authorities.<br>
+<sup>2</sup>An extension used by the client to indicate which named groups -Elliptic Curve Groups, Finite Field Groups- it supports for key exchange.<br>
+<sup>3</sup>An extension which contains the endpoint’s cryptographic parameters.<br>
+<sup>4</sup>These numbers, as it is noted in the paper, are based on the round-2 submissions.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/cryptography/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cryptography</a>
+        <a href="/tag/tls/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">TLS</a>
+        <a href="/tag/kems/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">KEMs</a>
+        <a href="/tag/post-quantum/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Post Quantum</a>
+        <a href="/tag/signatures/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Signatures</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-09-18T15:03:38+01:00">September 18, 2019 3:03PM</p>
+        <a href="/cloudflares-approach-to-research/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare’s Approach to Research</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare’s mission is to help build a better Internet. One of the tools used in pursuit of this goal is computer science research. We’ve learned that some of the difficult problems to solve are best approached through research...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/cryptography/" class="no-underline f1 fw2 blue3 underline-hover">Cryptography</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

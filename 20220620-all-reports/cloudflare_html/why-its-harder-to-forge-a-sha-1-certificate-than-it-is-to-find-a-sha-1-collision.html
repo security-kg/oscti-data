@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Why it’s harder to forge a SHA-1 certificate than it is to find a SHA-1 collision</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/why-its-harder-to-forge-a-sha-1-certificate-than-it-is-to-find-a-sha-1-collision/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Why it’s harder to forge a SHA-1 certificate than it is to find a SHA-1 collision" />
+    <meta property="og:description" content="It’s well known that SHA-1 is no longer considered a secure cryptographic hash function. Researchers now believe that finding a hash collision (two values that result in the same value when SHA-1 is applied) is inevitable and likely to happen." />
+    <meta property="og:url" content="https://blog.cloudflare.com/why-its-harder-to-forge-a-sha-1-certificate-than-it-is-to-find-a-sha-1-collision/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/rsa-signing-1.png" />
+    <meta property="article:published_time" content="2015-12-22T16:43:52.000Z" />
+    <meta property="article:modified_time" content="2018-08-24T23:39:08.000Z" />
+    <meta property="article:tag" content="Certificate Authority" />
+    <meta property="article:tag" content="Reliability" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="RSA" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Why it’s harder to forge a SHA-1 certificate than it is to find a SHA-1 collision" />
+    <meta name="twitter:description" content="It’s well known that SHA-1 is no longer considered a secure cryptographic hash function. Researchers now believe that finding a hash collision (two values that result in the same value when SHA-1 is applied) is inevitable and likely to happen." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/why-its-harder-to-forge-a-sha-1-certificate-than-it-is-to-find-a-sha-1-collision/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/rsa-signing-1.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Nick Sullivan" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Certificate Authority, Reliability, Programming, RSA" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@grittygrease" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Nick Sullivan",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg",
+            "width": 400,
+            "height": 400
+        },
+        "url": "https://blog.cloudflare.com/author/nick-sullivan/",
+        "sameAs": [
+            "https://crypto.dance",
+            "https://twitter.com/grittygrease"
+        ]
+    },
+    "headline": "Why it’s harder to forge a SHA-1 certificate than it is to find a SHA-1 collision",
+    "url": "https://blog.cloudflare.com/why-its-harder-to-forge-a-sha-1-certificate-than-it-is-to-find-a-sha-1-collision/",
+    "datePublished": "2015-12-22T16:43:52.000Z",
+    "dateModified": "2018-08-24T23:39:08.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/rsa-signing-1.png",
+    "keywords": "Certificate Authority, Reliability, Programming, RSA",
+    "description": "It’s well known that SHA-1 is no longer considered a secure cryptographic hash function. Researchers now believe that finding a hash collision (two values that result in the same value when SHA-1 is applied) is inevitable and likely to happen.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-certificate-authority tag-reliability tag-programming tag-rsa sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-certificate-authority tag-reliability tag-programming tag-rsa ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Why it’s harder to forge a SHA-1 certificate than it is to find a SHA-1 collision</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2015-12-22T16:43:52Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">December 22, 2015 4:43PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/nick-sullivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/09/BJ4NgXVj_400x400.jpg" alt="Nick Sullivan" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/nick-sullivan" class="fw5 f3 no-underline black mr3">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p>It’s well known that SHA-1 is no longer considered a secure cryptographic hash function. Researchers now believe that finding a hash collision (two values that result in the same value when SHA-1 is applied) is inevitable and likely to happen in a matter of months. This poses a potential threat to trust on the web, as many websites use certificates that are digitally signed with algorithms that rely on SHA-1. Luckily for everyone, finding a hash collision is <em>not</em> enough to forge a digital certificate and break the trust model of the Internet.</p>
+<p>We’ll explore how hash collisions have been used to forge digital signatures in the past. We’ll also discuss how certificate authorities can make this significantly harder for attackers in the future by including randomness in certificate serial numbers.</p>
+<h3 id="digitalsignaturesarethebedrockoftrust">Digital signatures are the bedrock of trust</h3>
+<p>The Internet relies on trust. Whether it’s logging in to your bank or reading Reddit, HTTPS protects you by encrypting the data you exchange with a site and authenticating the site's identity with a digital certificate. Browsers visually display the added security of HTTPS as a padlock in the address bar.</p>
+<p>HTTPS can prove a site’s authenticity to a browser when a site owns a digital certificate that asserts the owner’s identity and hostname. Certificates are small files digitally signed by trusted third parties known as Certificate Authorities (CAs). For browsers, digital signatures are the definitive source of trust. If your browser trusts the CA and the digital signature on the certificate is correct, then the browser trusts the certificate. This system of identity is known as the public key infrastructure (PKI), something we’ve covered <a href="https://blog.cloudflare.com/how-to-build-your-own-public-key-infrastructure/">in detail in a previous post</a>.</p>
+<p>This system falls apart if digital signatures can no longer be trusted. If someone can create a certificate for cloudflare.com with a signature from a trusted CA, they can use it to impersonate the cloudflare.com website to visitors (given they can <a href="https://blog.cloudflare.com/dnssec-an-introduction">modify DNS</a>).</p>
+<p>A digital signature is a number cryptographically tied to a message with public key. Every digital signature requires a public-private key pair and a hash function. The hash function is used to take the message and replace it with a unique digest, the private key is used to sign, and the public key to verify signatures.</p>
+<p>For example, to create an RSA signature, you take a hash of the message and encrypt that hash with your private key. Anyone can verify that signature both belongs to you and is valid for the associated message. Take the public key, decrypt the hash and compare it with the hash of the message. If it's a match, the signature is correct. <a href="https://blog.cloudflare.com/ecdsa-the-digital-signature-algorithm-of-a-better-internet/">ECDSA</a> is a more recent algorithm that gets the same job done.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/08/rsa-signing-1.png" alt="digital signatures"></p>
+<p>There are several ways of obtaining a digitally signed certificate for a website. The standard way is by purchasing a certificate from a certificate authority like GlobalSign or Comodo. CAs follow a set of rules about certificate issuance, governed by CA/Browser Forum’s <a href="https://cabforum.org/baseline-requirements/">Baseline Requirements</a>.</p>
+<p>Another way to get a certificate is to steal a CA’s private key. In addition to being potentially illegal, it is also very hard to do: CA private keys are usually kept in dedicated secure machines called Hardware Security Modules (HSM) designed to protect against key extraction.</p>
+<p>A third more interesting way to obtain a certificate is to create a certificate that has the same hash as an existing trusted certificate. The signature from the trusted certificate can be added to the untrusted certificate, making it appear trusted.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/08/rsa-signing-2.png" alt="hash collision"></p>
+<p>If you can find a message that has the same hash value as a signed message, then you can swap in your message and the signature will verify correctly. This can be used to trick anyone into thinking someone signed a message that they didn’t.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/08/rsa-signing-3.png" alt="exploiting hash collisions"></p>
+<p>Cryptographic hash functions are designed to resist this sort of thing. They don’t always succeed.</p>
+<h3 id="securitypropertiesofhashfunctions">Security properties of hash functions</h3>
+<p>Cryptographic hash functions are designed to satisfy three security properties:</p>
+<ul>
+<li>collision resistance</li>
+<li>second pre-image resistance</li>
+<li>pre-image resistance</li>
+</ul>
+<p>Collision resistance here means there are no known algorithms faster than brute force to find two values that hash to the same value. This is the strongest security requirement, and usually the first one to be broken.</p>
+<p>A hash function has second pre-image resistance when, given a value and its hash, it is computationally infeasible to find a second value that hashes to the same value. On the surface, this would seem like the security property that protects digital signatures on certificates. However, as we’ll explore in the next section, it’s still possible to forge certificates signed with a second pre-image resistant hash.</p>
+<p>Pre-image resistance means that given a hash, it’s computationally infeasible for an attacker to find a value that hashes to it. If you can find a pre-image, you can easily find a second pre-image or a collision.</p>
+<p>In the next section, we’ll describe what happened the last time we used a cryptographic hash function without collision resistance for digital signatures.</p>
+<h3 id="breakingmd5">Breaking MD5</h3>
+<p>MD5 is an incredibly popular cryptographic hash function; it also happens to be completely broken with respect to collision resistance. MD5 is still widely used, just not for digital signatures.</p>
+<p>The first collision in MD5, discovered in <a href="https://eprint.iacr.org/2004/199.pdf">2004 by a group of Chinese researchers (PDF)</a>, used a lot of math and about an hour of computation by a supercomputer. Today, computing an MD5 collision takes only seconds on a laptop. This was cleverly demonstrated by <a href="http://natmchugh.blogspot.com/2014/10/how-i-created-two-images-with-same-md5.html">Nat McHugh</a>, who used a chosen-prefix hash collision (more on this later) in MD5 to create two images with the same hash—in this case Barry White and James Brown (he later created a three-way collision with <a href="http://natmchugh.blogspot.com/2014/11/three-way-md5-collision.html">Jack Black</a>).</p>
+<p>Three images with the same MD5 hash:<br>
+<img src="https://blog.cloudflare.com/content/images/2015/08/white.jpg" alt=""><br>
+<img src="https://blog.cloudflare.com/content/images/2015/08/brown.jpg" alt=""><br>
+<img src="https://blog.cloudflare.com/content/images/2015/08/black.jpg" alt=""></p>
+<p>You can verify this yourself via <code>curl</code> and <code>md5</code>:</p>
+<pre><code>$ curl -s https://blog.cloudflare.com/content/images/2015/08/white.jpg | md5
+b69dd1fd1254868b6e0bb8ed9fe7ecad
+$ curl -s https://blog.cloudflare.com/content/images/2015/08/brown.jpg | md5
+b69dd1fd1254868b6e0bb8ed9fe7ecad
+$ curl -s https://blog.cloudflare.com/content/images/2015/08/black.jpg | md5
+b69dd1fd1254868b6e0bb8ed9fe7ecad
+</code></pre>
+<p>Despite being relatively trivial to find an MD5 collision, it’s still not known how to perform a second-preimage attack on MD5. For example, given a digitally signed certificate, nobody has been able to create a second certificate with the same hash. Despite this, researchers created a <a href="http://www.win.tue.nl/hashclash/rogue-ca/">certificate</a> with the same signature as a certificate trusted by browsers.</p>
+<p>The technique they used, a chosen-prefix attack, was originally proposed by Marc Stevens in his <a href="http://www.win.tue.nl/hashclash/On%20Collisions%20for%20MD5%20-%20M.M.J.%20Stevens.pdf">Master’s Thesis</a>. It can be used to create a forged certificate as long as you can get a certificate authority to issue a certificate that starts with predictable values.</p>
+<h3 id="chosenprefixattacks">Chosen-prefix attacks</h3>
+<p>If you can find a collision, you can take two different values and append data to each so they hash to the same value. In the original MD5 collision attack, the researchers computed two messages <code>M1</code> and <code>M2</code> such that <code>H(M1) = H(M2)</code>. Stevens extended this research to find a way to make two known values <code>P1</code> and <code>P2</code> collide by appending bytes. With prefixes <code>P1</code> and <code>P2</code>, he was able to demonstrate how to find S1 and S2 so that <code>H(P1|S1) = H(P2|S2)</code>.</p>
+<p>This was enough to allow an attacker to create two certificates with the same hash. Let’s look at the approximate structure of a certificate:</p>
+<ul>
+<li>Serial number</li>
+<li>Validity period</li>
+<li>Domain name</li>
+<li>Public key</li>
+<li>X.509 extensions</li>
+<li>Signature</li>
+</ul>
+<p>If the attacker knows every value before the domain, then they can take</p>
+<pre><code>P1 = Serial number | Validity period | real domain name
+</code></pre>
+<p>and</p>
+<pre><code>P2 = Serial number | Validity period | forged domain name
+</code></pre>
+<p>and apply the attack to get S1 and S2 that fit into the public key section. If the serial number and validity period can be predicted, a collision can be found using the following steps:</p>
+<ol>
+<li>Guess when the certificate will be issued;</li>
+<li>Predict the serial number for certificates issued in that time period; and</li>
+<li>Compute matching prefixes for several guesses covering the expected serial numbers and issuance dates</li>
+</ol>
+<p><img src="https://blog.cloudflare.com/content/images/2015/12/sha-1-certificate-forgery-1.png" alt=""></p>
+<p>The attacker precomputes chosen-prefix collisions for the choices for each of these values, where one prefix has a domain name that is under the requester’s control (e.g. for attacker.com) and one for the target domain (e.g. google.com). The &quot;collision bits&quot; that cause the two certificates to collide end up aligning with first few bytes of the public key of the certificate.</p>
+<p>Once the collisions are computed, the attacker has to convince a CA to issue a certificate with the correct serial number at the correct time for a verifiable domain and a public key that corresponds to the collision bits. If they're lucky, the certificate the CA returns will have the same hash as the malicious certificate. They can then transpose the valid signature onto the malicious certificate to make it trusted.</p>
+<p>Colliding the domain name is the simplest type of chosen-prefix collision attack. It is also possible to prepare the collision in such a way that the RSA public key from the trusted certificate lines up with the X.509 extensions of the forged certificate. This is much more dangerous since it allows the forged certificate to set the &quot;Is CA&quot; bit. As long as the <a href="https://technet.microsoft.com/en-us/library/cc737026(v=ws.10).aspx">path length constraint</a> of the signing CA is large enough, this forged CA would be able to issue trusted certificates for any domain.</p>
+<h3 id="forgingmd5certificatesinpractice">Forging MD5 certificates in practice</h3>
+<p>In 2008, several researchers (including Marc Stevens and Alex Sotirov) used chosen prefix collision techniques to <a href="http://www.win.tue.nl/hashclash/rogue-ca/">forge a certificate authority</a> trusted by browsers. This proof of concept was presented at the Chaos Communication Congress in 2008 and required only a few days of computation.</p>
+<p>In 2012, a piece of malware called Flame was discovered. Flame was able infect computers by hijacking Microsoft’s Windows Update mechanism. At the time, Windows Update validated updates by checking code signatures using certificates signed by Microsoft using a MD5-based signature. The authors of Flame used a forged Microsoft certificate. According to an <a href="http://blog.trailofbits.com/2012/06/11/analyzing-the-md5-collision-in-flame/">analysis of this certificate</a>, it was likely the chosen-prefix technique was used to create Flame’s forged certificate.</p>
+<p>Forbes declared this <a href="http://www.forbes.com/sites/richardstiennon/2012/06/14/flames-md5-collision-is-the-most-worrisome-security-discovery-of-2012/">the most worrisome security discovery of 2012</a> since it demonstrated it was feasible for attackers to forge any website’s certificate using an MD5 hash collision when the client trusts MD5-signed certificates.</p>
+<h3 id="sha1vsmd5">SHA-1 vs MD5</h3>
+<p>SHA-1 is supposedly more secure than MD5 for use in digital signatures. The National Security Agency published SHA-1 (SHA stands for Secure Hash Algorithm) in 1995 as a standard for cryptographically secure hashing. Designed to be collision resistant up to 2<sup>80</sup> bits, SHA-1 has had a long and useful life, and a collision has not been published as of this blog post. Even though a collision has never been published, several theoretical attacks (the <a href="http://gauss.ececs.uc.edu/Courses/c653/lectures/Hashing/sha1-crypto-auth-new-2-yao.pdf">first in 2005</a>, improved <a href="http://2012.sharcs.org/slides/stevens.pdf">in 2012</a>) indicate that SHA-1 is not as secure as its bit length implies. The latest research suggests that its collision resistance is <a href="https://marc-stevens.nl/research/papers/PhD%20Thesis%20Marc%20Stevens%20-%20Attacks%20on%20Hash%20Functions%20and%20Applications.pdf">at best 2<sup>65</sup></a> — within the realm of feasibility for some governments. In fact, researchers published a freestart collision (a precursor to a full collision) for SHA-1 <a href="https://eprint.iacr.org/2015/967.pdf"> earlier this year</a>.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2015/12/Sharks_outside_cage.jpg" alt=""><small><a href="https://en.wikipedia.org/wiki/Shark_proof_cage#/media/File:Sharks_outside_cage.jpg">CC BY-SA 2.0</a></small></p>
+<p>Academic cryptanalysts are like sharks. If there's blood in the water, they swarm. It took nine years to get from the first published weakness in MD5 (<a href="http://cseweb.ucsd.edu/~bsy/dobbertin.ps">1996</a>) to a hash collision (<a href="https://www.schneier.com/blog/archives/2005/06/more_md5_collis.html">2005</a>), and then another three years to forge a trusted digital signature (<a href="http://www.win.tue.nl/hashclash/rogue-ca/">2008</a>). They might be slow, but they're relentless.</p>
+<p>Attacks always improve and computers get more powerful.  It was nine years from first weakness to hash collision in MD5; it's been ten years for SHA-1. If history is any guide, a public collision for SHA-1 could be published at any moment, with chosen-prefix collisions arriving soon after.</p>
+<h3 id="preventingchosenprefixattacksbyrequiringserialnumberentropy">Preventing chosen-prefix attacks by requiring serial number entropy</h3>
+<p>One way to improve the security of digital signatures against a chosen-prefix attack is to make the prefix less predictable.</p>
+<p>As described above, the chosen prefix attack requires the attacker to predict both the serial number and the validity period. Certificates used on the web have serial numbers up to 160 bits long. Requiring CAs to make the serial number unpredictable instead of sequential, it is possible to make the chosen-prefix attack significantly more expensive.</p>
+<p>For example, if a CA ensures the serial number contains 20 bits of entropy, then the attacker will need to compute 2<sup>20</sup> chosen-prefixes in order to guess the serial number correctly.</p>
+<p>This makes the attack over a <em>million times</em> more difficult.</p>
+<p>Computing a SHA-1 collision might be feasible in 2016, and there's a chance that chosen-prefix attacks also become feasible. Nevertheless, choosing partially randomized serial can make certificate forgery significantly more difficult for attackers. Barring a breakthrough in hash collision techniques, it's unlikely we'll see a certificate collision for long time.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>The SHA-1 hash function, widely used for everything from file integrity to digital signatures, is at the end of its useful life. Some browsers even show security warnings when websites use certificates signed using a SHA-1 based digital signature. A hash collision in SHA-1 is bad, but it’s not what matters for web security. Digital signature forgery is more problematic for trust on the Web. Requiring CAs to randomize serial numbers will significantly increase the cost of such forgeries, allowing potentially weak algorithms like SHA-1 to be useful for longer. This is why we make it <strong>mandatory</strong> for CAs to use serial numbers that include at least 20 bits of entropy in our proposal to the CA/B Forum <a href="https://cabforum.org/pipermail/public/2015-December/006488.html">for Legacy Verified (LV) SHA-1 certificates</a>.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/certificate-authority/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Certificate Authority</a>
+        <a href="/tag/reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Reliability</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/rsa/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">RSA</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-05-10T16:21:42+01:00">May 10, 2016 4:21PM</p>
+        <a href="/how-we-built-origin-ca-web-crypto/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">How we built Origin CA: Web Crypto</h2>
+        </a>
+
+        <p class="gray1 lh-copy">At CloudFlare we strive to combine features that are simple, secure, and backed by solid technology. The Origin CA is a great example of this. You no longer need to go to a third-party certificate authority to protect the connection between CloudFlare and your origin server....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-sullivan/" class="fw5 f2 black no-underline">Nick Sullivan</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/certificate-authority/" class="no-underline f1 fw2 blue3 underline-hover">Certificate Authority</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/crypto/" class="no-underline f1 fw2 blue3 underline-hover">Crypto</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/api/" class="no-underline f1 fw2 blue3 underline-hover">API</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

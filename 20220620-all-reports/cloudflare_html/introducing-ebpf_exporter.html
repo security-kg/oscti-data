@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Introducing ebpf_exporter</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/introducing-ebpf_exporter/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Introducing ebpf_exporter" />
+    <meta property="og:description" content="Here at Cloudflare we use Prometheus to collect operational metrics. We run it on hundreds of servers and ingest millions of metrics per second to get insight into our network and provide the best possible service to our customers." />
+    <meta property="og:url" content="https://blog.cloudflare.com/introducing-ebpf_exporter/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2018/08/pastedImage0.png" />
+    <meta property="article:published_time" content="2018-08-24T15:11:53.000Z" />
+    <meta property="article:modified_time" content="2020-03-30T19:17:19.000Z" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="eBPF" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="Programming" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Introducing ebpf_exporter" />
+    <meta name="twitter:description" content="Here at Cloudflare we use Prometheus to collect operational metrics. We run it on hundreds of servers and ingest millions of metrics per second to get insight into our network and provide the best possible service to our customers." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/introducing-ebpf_exporter/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2018/08/pastedImage0.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Ivan Babrou" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Speed &amp; Reliability, eBPF, Linux, Programming" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ivan Babrou",
+        "image": {
+            "@type": "ImageObject",
+            "url": "//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s=250&d=mm&r=x",
+            "width": 250,
+            "height": 250
+        },
+        "url": "https://blog.cloudflare.com/author/ivan/",
+        "sameAs": []
+    },
+    "headline": "Introducing ebpf_exporter",
+    "url": "https://blog.cloudflare.com/introducing-ebpf_exporter/",
+    "datePublished": "2018-08-24T15:11:53.000Z",
+    "dateModified": "2020-03-30T19:17:19.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2018/08/pastedImage0.png",
+    "keywords": "Speed & Reliability, eBPF, Linux, Programming",
+    "description": "Here at Cloudflare we use Prometheus to collect operational metrics. We run it on hundreds of servers and ingest millions of metrics per second to get insight into our network and provide the best possible service to our customers.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-speed-and-reliability tag-ebpf tag-linux tag-programming sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-speed-and-reliability tag-ebpf tag-linux tag-programming ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Introducing ebpf_exporter</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2018-08-24T16:11:53+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">August 24, 2018 4:11PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/ivan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="//www.gravatar.com/avatar/e2ee800c1f69d88acdfea37994b87276?s&#x3D;250&amp;d&#x3D;mm&amp;r&#x3D;x" alt="Ivan Babrou" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/ivan" class="fw5 f3 no-underline black mr3">Ivan Babrou</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><em>This is an adapted transcript of a talk I gave at Promcon 2018. You can find slides with additional information on our Prometheus deployment and presenter notes <a href="https://docs.google.com/presentation/d/1420m05QANTxrCPvwsLZSHWRTvqOsxCVRzJsVp9awoFg/edit?usp=sharing">here</a>. There's also a <a href="https://www.youtube.com/watch?v=VvJx0WTiGcA&amp;feature=youtu.be&amp;t=1h15m40s">video</a>.</em></p>
+<p><em>Tip: you can click on the image to see the original large version.</em></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/1.jpg">![1](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/1.jpg" alt="1"></a></p>
+<p>Here at Cloudflare we use <a href="https://prometheus.io/">Prometheus</a> to collect operational metrics. We run it on hundreds of servers and ingest millions of metrics per second to get insight into our network and provide the best possible service to our customers.</p>
+<p>Prometheus metric format is popular enough, it's now being standardized as <a href="https://openmetrics.io/">OpenMetrics</a> under Cloud Native Computing Foundation. It's exciting to see convergence in long fragmented metrics landscape.</p>
+<p>In this blog post we'll talk about how we measure low level metrics and share a tool that can help you to get similar understanding of your systems.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/2.jpg">![2](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/2.jpg" alt="2"></a></p>
+<p>There are two main exporters one can use to get some insight into a Linux system performance.</p>
+<p>The first one is <a href="https://github.com/prometheus/node_exporter">node_exporter</a> that gives you information about basics like CPU usage breakdown by type, memory usage, disk IO stats, filesystem and network usage.</p>
+<p>The second one is <a href="https://github.com/google/cadvisor">cAdvisor</a>, that gives similar metrics, but drills down to a container level. Instead of seeing total CPU usage you can see which containers (and systemd units are also containers for <code>cAdvisor</code>) use how much of global resources.</p>
+<p>This is the absolute minimum of what you should know about your systems. If you don’t have these two, you should start there.</p>
+<p>Let’s look at the graphs you can get out of this.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/3.jpg">![3](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/3.jpg" alt="3"></a></p>
+<p>I should mention that every screenshot in this post is from a real production machine doing something useful. We have different generations of hardware, so don’t try to draw any conclusions.</p>
+<p>Here you can see the basics you get from <code>node_exporter</code> for CPU and memory. You can see the utilization and how much slack resources you have.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/4.jpg">![4](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/4.jpg" alt="4"></a></p>
+<p>Some more metrics from <code>node_exporter</code>, this time for disk IO. There are similar panels for network as well.</p>
+<p>At the basic level you can do some correlation to explain why CPU went up if you see higher network and disk activity.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/5.jpg">![5](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/5.jpg" alt="5"></a></p>
+<p>With <code>cAdvisor</code> this gets more interesting, since you can now see how global resources like CPU are sliced between services. If CPU or memory usage grows, you can pinpoint exact service that is responsible and you can also see how it affects other services.</p>
+<p>If global CPU numbers do not change much, you can still see shifts between services.</p>
+<p>All of this information comes from the simplest counters and first derivatives (rates) on them.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/6.jpg">![6](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/6.jpg" alt="6"></a></p>
+<p>Counters are great, but they lack detail about individual events. Let’s take disk io for example. We get device io time from <code>node_exporter</code> and the derivative of that cannot go beyond one second per one second of real time, which means we can draw a bold red line at 1s and see what kind of utilization we get from our disks.</p>
+<p>We get one number that characterizes out workload, but that’s simply not enough to understand it. Are we doing many fast IO operations? Are we doing few slow ones? What kind of mix of slow vs fast do we get? How are writes and reads different?</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/7.jpg">![7](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/7.jpg" alt="7"></a></p>
+<p>These questions beg for a histogram. What we have is a counter above, but what we want is a histogram below.</p>
+<p>Keep in mind that Prometheus histograms are cumulative and <code>le</code> label counts all events lower than or equal to the value of the label.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/8.jpg">![8](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/8.jpg" alt="8"></a></p>
+<p>Okay, so imagine we have that histogram. To visualize the difference you get between the two types of metrics here are two screenshots of the same event, which is an SSD replacement in production. We replaced a disk and this is how it affected the line and the histogram. In the new Grafana 5 you can plot histograms as heatmaps and it gives you a lot more detail than just one line.</p>
+<p>The next slide has a bigger screenshot, on this slide you should just see the shift in detail.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/9.jpg">![9](https://blog.cloudflar<img src="https://blog.cloudflare.com/content/images/2018/08/9.jpg" alt="9"></a></p>
+<p>Here you can see buckets color coded and each timeslot has its own distribution in a tooltip. It can definitely get easier to understand with bar highlights and double Y axis, but it’s a big step forward from just one line nonetheless.</p>
+<p>In addition to nice visualizations, you can also plot number of events above Xms and have alerts and SLOs on that. For example, you can alert if your read latency for block devices exceeds 10ms.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/10.jpg">![10](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/10.jpg" alt="10"></a></p>
+<p>And if you were looking closely at these histograms, you may have noticed values on the Y axis are kind of high. Before the replacement you can see values in 0.5s to 1.0s bucket.</p>
+<p>Tech specs for the left disk give you 50 microsecond read/write latency and on the right you get a slight decrease to 36 microseconds. That’s not what we see on the histogram at all. Sometimes you can spot this with fio in testing, but production workloads may have patterns that are difficult to replicate and have very different characteristics. Histograms show how it is.</p>
+<p>Even a few slow requests can hurt overall numbers if you're not careful with IO. We've blogged <a href="https://blog.cloudflare.com/how-we-scaled-nginx-and-saved-the-world-54-years-every-day/">how this affected our cache latency and how we worked around this</a> recently.</p>
+<p>By now you should be convinced that histograms are clearly superior for events where you care about timings of individual events.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/11.jpg">![11](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/11.jpg" alt="11"></a></p>
+<p>And if you wanted to switch all your storage latency measurements to histograms, I have tough news for you: Linux kernel only provides counters for <code>node_exporter</code>.</p>
+<p>You can try to mess with <code>blktrace</code> for this, but it doesn’t seem practical or efficient.</p>
+<p>Let’s switch gears a little and see how summary stats from counters can be deceiving.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/12.gif">![12](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/12.gif" alt="12"></a></p>
+<p>This is a <a href="https://www.autodeskresearch.com/publications/samestats">research from Autodesk</a>. The creature on the left is called Datasaurus. Then there are target figures in the middle and animations on the right.</p>
+<p>The amazing part is that shapes on the right and all intermediate animation frames for them have the same values for mean and standard deviation for both X and Y axis.</p>
+<p>From summary statistic’s point of view every box on the right is same, but if you plot individual events, a very different picture emerges.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/13.gif">![13](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/13.gif" alt="13"></a></p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/14.gif">![14](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/14.gif" alt="14"></a></p>
+<p>These animations are from the same research, here you can clearly see how box plots (mean + stddev) are non-representative of the raw events.</p>
+<p>Histograms, on the contrary, give an accurate picture.</p>
+<p>We established that histograms are what you want, but you need individual events to make those histograms. What are the requirements for a system that would handle this task, assuming that we want to measure things like io operations in the Linux kernel?</p>
+<ul>
+<li>It has to be low overhead, otherwise we can’t run it in production</li>
+<li>It has to be universal, so we are not locked into just io tracing</li>
+<li>It has to be supported out of the box, third party kernel modules and patches are not very practical</li>
+<li>And finally it has to be safe, we don’t want to crash large chunk of the internet we're responsible for to get some metrics, even if they are interesting</li>
+</ul>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/16.jpg">![16](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/16.jpg" alt="16"></a></p>
+<p>And it turns out, there’s a solution called eBPF. It’s a low overhead sandboxed user-defined bytecode running in the kernel. It can never crash, hang or interfere with the kernel negatively. That sounds kind of vague, but here are <a href="http://www.brendangregg.com/ebpf.html">two</a> <a href="https://cilium.readthedocs.io/en/v1.1/bpf/">links</a> that dive into the details explaining how this works.</p>
+<p>The main part is that it’s already included with the Linux kernel. It’s used in networking subsystem and things like seccomp rules, but as a general “run safe code in the kernel” it has many uses beyond that.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/17.jpg">![17](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/17.jpg" alt="17"></a></p>
+<p>We said it’s a bytecode and this is how it looks. The good part is that you never have to write this by hand.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/18.jpg">![18](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/18.jpg" alt="18"></a></p>
+<p>To use eBPF you write small C programs that attach to kernel functions and run before or after them. Your C code is then compiled into bytecode, verified and loaded into kernel to run with JIT compiler for translation into native opcodes. The constraints on the code are enforced by verifier and you are guaranteed to not be able to write an infinite loop or allocate tons of memory.</p>
+<p>To share data with eBPF programs, you can use maps. In terms of metric collection, maps are updated by eBPF programs in the kernel and only accessed by userspace during scraping.</p>
+<p>It is critical for performance that the eBPF VM runs in the kernel and does not cross userspace boundary.</p>
+<p>You can see the workflow on the image above.</p>
+<p>Having to write C is not an eBPF constraint, you can produce bytecode in any way you want. There are other alternatives like lua and ply, and sysdig is adding a backed to run via eBPF too. Maybe someday people will be writing <em>safe javacript</em> that runs in the kernel.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/19.jpg">![19](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/19.jpg" alt="19"></a></p>
+<p>Just like GCC compiles C code into machine code, BCC compiles C code into eBPF opcodes. BCC is a rewriter plus LLVM compiler and you can use it as a library in your code. There are bindings for C, C++, Python and Go.</p>
+<p>In this example we have a simple function that runs after <code>d_lookup</code> kernel function that is responsible for directory cache lookups. It doesn’t look complicated and the basics should be understandable for people familiar with C-like languages.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/20.jpg">![20](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/20.jpg" alt="20"></a></p>
+<p>In addition to a compiler, BCC includes some tools that can be used for debugging production systems with low overhead eBPF provides.</p>
+<p>Let’s quickly go over a few of them.</p>
+<p>The one above is <code>biolatency</code>, which shows you a histogram of disk io operations. That’s exactly what we started with and it’s already available, just as a script instead of an exporter for Prometheus.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/21.jpg">![21](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/21.jpg" alt="21"></a></p>
+<p>Here’s <code>execsnoop</code>, that allows you to see which commands are being launched in the system. This is often useful if you want to catch quickly terminating programs that do not hang around long enough to be observed in ps output.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/22.jpg">![22](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/22.jpg" alt="22"></a></p>
+<p>There’s also <code>ext4slower</code> that instead of showing slow IO operations, shows slow ext4 filesystem operations. One might think these two map fairly closely, but one filesystem operation does not necessarily map to one disk IO operation:</p>
+<ul>
+<li>Writes can go into writeback cache and not touch the disk until later</li>
+<li>Reads can involve multiple IOs to the physical device</li>
+<li>Reads can also be blocked behind async writes</li>
+</ul>
+<p>The more you know about disk io, the more you want to run stateless, really. Sadly, RAM prices are not going down.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/23.jpg">![23](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/23.jpg" alt="23"></a></p>
+<p>Okay, now to the main idea of this post. We have all these primitives, now we should be able to tie them all together and get an <a href="https://github.com/cloudflare/ebpf_exporter">ebpf_exporter</a> on our hands to get metrics in Prometheus where they belong. Many BCC tools already have kernel side ready, reviewed and battle tested, so the hardest part is covered.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/24.jpg">![24](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/24.jpg" alt="24"></a></p>
+<p>Let’s look at a simple example to get counters for timers fired in the kernel. This example is from the <code>ebpf_exporter</code> repo, where you can find a few more complex ones.</p>
+<p>On the BCC code side we define a hash and attach to a tracepoint. When the tracepoint fires, we increment our hash where the key is the address of a function that fired the tracepoint.</p>
+<p>On the exporter side we say that we want to take the hash and transform 8 byte keys with <code>ksym</code> decoder. Kernel keeps a map of function addresses to their names in <code>/proc/kallsyms</code> and we just use that. We also define that we want to attach our function to <code>timer:timer_start</code> tracepoint.</p>
+<p>This is objectively quite verbose and perhaps some things can be inferred instead of being explicit.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/25.jpg">![25](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/25.jpg" alt="25"></a></p>
+<p>This is an example graph we can get out of this exporter config.</p>
+<p>Why can this be useful? You may remember our <a href="https://blog.cloudflare.com/tracing-system-cpu-on-debian-stretch/">blog post about our tracing of a weird bug during OS upgrade from Debian Jessie to Stretch</a>.</p>
+<p>TL;DR is that systemd bug broke TCP segmentation offload on vlan interface, which increased CPU load 5x and introduced lots of interesting side effects up to memory allocation stalls. You do not want to see that allocating one page takes 12 seconds, but that's exactly what we were seeing.</p>
+<p>If we had timer metrics enabled, we would have seen the clear change in metrics sooner.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/27.jpg">![27](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/27.jpg" alt="27"></a></p>
+<p>Another bundled example can give you IPC or instruction per cycle metrics for each CPU. On this production system we can see a few interesting things:</p>
+<ul>
+<li>Not all cores are equal, with two cores being outliers (green on the top is zero, yellow on the bottom is one)</li>
+<li>Something happened that dropped IPC of what looks like half of cores</li>
+<li>There’s some variation in daily load cycles that affects IPC</li>
+</ul>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/28.jpg">![28](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/28.jpg" alt="28"></a></p>
+<p>Why can this be useful? Check out <a href="http://www.brendangregg.com/blog/2017-05-09/cpu-utilization-is-wrong.html">Brendan Gregg’s somewhat controversial blog post about CPU utilization</a>.</p>
+<p>TL;DR is that CPU% does not include memory stalls that do not perform any useful compute work. IPC helps to understand that factor better.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/29.jpg">![29](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/29.jpg" alt="29"></a></p>
+<p>Another bundled example is LLC or L3 CPU cache hit rate. This is from the same machine as IPC metrics and you can see some major affecting not just IPC, but also the hit rate.</p>
+<p>Why can this be useful? You can see how your CPU cache is doing and you can see how it may be affected by bigger L3 cache or more cores sharing the same cache.</p>
+<p>LLC hit rate usually goes hand in hand with IPC patterns as well.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/31.jpg">![31](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/31.jpg" alt="31"></a></p>
+<p>Now to the fun part. We started with IO latency histograms and they are bundled with <code>ebpf_exporter</code> examples.</p>
+<p>This is also a histogram, but now for run queue latency. When a process is woken up in the kernel, it’s ready to run. If CPU is idle, it can run immediately and scheduling delay is zero. If CPU is busy doing some other work, the process is put on a run queue and the CPU picks it up when it’s available. That delay between being ready to run and actually running  is the scheduling delay and it affects latency for interactive applications.</p>
+<p>In <code>cAdvisor</code> you have a counter with this delay, here you have a histogram of actual values of that delay.</p>
+<p>Understanding of how you can be delayed is important for understanding the causes of externally visible latency. Check out <a href="http://www.brendangregg.com/blog/2017-03-16/perf-sched.html">another blog post by Brendan Gregg</a> to see how you can further trace and understand scheduling delays with Linux perf tool. It's quite surprising how high delay can be on even an even lighty loaded machine.</p>
+<p>It also helps to have a metrics that you can observe if you change any scheduling sysctls in the kernel. The law is that you can never trust internet or even your own judgement to change any sysctls. If you can’t measure the effects, you are lying to yourself.</p>
+<p>There’s also <a href="https://www.scylladb.com/2016/06/10/read-latency-and-scylla-jmx-process/">another great post from Scylla people</a> about their finds. We were able to apply their sysctls and observe results, which was quite satisfying.</p>
+<p>Things like pinning processes to CPUs also affects scheduling, so this metric is invaluable for such experiments.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/33.jpg">![33](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/33.jpg" alt="33"></a></p>
+<p>The examples we gave are not the only ones possible. In addition to IPC and LLC metrics there are around 500 hardware metrics you can get on a typical server.</p>
+<p>There are around 2000 tracepoints with stable ABI you can use on many kernel subsystems.</p>
+<p>And you can always trace any non-inlined kernel function with kprobes and kretprobes, but nobody guarantees binary compatibility between releases for those. Some are stable, others not so much.</p>
+<p>We don’t have support for user statically defined tracepoints or uprobes, which means you cannot trace userspace applications. This is something we can reconsider in the future, but in the meantime you can always add metrics to your apps by regular means.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/34.jpg">![34](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/34.jpg" alt="34"></a></p>
+<p>This image shows tools that BCC provides, you can see it covers many aspects.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/35.jpg">![35](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/35.jpg" alt="35"></a></p>
+<p>Nothing in this life is free and even low overhead still means some overhead. You should measure this in your own environment, but this is <a href="https://github.com/cloudflare/ebpf_exporter/tree/master/benchmark">what we’ve seen</a>.</p>
+<p>For a fast <code>getpid()</code> syscall you get around 34% overhead if you count them by PID. 34% sounds like a lot, but it’s the simplest syscall and 100ns overhead is a cost of one memory reference.</p>
+<p>For a complex case where we mix command name to copy some memory and mix in some randomness, the number jumps to 330ns or 105% overhead. We can still do 1.55M ops/s instead of 3.16M ops/s per logical core. If you measure something that doesn’t happen as often on each core, you’re probably not going to notice it as much.</p>
+<p>We've seen run queue latency histogram to add 300ms of system time on a machine with 40 logical cores and 250K scheduling events per second.</p>
+<p>Your mileage may vary.</p>
+<p><a href="https://blog.cloudflare.com/content/images/2018/08/36.jpg">![36](https://blog.cloudfla<img src="https://blog.cloudflare.com/content/images/2018/08/36.jpg" alt="36"></a></p>
+<p>So where should you run the exporter then? The answer is anywhere you feel comfortable.</p>
+<p>If you run simple programs, it doesn’t hurt to run anywhere. If you are concerned about overhead, you can do it only on canary instances and hope for results to be representative. We do exactly that, but instead of canary instances we have a luxury of having a couple of canary datacenters with live customers. They get updates after our offices do, so it’s not as bad as it sounds.</p>
+<p>For some upgrade events you may want to enable more extensive metrics. An example would be a major distro or kernel upgrade.</p>
+<p>The last thing we wanted to mention is that <code>ebpf_exporter</code> is open source and we encourage you to try it and maybe contribute interesting examples that may be useful to others.</p>
+<p>GitHub: <a href="https://github.com/cloudflare/ebpf_exporter">https://github.com/cloudflare/ebpf_exporter</a></p>
+<p>Reading materials on eBPF:</p>
+<ul>
+<li><a href="https://iovisor.github.io/bcc/">https://iovisor.github.io/bcc/</a></li>
+<li><a href="https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md">https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md</a></li>
+<li><a href="http://www.brendangregg.com/ebpf.html">http://www.brendangregg.com/ebpf.html</a></li>
+<li><a href="http://docs.cilium.io/en/latest/bpf/">http://docs.cilium.io/en/latest/bpf/</a></li>
+</ul>
+<p><em>While this post was in drafts, we added another example for <a href="https://github.com/cloudflare/ebpf_exporter/pull/35">tracing port exhaustion issues</a> and that took under 10 minutes to write.</em></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/ebpf/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">eBPF</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-11-19T22:38:20Z">November 19, 2020 10:38PM</p>
+        <a href="/improving-performance-and-search-rankings-with-cloudflare-for-fun-and-profit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Improving Performance and Search Rankings with Cloudflare for Fun and Profit</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Making things fast is one of the things we do at Cloudflare. More responsive websites, apps, APIs, and networks directly translate into improved conversion and user experience....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    <span class="fw5 f2 black no-underline">,&nbsp;</span>
+                    <a href="/author/rita/" class="fw5 f2 black no-underline">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/seo/" class="no-underline f1 fw2 blue3 underline-hover">SEO</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/browser-insights/" class="no-underline f1 fw2 blue3 underline-hover">Browser Insights</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/analytics/" class="no-underline f1 fw2 blue3 underline-hover">Analytics</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-12-31T19:13:58Z">December 31, 2019 7:13PM</p>
+        <a href="/adopting-a-new-approach-to-http-prioritization/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Adopting a new approach to HTTP prioritization</h2>
+        </a>
+
+        <p class="gray1 lh-copy">HTTP prioritization is important for web performance. This is the story behind a new approach recently adopted for further work in the IETF....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/lucas/" class="fw5 f2 black no-underline">Lucas Pardue</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-08-13T14:01:00+01:00">August 13, 2019 2:01PM</p>
+        <a href="/magic-transit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Magic Transit makes your network smarter, better, stronger, and cheaper to operate</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we’re excited to announce Cloudflare Magic Transit. Magic Transit provides secure, performant, and reliable IP connectivity to the Internet. Out-of-the-box, Magic Transit deployed in front of your on-premise network protects it from DDoS attack...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rustam-lalkaka/" class="fw5 f2 black no-underline">Rustam Lalkaka</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-08-13T14:00:00+01:00">August 13, 2019 2:00PM</p>
+        <a href="/magic-transit-network-functions/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Magic Transit: Network functions at Cloudflare scale</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today we announced Cloudflare Magic Transit, which makes Cloudflare’s network available to any IP traffic on the Internet. Up until now, Cloudflare has primarily operated proxy services: our servers terminate HTTP, TCP, and UDP sessions...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/nick-wondra/" class="fw5 f2 black no-underline">Nick Wondra</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/magic-transit/" class="no-underline f1 fw2 blue3 underline-hover">Magic Transit</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/network/" class="no-underline f1 fw2 blue3 underline-hover">Network</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/anycast/" class="no-underline f1 fw2 blue3 underline-hover">Anycast</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/tcp/" class="no-underline f1 fw2 blue3 underline-hover">TCP</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

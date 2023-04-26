@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>UtahFS: Encrypted File Storage</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Several months ago, I realized that I had a lot of sensitive files on my computer (my diary, if you must know) that I was afraid of losing, but I didn’t feel comfortable putting them in something like Google Drive or Dropbox. Introducing UtahFS." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/utahfs/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="UtahFS: Encrypted File Storage" />
+    <meta property="og:description" content="Several months ago, I realized that I had a lot of sensitive files on my computer (my diary, if you must know) that I was afraid of losing, but I didn’t feel comfortable putting them in something like Google Drive or Dropbox. Introducing UtahFS." />
+    <meta property="og:url" content="https://blog.cloudflare.com/utahfs/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/06/ORAM.gif" />
+    <meta property="article:published_time" content="2020-06-09T11:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-06-26T20:29:41.000Z" />
+    <meta property="article:tag" content="UtahFS" />
+    <meta property="article:tag" content="Encryption" />
+    <meta property="article:tag" content="Developers" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="UtahFS: Encrypted File Storage" />
+    <meta name="twitter:description" content="Several months ago, I realized that I had a lot of sensitive files on my computer (my diary, if you must know) that I was afraid of losing, but I didn’t feel comfortable putting them in something like Google Drive or Dropbox. Introducing UtahFS." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/utahfs/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/06/ORAM.gif" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Brendan McMillion" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="UtahFS, Encryption, Developers" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Brendan McMillion",
+        "image": "https://blog.cloudflare.com/content/images/2018/09/bTQeMgGCTWKJfV85Fx4K_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg",
+        "url": "https://blog.cloudflare.com/author/brendan/",
+        "sameAs": []
+    },
+    "headline": "UtahFS: Encrypted File Storage",
+    "url": "https://blog.cloudflare.com/utahfs/",
+    "datePublished": "2020-06-09T11:00:00.000Z",
+    "dateModified": "2020-06-26T20:29:41.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/06/ORAM.gif",
+    "keywords": "UtahFS, Encryption, Developers",
+    "description": "Several months ago, I realized that I had a lot of sensitive files on my computer (my diary, if you must know) that I was afraid of losing, but I didn’t feel comfortable putting them in something like Google Drive or Dropbox. Introducing UtahFS.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-utahfs tag-encryption tag-developers sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-utahfs tag-encryption tag-developers ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">UtahFS: Encrypted File Storage</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-06-09T12:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">June 09, 2020 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/brendan/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2018/09/bTQeMgGCTWKJfV85Fx4K_1204a20b3d1d96bba523a6a2a5fa3cd73bd4fe59240a27ad6eb8c064c6792446.jpg" alt="Brendan McMillion" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/brendan" class="fw5 f3 no-underline black mr3">Brendan McMillion</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>Encryption is one of the most powerful technologies that everyone uses on a daily basis without realizing it. Transport-layer encryption, which protects data as it’s sent across the Internet to its intended destination, is now ubiquitous because it’s a fundamental tool for creating a trustworthy Internet. Disk encryption, which protects data while it’s sitting idly on your phone or laptop’s hard drive, is also becoming ubiquitous because it prevents anybody who steals your device from also being able to see what’s on your desktop or read your email.</p><p>The next improvement on this technology that’s starting to gain popularity is end-to-end encryption, which refers to a system where only the end-users are able to access their data -- not any intermediate service providers. Some of the most popular examples of this type of encryption are chat apps like <a href="https://faq.whatsapp.com/en/android/28030015/">WhatsApp</a> and <a href="https://signal.org/">Signal</a>. End-to-end encryption significantly reduces the likelihood of a user’s data being <a href="https://en.wikipedia.org/wiki/Yahoo!_data_breaches">maliciously stolen</a> from, or <a href="https://arstechnica.com/gadgets/2020/02/google-photos-bug-let-strangers-download-your-private-videos/">otherwise mishandled</a> by a service provider. This is because even if the service provider loses the data, nobody will have the keys to decrypt it!</p><p>Several months ago, I realized that I had a lot of sensitive files on my computer (my diary, if you must know) that I was afraid of losing, but I didn’t feel comfortable putting them in something like Google Drive or Dropbox. While Google and Dropbox are absolutely trustworthy companies, they don’t offer encryption and this is a case where I would really wanted complete control of my data.</p><p>From looking around, it was hard for me to find something that met all of my requirements:</p><ol><li>Would both encrypt and authenticate the directory structure, meaning that file names are hidden and it’s not possible for others to move or rename files.</li><li>Viewing/changing part of a large file doesn’t require downloading and decrypting the entire file.</li><li>Is open-source and has a documented protocol.</li></ol><p>So I set out to build such a system! The end result is called UtahFS, and the <a href="https://github.com/cloudflare/utahfs">code for it is available here</a>. Keep in mind that this system is not used in production at Cloudflare: it’s a proof-of-concept that I built while working on our <a href="https://blog.cloudflare.com/cloudflares-approach-to-research/">Research Team</a>. The rest of this blog post describes why I built it as I did, but there’s documentation in the repository on actually using it if you <a href="https://github.com/cloudflare/utahfs/tree/master/docs">want to skip to that</a>.</p><h3 id="storage-layer">Storage Layer</h3><p>The first and most important part of a storage system is… the storage. For this, I used <a href="https://en.wikipedia.org/wiki/Object_storage">Object Storage</a>, because it’s one of the cheapest and most reliable ways to store data on somebody else’s hard drives. Object storage is nothing more than a key-value database hosted by a cloud provider, often tuned for storing values around a few kilobytes in size. There are a ton of different providers with different pricing schemes like <a href="https://aws.amazon.com/free/storage/">Amazon S3</a>, <a href="https://www.backblaze.com/b2/cloud-storage.html">Backblaze B2</a>, and <a href="https://wasabi.com/">Wasabi</a>. All of them are capable of storing terabytes of data, and many also offer geographic redundancy.</p><h3 id="data-layer">Data Layer</h3><p>One of the requirements that was important to me was that it shouldn’t be necessary to download and decrypt an entire file before being able to read a part of it. One place where this matters is audio and video files, because it enables playback to start quickly. Another case is ZIP files: a lot of file browsers have the ability to explore compressed archives, like ZIP files, without decompressing them. To enable this functionality, the browser needs to be able to read a specific part of the archive file, decompress just that part, and then move somewhere else.</p><p>Internally, UtahFS never stores objects that are larger than a configured size (32 kilobytes, by default). If a file has more than that amount of data, the file is broken into multiple objects which are connected by a <a href="https://en.wikipedia.org/wiki/Skip_list">skip list</a>. A skip list is a slightly more complicated version of a <a href="https://en.wikipedia.org/wiki/Linked_list">linked list</a> that allows a reader to move to a random position quickly by storing additional pointers in each block that point further than just one hop ahead.</p><p>When blocks in a skip list are no longer needed, because a file was deleted or truncated, they’re added to a special “trash” linked list. Elements of the trash list can then be recycled when blocks are needed somewhere else, to create a new file or write more data to the end of an existing file, for example. This maximizes reuse and means new blocks only need to be created when the trash list is empty. Some readers might recognize this as the Linked Allocation strategy described in The Art of Computer Programming: Volume 1, section 2.2.3!</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2020/06/IMG_0428-5.jpg" class="kg-image"></figure><p>The reason for using Linked Allocation is fundamentally that it’s the most efficient for most operations. But also, it’s the approach for allocating memory that’s going to be most compatible with the cryptography we talk about in the next three sections.</p><h3 id="encryption-layer">Encryption Layer</h3><p>Now that we’ve talked about how files are broken into blocks and connected by a skip list, we can talk about how the data is actually protected. There are two aspects to this:</p><p>The first is <strong>confidentiality</strong>, which hides the contents of each block from the storage provider. This is achieved simply by encrypting each block with AES-GCM, with a key derived from the user’s password.</p><p>While simple, this scheme doesn’t provide <em>forward secrecy</em> or <em>post-compromise security</em>. Forward Secrecy means that if the user’s device was compromised, an attacker wouldn’t be able to read deleted files. Post-Compromise Security means that once the user’s device is no longer compromised, an attacker wouldn’t be able to read new files. Unfortunately, providing either of these guarantees means storing cryptographic keys on the user’s device that would need to be synchronized between devices and, if lost, would render the archive unreadable.</p><p>This scheme also doesn’t protect against <em>offline password cracking</em>, because an attacker can take any of the encrypted blocks and keep guessing passwords until they find one that works. This is somewhat mitigated by using <a href="https://en.wikipedia.org/wiki/Argon2">Argon2</a>, which makes guessing passwords more expensive, and by recommending that users choose strong passwords.</p><p>I'm definitely open to improving the encryption scheme in the future, but considered the security properties listed above too difficult and fragile for the initial release.</p><h3 id="integrity-layer">Integrity Layer</h3><p>The second aspect of data protection is <strong>integrity</strong>, which ensures the storage provider hasn’t changed or deleted anything. This is achieved by building a Merkle Tree over the user’s data. Merkle Trees are described in-depth in our <a href="https://blog.cloudflare.com/introducing-certificate-transparency-and-nimbus/">blog post about Certificate Transparency</a>. The root hash of the Merkle Tree is associated with a version number that’s incremented with each change, and both the root hash and the version number are authenticated with a key derived from the user’s password. This data is stored in two places: under a special key in the object storage database, and in a file on the user’s device.</p><p>Whenever the user wants to read a block of data from the storage provider, they first request the root stored remotely and check that it’s either the same as what they have on disk, or has a greater version number than what’s on disk. Checking the version number prevents the storage provider from reverting the archive to a previous (valid) state undetected. Any data which is read can then be verified against the most recent root hash, which prevents any other types of modifications or deletions.</p><p>Using a Merkle Tree here has the same benefit as it does for Certificate Transparency: it allows us to verify individual pieces of data without needing to download and verify <em>everything</em> at once. Another common tool used for data integrity is called a Message Authentication Code (or MAC), and while it’s a lot simpler and more efficient, it doesn’t have a way to do only partial verification.</p><p>The one thing our use of Merkle Trees doesn’t protect against is <em>forking</em>, where the storage provider shows different versions of the archive to different users. However, detecting forks would require some kind of gossip between users, which is beyond the scope of the initial implementation for now.</p><h3 id="hiding-access-patterns">Hiding Access Patterns</h3><p><a href="https://en.wikipedia.org/wiki/Oblivious_RAM">Oblivious RAM</a>, or ORAM, is a cryptographic technique for reading and writing to random-access memory in a way that hides which operation was performed (a read, or a write) and to which part of memory the operation was performed, from the memory itself! In our case, the ‘memory’ is our object storage provider, which means we’re hiding from them which pieces of data we’re accessing and why. This is valuable for defending against <em>traffic analysis attacks</em>, where an adversary with detailed knowledge of a system like UtahFS can look at the requests it makes, and infer the contents of encrypted data. For example, they might see that you <em>upload</em> data at regular intervals and almost never <em>download</em>, and infer that you’re storing automated backups.</p><p>The simplest implementation of ORAM would consist of always reading the entire memory space and then rewriting the entire memory space with all new values, any time you want to read or write an individual value. An adversary looking at the pattern of memory accesses wouldn’t be able to tell which value you actually wanted, because you always touch everything. This would be incredibly inefficient, however.</p><p>The construction we actually use, which is called <a href="https://eprint.iacr.org/2013/280.pdf">Path ORAM</a>, abstracts this simple scheme a little bit to make it more efficient. First, it organizes the blocks of memory into a binary tree, and second, it keeps a client-side table that maps application-level pointers to random leafs in the binary tree. The trick is that a value is allowed to live in any block of memory that’s on the path between its assigned leaf and the root of the binary tree. </p><p>Now, when we want to lookup the value that a pointer goes to, we look in our table for its assigned leaf, and read all the nodes on the path between the root and that leaf. The value we’re looking for should be on this path, so we already have what we need! And in the absence of any other information, all the adversary saw is that we read a random path from the tree.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://lh5.googleusercontent.com/OnV9bUq99Xo_9mAJMhdcNl95cXeHZ5UpTIWtKixAdgvCqQWCe0bcm7XU0-AUbEDpWeEsfAdHthy4v1JtBbTMeWPuf8NOPSP-0WUpDpVB2rXd0cPCa7XNBxo2sWFDnFo1ekKdBqcE" class="kg-image"><figcaption>What looks like a random path is read from the tree, that ends up containing the data we're looking for.</figcaption></figure><p>However, we still need to hide whether we’re reading or writing, and to re-randomize some memory to ensure this lookup can’t be linked with others we make in the future. So to re-randomize, we assign the pointer we just read to a new leaf and move the value from whichever block it was stored in before to a block that’s a parent of both the new and old leaves. (In the worst case, we can use the root block since the root is a parent of everything.) Once the value is moved to a suitable block and done being consumed/modified by the application, we re-encrypt all the blocks we fetched and write them back to memory. This puts the value in the path between the root and its new leaf, while only changing the blocks of memory we’ve already fetched.</p><figure class="kg-card kg-image-card"><img src="https://lh4.googleusercontent.com/F_vFMv6YdIugYlfOqHiVrJPM1krZVvLrZGE_EWdXvb88n7OodhAYLjww46GOf92KAdLcVBSO9r9qe0ssbFH8j7xtwI3XLmXixZubPXDv2fhoSXd65HoaqbxsTbxoF52lXMFEutkp" class="kg-image"></figure><p>This construction is great because we’ve only had to touch the memory assigned to a single random path in a binary tree, which is a logarithmic amount of work relative to the total size of our memory. But even if we read the same value again and again, we’ll touch completely random paths from the tree each time! There’s still a performance penalty caused by the additional memory lookups though, which is why ORAM support is optional.</p><h3 id="wrapping-up">Wrapping Up</h3><p>Working on this project has been really rewarding for me because while a lot of the individual layers of the system seem simple, they’re the result of a lot of refinement and build up into something complex quickly. It was difficult though, in that I had to implement a lot of functionality myself instead of reuse other people’s code. This is because building end-to-end encrypted systems requires carefully integrating security into every feature, and the only good way to do that is from the start. I hope UtahFS is useful for others interested in secure storage.</p>
+            </div>
+        </section>
+
+        <a href="/tag/utahfs/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">UtahFS</a>
+        <a href="/tag/encryption/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Encryption</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"rayId":"633cc8b6b94d29a7","si":10,"version":"2021.2.0"}'></script>
+</body>
+
+</html>

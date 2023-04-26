@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Using HPKE to Encrypt Request Payloads</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Allowing users to securely log parts of the request that match firewall rules while making it impossible for anyone else to decrypt." />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Using HPKE to Encrypt Request Payloads" />
+    <meta property="og:description" content="Allowing users to securely log parts of the request that match firewall rules while making it impossible for anyone else to decrypt." />
+    <meta property="og:url" content="https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/02/facebook-link-image-5.png" />
+    <meta property="article:published_time" content="2021-02-19T12:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-02-19T12:00:00.000Z" />
+    <meta property="article:tag" content="WAF" />
+    <meta property="article:tag" content="WAF Rules" />
+    <meta property="article:tag" content="Security" />
+    <meta property="article:tag" content="Firewall" />
+    <meta property="article:tag" content="Crypto" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Using HPKE to Encrypt Request Payloads" />
+    <meta name="twitter:description" content="Allowing users to securely log parts of the request that match firewall rules while making it impossible for anyone else to decrypt." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/02/twitter-shared-link-5.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Miguel de Moura" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="WAF, WAF Rules, Security, Firewall, Crypto" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@miguel_demoura" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Miguel de Moura",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/03/9093796.jpg",
+            "width": 600,
+            "height": 600
+        },
+        "url": "https://blog.cloudflare.com/author/miguel/",
+        "sameAs": [
+            "https://migueldemoura.com",
+            "https://twitter.com/miguel_demoura"
+        ]
+    },
+    "headline": "Using HPKE to Encrypt Request Payloads",
+    "url": "https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/",
+    "datePublished": "2021-02-19T12:00:00.000Z",
+    "dateModified": "2021-02-19T12:00:00.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/02/Hybrid-WAF-keys-1.png",
+    "keywords": "WAF, WAF Rules, Security, Firewall, Crypto",
+    "description": "Allowing users to securely log parts of the request that match firewall rules while making it impossible for anyone else to decrypt.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-waf tag-waf-rules tag-security tag-firewall tag-crypto sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-waf tag-waf-rules tag-security tag-firewall tag-crypto ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Using HPKE to Encrypt Request Payloads</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-02-19T12:00:00Z">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">February 19, 2021 12:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/miguel/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/03/9093796.jpg" alt="Miguel de Moura" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/miguel" class="fw5 f3 no-underline black mr3">Miguel de Moura</a>
+                </div>
+            </li>
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/andre-bluehs/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2021/02/headshot.jpg" alt="Andre Bluehs" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/andre-bluehs" class="fw5 f3 no-underline black mr3">Andre Bluehs</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/02/Hybrid-WAF-keys.png" class="kg-image"></figure><p>The Managed Rules team was recently given the task of allowing Enterprise users to <a href="https://blog.cloudflare.com/encrypt-waf-payloads-hpke/">debug Firewall Rules</a> by viewing the part of a request that matched the rule. This makes it easier to determine what specific attacks a rule is stopping or why a request was a false positive, and what possible refinements of a rule could improve it.</p><p>The fundamental problem, though, was how to securely store this debugging data as it may contain sensitive data such as personally identifiable information from submissions, cookies, and other parts of the request. We needed to store this data in such a way that <strong>only</strong> the user who is allowed to access it can do so. Even Cloudflare shouldn't be able to see the data, following our philosophy that any personally identifiable information that passes through our network is a <a href="https://blog.cloudflare.com/welcome-to-privacy-and-compliance-week/">toxic asset</a>.</p><p>This means we needed to encrypt the data in such a way that we can allow the user to decrypt it, but not Cloudflare. This means <a href="https://www.cloudflare.com/learning/ssl/how-does-public-key-encryption-work/">public key encryption</a>.</p><p>Now we needed to decide on which encryption algorithm to use. We came up with some questions to help us evaluate which one to use:</p><ul><li>What requirements do we have for the algorithm?</li><li>What language do we implement it in?</li><li>How do we make this as secure as possible for users?</li></ul><p>Here's how we made those decisions.</p><h3 id="algorithm-requirements">Algorithm Requirements</h3><p>While we knew we needed to use <a href="https://www.cloudflare.com/learning/ssl/how-does-public-key-encryption-work/">public key encryption</a>, we also needed to keep an eye on performance. This led us to select <a href="https://tools.ietf.org/html/draft-irtf-cfrg-hpke-06">Hybrid Public Key Encryption</a> (HPKE) early on as it has a best-of-both-worlds approach to using symmetric as well as public-key cryptography to increase performance. While these best-of-both-worlds schemes aren’t new [<a href="https://nacl.cr.yp.to/box.html">1</a>][<a href="https://github.com/google/tink">2</a>][<a href="https://age-encryption.org/">3</a>], HPKE aims to provide a single, future-proof, robust, interoperable combination of a general key encapsulation mechanism and a symmetric encryption algorithm.</p><p>HPKE is an emerging standard developed by the Crypto Forum Research Group (CFRG), the research body that supports the development of Internet standards at the <a href="http://ietf.org">IETF. The CFRG </a>produces specifications called RFCs (such as <a href="https://tools.ietf.org/html/rfc7748">RFC 7748</a> for elliptic curves) that are then used in higher level protocols including two we talked about previously: <a href="https://blog.cloudflare.com/oblivious-dns/">ODoH</a> and <a href="https://blog.cloudflare.com/encrypted-client-hello/">ECH</a>. Cloudflare has long been a supporter of Internet standards, so HPKE was a natural choice to use for this feature. Additionally, HPKE was co-authored by one of our colleagues at Cloudflare.</p><h3 id="how-hpke-works">How HPKE Works</h3><p>HPKE combines an asymmetric algorithm such as <a href="https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman">elliptic curve Diffie-Hellman</a> and a symmetric cipher such as AES. One of the upsides of HPKE is that the algorithms aren't dictated to the implementer, but making a combination that’s <a href="https://en.wikipedia.org/wiki/Provable_security#In_cryptography">provably secure</a> and meets the developer’s intuitive notions of security is important. All too often developers reach for a scheme without carefully understanding what it does, resulting in security vulnerabilities.</p><p>HPKE solves these problems by providing a high level of security in a generic manner and providing necessary hooks to tie messages to the context in which they are generated. This is the application of decades of research into the correct security notions and schemes.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/02/image2-13.png" class="kg-image"></figure><p>HPKE is built in stages. First it turns a Diffie-Hellman key agreement into a Key Encapsulation Mechanism. A key encapsulation mechanism has two algorithms: Encap and Decap. The Encap algorithm creates a symmetric secret and wraps it in a public key, so that only the holder of the private key can unwrap it. An attacker with the encapsulation cannot recover the random key. Decap takes the encapsulation and the private key associated to the public key, and computes the same random key. This translation gives HPKE the flexibility to work almost unchanged with any kind of public key encryption or key agreement algorithm.</p><p>HPKE mixes this key with an optional info argument, as well as information relating to the cryptographic parameters used by each side. This ensures that attackers cannot modify messages’ meaning by taking them out of context. A postcard marked “So happy to see you again soon” is ominous from the dentist and endearing from one’s grandmother.</p><p>The specification for HPKE is open and available on the <a href="https://tools.ietf.org/html/draft-irtf-cfrg-hpke-06">IETF website</a>. It is on its way to becoming an RFC after passing multiple rounds of review and analysis by cryptography experts at the CFRG. HPKE is already gaining adoption in IETF protocols like ODoH, ECH, and the new <a href="https://messaginglayersecurity.rocks/">Messaging Layer Security (MLS)</a> protocol. HPKE is also designed with the <a href="https://blog.cloudflare.com/securing-the-post-quantum-world/">post-quantum future</a> since it is built to work with any KEM, including <a href="https://csrc.nist.gov/News/2020/pqc-third-round-candidate-announcement">all the NIST finalists for post-quantum </a>public-key encryption.</p><h3 id="implementation-language">Implementation Language</h3><p>Once we had an encryption scheme selected, we needed to settle on an implementation. HPKE is still fairly new, so the libraries aren't quite mature yet. There is a <a href="https://github.com/cisco/go-hpke">reference implementation</a>, and we’re in the process of developing an implementation in Go as part of <a href="https://github.com/cloudflare/circl">CIRCL</a>. However, in the absence of a clear "go to" that is widely known to be the best, we decided to go with <a href="https://github.com/rozbb/rust-hpke">an implementation</a> leveraging the same language already powering much of the Firewall code running at the Cloudflare edge - <a href="https://blog.cloudflare.com/building-fast-interpreters-in-rust/">Rust</a>.</p><p>Aside from this, the language benefits from features like native primitives, and crucially the ability to easily compile to <a href="https://developer.mozilla.org/en-US/docs/WebAssembly">WebAssembly (WASM)</a>.</p><p>As we mentioned in a <a href="https://blog.cloudflare.com/encrypt-waf-payloads-hpke/">previous blog post</a>, customers are able to generate a key pair and decrypt payloads either from the dashboard UI or from a CLI. Instead of writing and maintaining two different codebases for these, we opted to reuse the same implementation across the edge component that encrypts the payloads and the UI and CLI that decrypt them. To achieve this we compile our library to target WASM so it can be used in the dashboard UI code that runs in the browser. While this approach may yield a slightly larger JavaScript bundle size and relatively small computational overhead, we found it preferable to spending a significant amount of time securely re-implementing HPKE using JavaScript <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API">WebCrypto</a> primitives.</p><p>The HPKE implementation we decided on comes with the caveat of not yet being formally audited, so we performed our own internal security review. We analyzed the cryptography primitives being used and the corresponding libraries. Between the composition of said primitives and secure programming practices like correctly zeroing memory and safe usage of random number generators, we found no security issues.</p><h3 id="making-it-secure-for-users">Making It Secure For Users</h3><p>To encrypt on behalf of users, we need them to provide us with a public key. To make this as easy as possible, we built a CLI tool along with the ability to do it right in the browser. Either option allows the user to generate a public/private key pair without needing to talk to Cloudflare servers at all.</p><p>In our API, we specifically do not accept the private key of the key pair — we don't want it! We don't need and don't want to be able to decrypt the data we're storing.</p><p>For the dashboard, once the user provides the private key for decryption, the key is held in a temporary JavaScript variable and used for the in-browser decryption. This allows the user to not constantly have to provide the key while browsing the Firewall event logs. The private key is also not persisted in any way in the browser, so any action that refreshes the page such as refreshing or navigating away will require the user to provide the key again. We believe this is an acceptable usability compromise for better security.</p><h3 id="how-payload-extraction-works">How Payload Extraction Works</h3><p>After deciding how to encrypt the data, we just had to figure out the rest of the feature: what data to encrypt, how to store and transmit it, and how to allow users to decrypt it.</p><p>When an HTTP request reaches the L7 Firewall, it is evaluated against a set of rulesets. Each of these rulesets contain several rules written in the <a href="https://github.com/cloudflare/wirefilter">wirefilter</a> syntax.</p><p>An example of one such rule would be:</p><!--kg-card-begin: markdown--><pre><code>http.request.version eq &quot;HTTP/1.1&quot;
+and
+(
+    http.request.uri.path matches &quot;\n+.&quot;
+    or
+    http.request.uri.query matches &quot;\x00+.&quot;
+)
+</code></pre>
+<!--kg-card-end: markdown--><p>This expression evaluates to a boolean “true” for HTTP/1.1 requests that either contain one or more newlines followed by a character in the request path or one or more NULL bytes followed by a character in the query string.</p><p>Say we had the following request that would match the rule above:</p><!--kg-card-begin: markdown--><pre><code>GET /cms/%0Aadmin?action=%00post HTTP/1.1
+Host: example.com
+</code></pre>
+<!--kg-card-end: markdown--><p>If matched data logging is enabled, the rules that match would be executed again in a special context that tags all fields that are accessed during execution. We do this second execution because this tagging adds a noticeable computational overhead, and since the vast majority of requests don't trigger a rule at all we would be unnecessarily adding overhead to each request. Requests that do match any rules will only match a few rules as well, so we don't need to re-execute a large portion of the ruleset.</p><p>You may notice that although <code>http.request.uri.query matches "\x00+."</code> evaluates to <code>true</code> for this request, it won’t be executed, because the expression short-circuits with the first <code>or</code> condition that also matches. This results in only <code>http.request.version</code> and <code>http.request.uri.path</code> being tagged as accessed:</p><!--kg-card-begin: markdown--><pre><code>http.request.version -&gt; HTTP/1.1
+http.request.uri.path -&gt; /cms/%0Aadmin
+</code></pre>
+<!--kg-card-end: markdown--><p>Having gathered the fields that were accessed, the Firewall engine does some post-processing; removing fields that are a subset of others (e.g., the query string and the full URI), or truncating fields that are beyond a certain character length.</p><p>Finally, these get serialized as JSON, encrypted with the customer's public key, serialized again as a set of bytes, and prefixed with a version number should we need to change/update it in the future. To simplify consumption of these blobs, our APIs display a base64 encoded version of the bytes:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/02/image3-8.png" class="kg-image"></figure><p>Now that we have encrypted the data at the edge and persisted it in <a href="https://blog.cloudflare.com/tag/clickhouse/">ClickHouse</a>, we need to allow users to decrypt it. As part of the setup of turning this feature on, users generated a key-pair: the public key which was used to encrypt the payloads and a private key which is used to decrypt them. Decryption is done completely offline via either the command line using <a href="https://github.com/cloudflare/matched-data-cli">cloudflare/matched-data-cli</a>:</p><!--kg-card-begin: markdown--><pre><code>$ MATCHED_DATA=AkjQDktMX4FudxeQhwa0UPNezhkgLAUbkglNQ8XVCHYqPgAAAAAAAACox6cEwqWQpFVE2gCFyOFsSdm2hCoE0/oWKXZJGa5UPd5mWSRxNctuXNtU32hcYNR/azLjsGO668Jwk+qCdFvmKjEqEMJgI+fvhwLQmm4=
+$ matched-data-cli decrypt -d $MATCHED_DATA -k $PRIVATE_KEY
+{&quot;http.request.version&quot;: &quot;HTTP/1.1&quot;, &quot;http.request.uri.path&quot;: &quot;/cms/%0Aadmin&quot;}
+</code></pre>
+<!--kg-card-end: markdown--><p>Or the dashboard UI:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/02/image1-7.png" class="kg-image"></figure><p>Since our CLI tool is open-source and HPKE is interoperable, it can also be used in other tooling as part of a user's logging pipeline, for example in security information and event management (SIEM) software.</p><h3 id="conclusion">Conclusion</h3><p>This was a team effort with help from our Research and Security teams throughout the process. We relied on them for recommendations on how best to evaluate the algorithms as well as vetting the libraries we wanted to use.</p><p>We're very pleased with how HPKE has worked out for us from an ease-of-implementation and performance standpoint. It was also an easy choice for us to make due to its impending standardization and best-of-both-worlds approach to security.</p>
+            </div>
+        </section>
+
+        <a href="/tag/waf/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">WAF</a>
+        <a href="/tag/waf-rules/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">WAF Rules</a>
+        <a href="/tag/security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Security</a>
+        <a href="/tag/firewall/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Firewall</a>
+        <a href="/tag/crypto/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Crypto</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-01T12:00:00+01:00">July 01, 2020 12:00PM</p>
+        <a href="/making-the-waf-40-faster/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Making the WAF 40% faster</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As with all Cloudflare security products, the WAF is designed to not sacrifice performance for security, but there is always room for improvement. This blog post provides a brief overview of the latest performance improvements that were rolled out to our customers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/miguel/" class="fw5 f2 black no-underline">Miguel de Moura</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/performance/" class="no-underline f1 fw2 blue3 underline-hover">Performance</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-28T19:45:41+01:00">May 28, 2019 7:45PM</p>
+        <a href="/stopping-cve-2019-0604/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Stopping SharePoint’s CVE-2019-0604</h2>
+        </a>
+
+        <p class="gray1 lh-copy">On Saturday, 11th May 2019, we got the news of a critical web vulnerability being actively exploited in the wild by advanced persistent threats (APTs), affecting Microsoft’s SharePoint server (versions 2010 through 2019)....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/georgie/" class="fw5 f2 black no-underline">Georgie Yoxall</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/security/" class="no-underline f1 fw2 blue3 underline-hover">Security</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-03-01T10:00:00Z">March 01, 2019 10:00AM</p>
+        <a href="/new-firewall-tab-and-analytics/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">New Firewall Tab and Analytics</h2>
+        </a>
+
+        <p class="gray1 lh-copy">At Cloudflare, one of our top priorities is to make our products and services intuitive so that we can enable customers to accelerate and protect their Internet properties. We're excited to launch two improvements designed to make our Firewall easier to use and more accessible....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alex-cruz-farmer/" class="fw5 f2 black no-underline">Alex Cruz Farmer</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/analytics/" class="no-underline f1 fw2 blue3 underline-hover">Analytics</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/firewall/" class="no-underline f1 fw2 blue3 underline-hover">Firewall</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-04-20T17:14:53+01:00">April 20, 2018 5:14PM</p>
+        <a href="/keeping-drupal-sites-safe-with-cloudflares-waf/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Keeping Drupal sites safe with Cloudflare&#x27;s WAF</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare’s team of security analysts monitor for upcoming threats and vulnerabilities and where possible put protection in place for upcoming threats before they compromise our customers....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/maitane/" class="fw5 f2 black no-underline">Maitane Zotes</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/waf/" class="no-underline f1 fw2 blue3 underline-hover">WAF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/drupal/" class="no-underline f1 fw2 blue3 underline-hover">Drupal</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/vulnerabilities/" class="no-underline f1 fw2 blue3 underline-hover">Vulnerabilities</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/waf-rules/" class="no-underline f1 fw2 blue3 underline-hover">WAF Rules</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Mitigating Spectre and Other Security Threats: The Cloudflare Workers Security Model</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/mitigating-spectre-and-other-security-threats-the-cloudflare-workers-security-model/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Mitigating Spectre and Other Security Threats: The Cloudflare Workers Security Model" />
+    <meta property="og:description" content="Cloudflare is a security company, and the heart of Workers is, in my view, a security project. Running code written by third parties is always a scary proposition, and the primary concern of the Workers team is to make that safe." />
+    <meta property="og:url" content="https://blog.cloudflare.com/mitigating-spectre-and-other-security-threats-the-cloudflare-workers-security-model/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2020/07/Screen-Shot-2020-07-28-at-2.43.24-PM.png" />
+    <meta property="article:published_time" content="2020-07-29T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2020-07-29T17:06:28.000Z" />
+    <meta property="article:tag" content="Serverless Week" />
+    <meta property="article:tag" content="Serverless" />
+    <meta property="article:tag" content="Cloudflare Workers" />
+    <meta property="article:tag" content="DNS Security" />
+    <meta property="article:tag" content="Developers" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mitigating Spectre and Other Security Threats: The Cloudflare Workers Security Model" />
+    <meta name="twitter:description" content="Cloudflare is a security company, and the heart of Workers is, in my view, a security project. Running code written by third parties is always a scary proposition, and the primary concern of the Workers team is to make that safe." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/mitigating-spectre-and-other-security-threats-the-cloudflare-workers-security-model/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2020/07/Screen-Shot-2020-07-28-at-2.43.24-PM.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Kenton Varda" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Serverless Week, Serverless, Cloudflare Workers, DNS Security, Developers" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Kenton Varda",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/avatar-github.jpg",
+            "width": 460,
+            "height": 460
+        },
+        "url": "https://blog.cloudflare.com/author/kenton-varda/",
+        "sameAs": []
+    },
+    "headline": "Mitigating Spectre and Other Security Threats: The Cloudflare Workers Security Model",
+    "url": "https://blog.cloudflare.com/mitigating-spectre-and-other-security-threats-the-cloudflare-workers-security-model/",
+    "datePublished": "2020-07-29T13:00:00.000Z",
+    "dateModified": "2020-07-29T17:06:28.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2020/07/Screen-Shot-2020-07-28-at-2.43.24-PM.png",
+    "keywords": "Serverless Week, Serverless, Cloudflare Workers, DNS Security, Developers",
+    "description": "Cloudflare is a security company, and the heart of Workers is, in my view, a security project. Running code written by third parties is always a scary proposition, and the primary concern of the Workers team is to make that safe.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-serverless-week tag-serverless tag-workers tag-dns-security tag-developers sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-serverless-week tag-serverless tag-workers tag-dns-security tag-developers ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Mitigating Spectre and Other Security Threats: The Cloudflare Workers Security Model</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2020-07-29T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">July 29, 2020 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/kenton-varda/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="https://blog-cloudflare-com-assets.storage.googleapis.com/2020/08/avatar-github.jpg" alt="Kenton Varda" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/kenton-varda" class="fw5 f3 no-underline black mr3">Kenton Varda</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <!--kg-card-begin: markdown--><p><img src="https://blog.cloudflare.com/content/images/2020/07/Serverless-Week-Day-3@2x.png" alt="Serverless-Week-Day-3@2x"><br>
+Hello, I'm an engineer on the Workers team, and today I want to talk to you about security.</p>
+<p>Cloudflare is a security company, and the heart of Workers is, in my view, a security project. Running code written by third parties is always a scary proposition, and the primary concern of the Workers team is to make that safe.</p>
+<p>For a project like this, it is not enough to pass a security review and say &quot;ok, we're secure&quot; and move on. It's not even enough to consider security at every stage of design and implementation. For Workers, security in and of itself is an ongoing project, and that work is never done. There are always things we can do to reduce the risk and impact of future vulnerabilities.</p>
+<p>Today, I want to give you an overview of our security architecture, and then address two specific issues that we are frequently asked about: V8 bugs, and Spectre.</p>
+<h2 id="architecturaloverview">Architectural Overview</h2>
+<p>Let's start with a quick overview of the Workers Runtime architecture.</p>
+<p><img src="https://blog.cloudflare.com/content/images/2020/07/Workers-architecture.svg" alt="Workers-architecture"></p>
+<p>There are two fundamental parts of designing a code sandbox: secure isolation and API design.</p>
+<h3 id="isolation">Isolation</h3>
+<p>First, we need to create an execution environment where code can't access anything it's not supposed to.</p>
+<p>For this, our primary tool is V8, the JavaScript engine developed by Google for use in Chrome. V8 executes code inside &quot;isolates&quot;, which prevent that code from accessing memory outside the isolate -- even within the same process. Importantly, this means we can run many isolates within a single process. This is essential for an edge compute platform like Workers where we must host many thousands of guest apps on every machine, and rapidly switch between these guests thousands of times per second with minimal overhead. If we had to run a separate process for every guest, the number of tenants we could support would be drastically reduced, and we'd have to limit edge compute to a small number of big enterprise customers who could pay a lot of money. With isolate technology, we can make edge compute available to everyone.</p>
+<p>Sometimes, though, we do decide to schedule a worker in its own private process. We do this if it uses certain features that we feel need an extra layer of isolation. For example, when a developer uses the devtools debugger to inspect their worker, we run that worker in a separate process. This is because historically, in the browser, the inspector protocol has only been usable by the browser's trusted operator, and therefore has not received as much security scrutiny as the rest of V8. In order to hedge against the increased risk of bugs in the inspector protocol, we move inspected workers into a separate process with a process-level sandbox. We also use process isolation as an extra defense against Spectre, which I'll describe later in this post.</p>
+<p>Additionally, even for isolates that run in a shared process with other isolates, we run multiple instances of the whole runtime on each machine, which we call &quot;cordons&quot;. Workers are distributed among cordons by assigning each worker a level of trust and separating low-trusted workers from those we trust more highly. As one example of this in operation: a customer who signs up for our free plan will not be scheduled in the same process as an enterprise customer. This provides some defense-in-depth in the case a zero-day security vulnerability is found in V8. But I'll talk more about V8 bugs, and how we address them, later in this post.</p>
+<p>At the whole-process level, we apply another layer of sandboxing for defense in depth. The &quot;layer 2&quot; sandbox uses Linux namespaces and seccomp to prohibit all access to the filesystem and network. Namespaces and seccomp are commonly used to implement containers. However, our use of these technologies is much stricter than what is usually possible in container engines, because we configure namespaces and seccomp after the process has started (but before any isolates have been loaded). This means, for example, we can (and do) use a totally empty filesystem (mount namespace) and use seccomp to block absolutely all filesystem-related system calls. Container engines can't normally prohibit all filesystem access because doing so would make it impossible to use <code>exec()</code> to start the guest program from disk; in our case, our guest programs are not native binaries, and the Workers runtime itself has already finished loading before we block filesystem access.</p>
+<p>The layer 2 sandbox also totally prohibits network access. Instead, the process is limited to communicating only over local Unix domain sockets, to talk to other processes on the same system. Any communication to the outside world must be mediated by some other local process outside the sandbox.</p>
+<p>One such process in particular, which we call the &quot;supervisor&quot;, is responsible for fetching worker code and configuration from disk or from other internal services. The supervisor ensures that the sandbox process cannot read any configuration except that which is relevant to the workers that it should be running.</p>
+<p>For example, when the sandbox process receives a request for a worker it hasn't seen before, that request includes the encryption key for that worker's code (including attached secrets). The sandbox can then pass that key to the supervisor in order to request the code. The sandbox cannot request any worker for which it has not received the appropriate key. It cannot enumerate known workers. It also cannot request configuration it doesn't need; for example, it cannot request the TLS key used for HTTPS traffic to the worker.</p>
+<p>Aside from reading configuration, the other reason for the sandbox to talk to other processes on the system is to implement APIs exposed to Workers. Which brings us to API design.</p>
+<h3 id="apidesign">API Design</h3>
+<p>There is a saying: &quot;If a tree falls in the forest, but no one is there to hear it, does it make a sound?&quot; I have a related saying: &quot;If a Worker executes in a fully-isolated environment in which it is totally prevented from communicating with the outside world, does it actually run?&quot;</p>
+<p>Complete code isolation is, in fact, useless. In order for Workers to do anything useful, they have to be allowed to communicate with users. At the very least, a Worker needs to be able to receive requests and respond to them. It would also be nice if it could send requests to the world, safely. For that, we need APIs.</p>
+<p>In the context of sandboxing, API design takes on a new level of responsibility. Our APIs define exactly what a Worker can and cannot do. We must be very careful to design each API so that it can only express operations which we want to allow, and no more. For example, we want to allow Workers to make and receive HTTP requests, while we do not want them to be able to access the local filesystem or internal network services.</p>
+<p>Let's dig into the easier example first. Currently, Workers does not allow any access to the local filesystem. Therefore, we do not expose a filesystem API at all. No API means no access.</p>
+<p>But, imagine if we did want to support local filesystem access in the future. How would we do that? We obviously wouldn't want Workers to see the whole filesystem. Imagine, though, that we wanted each Worker to have its own private directory on the filesystem where it can store whatever it wants.</p>
+<p>To do this, we would use a design based on <a href="https://en.wikipedia.org/wiki/Capability-based_security">capability-based security</a>. Capabilities are a big topic, but in this case, what it would mean is that we would give the worker an object of type <code>Directory</code>, representing a directory on the filesystem. This object would have an API that allows creating and opening files and subdirectories, but does not permit traversing &quot;up&quot; the tree to the parent directory. Effectively, each worker would see its private <code>Directory</code> as if it were the root of their own filesystem.</p>
+<p>How would such an API be implemented? As described above, the sandbox process cannot access the real filesystem, and we'd prefer to keep it that way. Instead, file access would be mediated by the supervisor process. The sandbox talks to the supervisor using <a href="https://capnproto.org/rpc.html">Cap'n Proto RPC</a>, a capability-based RPC protocol. (Cap'n Proto is an open source project currently maintained by the Cloudflare Workers team.) This protocol makes it very easy to implement capability-based APIs, so that we can strictly limit the sandbox to accessing only the files that belong to the Workers it is running.</p>
+<p>Now what about network access? Today, Workers are allowed to talk to the rest of the world only via HTTP -- both incoming and outgoing. There is no API for other forms of network access, therefore it is prohibited (though we plan to support other protocols in the future).</p>
+<p>As mentioned before, the sandbox process cannot connect directly to the network. Instead, all outbound HTTP requests are sent over a Unix domain socket to a local proxy service. That service implements restrictions on the request. For example, it verifies that the request is either addressed to a public Internet service, or to the Worker's zone's own origin server, not to internal services that might be visible on the local machine or network. It also adds a header to every request identifying the worker from which it originates, so that abusive requests can be traced and blocked. Once everything is in order, the request is sent on to our HTTP caching layer, and then out to the Internet.</p>
+<p>Similarly, inbound HTTP requests do not go directly to the Workers Runtime. They are first received by an inbound proxy service. That service is responsible for TLS termination (the Workers Runtime never sees TLS keys), as well as identifying the correct Worker script to run for a particular request URL. Once everything is in order, the request is passed over a Unix domain socket to the sandbox process.</p>
+<h2 id="v8bugsandthepatchgap">V8 bugs and the &quot;patch gap&quot;</h2>
+<p>Every non-trivial piece of software has bugs, and sandboxing technologies are no exception. Virtual machines have bugs, containers have bugs, and yes, isolates (which we use) also have bugs. We can't live life pretending that no further bugs will ever be discovered; instead, we must assume they will and plan accordingly.</p>
+<p>We rely heavily on isolation provided by V8, the JavaScript engine built by Google for use in Chrome. This has good sides and bad sides. On one hand, V8 is an extraordinarily complicated piece of technology, creating a wider &quot;attack surface&quot; than virtual machines. More complexity means more opportunities for something to go wrong. On the bright side, though, an extraordinary amount of effort goes into finding and fixing V8 bugs, owing to its position as arguably the most popular sandboxing technology in the world. Google regularly pays out 5-figure bounties to anyone finding a V8 sandbox escape. Google also operates fuzzing infrastructure that automatically finds bugs faster than most humans can. Google's investment does a lot to minimize the danger of V8 &quot;zero-days&quot; -- bugs that are found by the bad guys and not known to Google.</p>
+<p>But, what happens after a bug is found and reported by the good guys? V8 is open source, so fixes for security bugs are developed in the open and released to everyone at the same time -- good guys and bad guys. It's important that any patch be rolled out to production as fast as possible, before the bad guys can develop an exploit.</p>
+<p>The time between publishing the fix and deploying it is known as the &quot;patch gap&quot;. Earlier this year, <a href="https://www.zdnet.com/article/google-cuts-chrome-patch-gap-in-half-from-33-to-15-days/">Google announced that Chrome's patch gap had been reduced from 33 days to 15 days</a>.</p>
+<p>Fortunately, we have an advantage here, in that we directly control the machines on which our system runs. We have automated almost our entire build and release process, so the moment a V8 patch is published, our systems automatically build a new release of the Workers Runtime and, after one-click sign-off from the necessary (human) reviewers, automatically push that release out to production.</p>
+<p>As a result, our patch gap is now under 24 hours. A patch published by V8's team in Munich during their work day will usually be in production before the end of our work day in the US.</p>
+<h2 id="spectreintroduction">Spectre: Introduction</h2>
+<p><img src="https://blog.cloudflare.com/content/images/2020/07/Spectre-vulnerability-@2x.png" alt="Spectre-vulnerability-@2x"><br>
+We get a lot of questions about Spectre. The V8 team at Google has stated in no uncertain terms that <a href="https://arxiv.org/abs/1902.05178">V8 itself cannot defend against Spectre</a>. Since Workers relies on V8 for sandboxing, many have asked if that leaves Workers vulnerable. However, we do not need to depend on V8 for this; the Workers environment presents many alternative approaches to mitigating Spectre.</p>
+<p>Spectre is complicated and nuanced, and there's no way I can cover everything there is to know about it or how Workers addresses it in a single blog post. But, hopefully I can clear up some of the confusion and concern.</p>
+<h3 id="whatisit">What is it?</h3>
+<p>Spectre is a class of attacks in which a malicious program can trick the CPU into &quot;speculatively&quot; performing computation using data that the program is not supposed to have access to. The CPU eventually realizes the problem and does not allow the program to see the results of the speculative computation. However, the program may be able to derive bits of the secret data by looking at subtle side effects of the computation, such as the effects on cache.</p>
+<p><a href="https://www.cloudflare.com/learning/security/threats/meltdown-spectre/">For more background about Spectre, check out our Learning Center page on the topic.</a></p>
+<h3 id="whydoesitmatterforworkers">Why does it matter for Workers?</h3>
+<p>Spectre encompasses a wide variety of vulnerabilities present in modern CPUs. The specific vulnerabilities vary by architecture and model, and it is likely that many vulnerabilities exist which haven't yet been discovered.</p>
+<p>These vulnerabilities are a problem for every cloud compute platform. Any time you have more than one tenant running code on the same machine, Spectre attacks come into play. However, the &quot;closer together&quot; the tenants are, the more difficult it can be to mitigate specific vulnerabilities. Many of the known issues can be mitigated at the kernel level (protecting processes from each other) or at the hypervisor level (protecting VMs), often with the help of CPU microcode updates and various tricks (many of which, unfortunately, come with serious performance impact).</p>
+<p>In Cloudflare Workers, we isolate tenants from each other using V8 isolates -- not processes nor VMs. This means that we cannot necessarily rely on OS or hypervisor patches to &quot;solve&quot; Spectre for us. We need our own strategy.</p>
+<h3 id="whynotuseprocessisolation">Why not use process isolation?</h3>
+<p>Cloudflare Workers is designed to run your code in every single Cloudflare location, of which there are currently 200 worldwide and growing.</p>
+<p>We wanted Workers to be a platform that is accessible to everyone -- not just big enterprise customers who can pay megabucks for it. We need to handle a huge number of tenants, where many tenants get very little traffic.</p>
+<p>Combine these two points, and things get tricky.</p>
+<p>A typical, non-edge serverless provider could handle a low-traffic tenant by sending all of that tenant's traffic to a single machine, so that only one copy of the application needs to be loaded. If the machine can handle, say, a dozen tenants, that's plenty. That machine can be hosted in a mega-datacenter with literally millions of machines, achieving economies of scale. However, this centralization incurs latency and worldwide bandwidth costs when the users don't happen to be nearby.</p>
+<p>With Workers, on the other hand, every tenant, regardless of traffic level, currently runs in every Cloudflare location. And in our quest to get as close to the end user as possible, we sometimes choose locations that only have space for a limited number of machines. The net result is that we need to be able to host thousands of active tenants per machine, with the ability to rapidly spin up inactive ones on-demand. That means that each guest cannot take more than a couple megabytes of memory -- hardly enough space for a call stack, much less everything else that a process needs.</p>
+<p>Moreover, we need context switching to be extremely cheap. Many Workers resident in memory will only handle an event every now and then, and many Workers spend less than a fraction of a millisecond on any particular event. In this environment, a single core can easily find itself switching between thousands of different tenants every second. Moreover, to handle one event, a significant amount of communication needs to happen between the guest application and its host, meaning still more switching and communications overhead. If each tenant lives in its own process, all this overhead is orders of magnitude larger than if many tenants live in a single process. When using strict process isolation in Workers, we find the CPU cost can easily be 10x what it is with a shared process.</p>
+<p>In order to keep Workers inexpensive, fast, and accessible to everyone, we must solve these issues, and that means we must find a way to host multiple tenants in a single process.</p>
+<h3 id="thereisnofixforspectre">There is no &quot;fix&quot; for Spectre</h3>
+<p>A dirty secret that the industry doesn't like to admit: no one has &quot;fixed&quot; Spectre. Not even when using heavyweight virtual machines. Everyone is still vulnerable.</p>
+<p>The current approach being taken by most of the industry is essentially a game of whack-a-mole. Every couple months, researchers uncover a new Spectre vulnerability. CPU vendors release some new microcode, OS vendors release kernel patches, and everyone has to update.</p>
+<p>But is it enough to merely deploy the latest patches?</p>
+<p>It is abundantly clear that many more vulnerabilities exist, but haven't yet been publicized. Who might know about those vulnerabilities? Most of the bugs being published are being found by (very smart) graduate students on a shoestring budget. Imagine, for a minute, how many more bugs a well-funded government agency, able to buy the very best talent in the world, could be uncovering.</p>
+<p>To truly defend against Spectre, we need to take a different approach. It's not enough to block individual known vulnerabilities. We must address the entire class of vulnerabilities at once.</p>
+<h3 id="wecantstopitbutwecanslowitdown">We can't stop it, but we can slow it down</h3>
+<p>Unfortunately, it's unlikely that any catch-all &quot;fix&quot; for Spectre will be found. But for the sake of argument, let's try.</p>
+<p>Fundamentally, all Spectre vulnerabilities use side channels to detect hidden processor state. Side channels, by definition, involve observing some non-deterministic behavior of a system. Conveniently, most software execution environments try hard to eliminate non-determinism, because non-deterministic execution makes applications unreliable.</p>
+<p>However, there are a few sorts of non-determinism that are still common. The most obvious among these is timing. The industry long ago gave up on the idea that a program should take the same amount of time every time it runs, because deterministic timing is fundamentally at odds with heuristic performance optimization. Sure enough, most Spectre attacks focus on timing as a way to detect the hidden microarchitectural state of the CPU.</p>
+<p>Some have proposed that we can solve this by making timers inaccurate or adding random noise. However, it turns out that this does not stop attacks; it only makes them slower. If the timer tracks real time at all, then anything you can do to make it inaccurate can be overcome by running an attack multiple times and using statistics to filter out the noise.</p>
+<p>Many security researchers see this as the end of the story. What good is slowing down an attack, if the attack is still possible? Once the attacker gets your private key, it's game over, right? What difference does it make if it takes them a minute or a month?</p>
+<h3 id="cascadingslowdowns">Cascading Slow-downs</h3>
+<p>We find that, actually, measures that slow down an attack can be powerful.</p>
+<p>Our key insight is this: as an attack becomes slower, new techniques become practical to make it even slower still. The goal, then, is to chain together enough techniques that an attack becomes so slow as to be uninteresting.</p>
+<p>Much of cryptography, after all, is technically vulnerable to &quot;brute force&quot; attacks -- technically, with enough time, you can break it. But when the time required is thousands (or even billions) of years, we decide that this is good enough.</p>
+<p>So, what do we do to slow down Spectre attacks to the point of meaninglessness?</p>
+<h2 id="freezingaspectreattack">Freezing a Spectre Attack</h2>
+<p><img src="https://blog.cloudflare.com/content/images/2020/07/freeze-Spectre@2x.png" alt="freeze-Spectre@2x"></p>
+<h3 id="step0dontallownativecode">Step 0: Don't allow native code</h3>
+<p>We do not allow our customers to upload native-code binaries to run on our network. We only accept JavaScript and WebAssembly. Of course, many other languages, like Python, Rust, or even Cobol, can be compiled or transpiled to one of these two formats; the important point is that we do another pass on our end, using V8, to convert these formats into true native code.</p>
+<p>This, in itself, doesn't necessarily make Spectre attacks harder. However, I present this as step 0 because it is fundamental to enabling everything else below.</p>
+<p>Accepting native code programs implies being beholden to an existing CPU architecture (typically, x86). In order to execute code with reasonable performance, it is usually necessary to run the code directly on real hardware, severely limiting the host's control over how that execution plays out. For example, a kernel or hypervisor has no ability to prohibit applications from invoking the CLFLUSH instruction, an instruction <a href="https://gruss.cc/files/flushflush.pdf">which is very useful in side channel attacks</a> and almost nothing else.</p>
+<p>Moreover, supporting native code typically implies supporting whole existing operating systems and software stacks, which bring with them decades of expectations about how the architecture works under them. For example, x86 CPUs allow a kernel or hypervisor to disable the RDTSC instruction, which reads a high-precision timer. Realistically, though, disabling it will break many programs because they are implemented to use RDTSC any time they want to know the current time.</p>
+<p>Supporting native code would bind our hands in terms of mitigation techniques. By using an abstract intermediate format, we have much greater freedom.</p>
+<h3 id="step1disallowtimersandmultithreading">Step 1: Disallow timers and multi-threading</h3>
+<p>In Workers, you can get the current time using the JavaScript Date API, for example by calling <code>Date.now()</code>. However, the time value returned by this is not really the current time. Instead, it is the time at which the network message was received which caused the application to begin executing. While the application executes, time is locked in place. For example, say an attacker writes:</p>
+<pre><code class="language-javascript">let start = Date.now();
+for (let i = 0; i &lt; 1e6; i++) {
+  doSpectreAttack();
+}
+let end = Date.now();
+</code></pre>
+<p>The values of <code>start</code> and <code>end</code> will always be exactly the same. The attacker cannot use <code>Date</code> to measure the execution time of their code, which they would need to do to carry out an attack.</p>
+<blockquote>
+<p><strong>As an aside:</strong> This is a measure we actually implemented in mid-2017, long before Spectre was announced (and before we knew about it). We implemented this measure because we were worried about timing side channels in general. Side channels have been a concern of the Workers team from day one, and we have designed our system from the ground up with this concern in mind.</p>
+</blockquote>
+<p>Related to our taming of <code>Date</code>, we also do not permit multi-threading or shared memory in Workers. Everything related to the processing of one event happens on the same thread -- otherwise, it would be possible to &quot;race&quot; threads in order to &quot;MacGyver&quot; an implicit timer. We don't even allow multiple Workers operating on the same request to run concurrently. For example, if you have installed a Cloudflare App on your zone which is implemented using Workers, and your zone itself also uses Workers, then a request to your zone may actually be processed by two Workers in sequence. These run in the same thread.</p>
+<p>So, we have prevented code execution time from being measured <em>locally</em>. However, that doesn't actually prevent it from being measured: it can still be measured remotely. For example, the HTTP client that is sending a request to trigger the execution of the Worker can measure how long it takes for the Worker to respond. Of course, such a measurement is likely to be very noisy, since it would have to traverse the Internet. Such noise can be overcome, in theory, by executing the attack many times and taking an average.</p>
+<blockquote>
+<p><strong>Another aside:</strong> Some people have suggested that if a serverless platform like Workers were to completely reset an application's state between requests, so that every request &quot;starts fresh&quot;, this would make attacks harder. That is, imagine that a Worker's global variables were reset after every request, meaning you cannot store state in globals in one request and then read that state in the next. Then, doesn't that mean the attack has to start over from scratch for every request? If each request is limited to, say, 50ms of CPU time, does that mean that a Spectre attack isn't possible, because there's not enough time to carry it out? Unfortunately, it's not so simple. State doesn't have to be stored in the Worker; it could instead be stored in a conspiring client. The server can return its state to the client in each response, and the client can send it back to the server in the next request.</p>
+</blockquote>
+<p>But is an attack based on remote timers really feasible in practice? <strong>In adversarial testing, with help from leading Spectre experts, we have not been able to develop an attack that actually works in production.</strong></p>
+<p>However, we don't feel the lack of a working attack means we should stop building defenses. Instead, we're currently testing some more advanced measures, which we plan to roll out in the coming weeks.</p>
+<h3 id="step2dynamicprocessisolation">Step 2: Dynamic Process Isolation</h3>
+<p>We know that if an attack is possible at all, it would take a very long time to run -- hours at the very least, maybe as long as weeks. But once an attack has been running even for a second, we have a huge amount of new data that we can use to trigger further measures.</p>
+<p>Spectre attacks, you see, do a lot of &quot;weird stuff&quot; that you wouldn't usually expect to see in a normal program. These attacks intentionally try to create pathological performance scenarios in order to amplify microarchitectural effects. This is especially true when the attack has already been forced to run billions of times in a loop in order to overcome other mitigations, like those discussed above. This tends to show up in metrics like CPU performance counters.</p>
+<p>Now, the usual problem with using performance metrics to detect Spectre attacks is that sometimes you get false positives. Sometimes, a legitimate program behaves really badly. You can't go around shutting down every app that has bad performance.</p>
+<p>Luckily, we don't have to. Instead, we can choose to reschedule any Worker with suspicious performance metrics into its own process. As I described above, we can't do this with every Worker, because the overhead would be too high. But, it's totally fine to process-isolate just a few Workers, defensively. If the Worker is legitimate, it will keep operating just fine, albeit with a little more overhead. Fortunately for us, the nature of our platform is such that we can reschedule a Worker into its own process at basically any time.</p>
+<p>In fact, fancy performance-counter based triggering may not even be necessary here. If a Worker merely uses a large amount of CPU time per event, then the overhead of isolating it in its own process is relatively less, because it switches context less often. So, we might as well use process isolation for any Worker that is CPU-hungry.</p>
+<p>Once a Worker is isolated, then we can rely on the operating system's Spectre defenses, just aslike, for example, most desktop web browsers now do.</p>
+<p>Over the past year we've been working with the experts at Graz Technical University to develop this approach. (TU Graz's team co-discovered Spectre itself, and has been responsible for a huge number of the follow-on discoveries since then.) We have developed the ability to dynamically isolate workers, and we have identified metrics which reliably detect attacks. The whole system is currently undergoing testing to work out any remaining bugs, and we expect to roll it out fully within the next several weeks.</p>
+<p>But wait, didn't I say earlier that even process isolation isn't a complete defense, because it only addresses known vulnerabilities? Yes, this is still true. However, the trend over time is that new Spectre attacks tend to be slower and slower to carry out, and hence we can reasonably guess that by imposing process isolation we have further slowed down even attacks that we don't know about yet.</p>
+<h3 id="step3periodicwholememoryshuffling">Step 3: Periodic Whole-Memory Shuffling</h3>
+<p>After Step 2, we already think we've prevented all known attacks, and we're only worried about hypothetical unknown attacks. How long does a hypothetical unknown attack take to carry out? Well, obviously, nobody knows. But with all the mitigations in place so far, and considering that new attacks have generally been slower than older ones, we think it's reasonable to guess attacks will take days or longer.</p>
+<p>On a time scale of a day, we have new things we can do. In particular, it's totally reasonable to restart the entire Workers runtime on a daily basis, which resets the locations of everything in memory, forcing attacks to restart the process of discovering the locations of secrets.</p>
+<p>We can also reschedule Workers across physical machines or cordons, so that the window to attack any particular neighbor is limited.</p>
+<p>In general, because Workers are fundamentally preemptible (unlike containers or VMs), we have a lot of freedom to frustrate attacks.</p>
+<p>Once we have dynamic process isolation fully deployed, we plan to develop these ideas next. We see this as an ongoing investment, not something that will ever be &quot;done&quot;.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>Phew. You just read <em>twelve pages</em> about Workers security. Hopefully I've convinced you that designing a secure sandbox is only the beginning of building a secure compute platform, and the real work is never done. Popular security culture often dwells on clever hacks and clean fixes. But for the difficult real-world problems, often there is no right answer or simple fix, only the hard work of building defenses thicker and thicker.</p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/serverless-week/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless Week</a>
+        <a href="/tag/serverless/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Serverless</a>
+        <a href="/tag/workers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Cloudflare Workers</a>
+        <a href="/tag/dns-security/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">DNS Security</a>
+        <a href="/tag/developers/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Developers</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-31T14:00:00+01:00">July 31, 2020 2:00PM</p>
+        <a href="/making-magic-reimagining-developer-experiences-for-the-world-of-serverless/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Making magic: Reimagining Developer Experience for the World of Serverless</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Today I’m going to talk about TTFD, or time to first dopamine, and announce a huge improvement to the Workers development experience — wrangler dev....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/rita/" class="fw5 f2 black no-underline">Rita Kozlov</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless-week/" class="no-underline f1 fw2 blue3 underline-hover">Serverless Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/wrangler/" class="no-underline f1 fw2 blue3 underline-hover">Wrangler</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-30T14:00:00+01:00">July 30, 2020 2:00PM</p>
+        <a href="/eliminating-cold-starts-with-cloudflare-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Eliminating cold starts with Cloudflare Workers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">A “cold start” is the time it takes to load and execute a new copy of a serverless function for the first time. It’s a problem that’s both complicated to solve and costly to fix....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ashcon/" class="fw5 f2 black no-underline">Ashcon Partovi</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless-week/" class="no-underline f1 fw2 blue3 underline-hover">Serverless Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-28T14:00:00+01:00">July 28, 2020 2:00PM</p>
+        <a href="/the-migration-of-legacy-applications-to-workers/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The Migration of Legacy Applications to Workers</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As Cloudflare Workers, and other Serverless platforms, continue to drive down costs while making it easier for developers to stand up globally scaled applications, the migration of legacy applications is becoming increasingly common....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/kirk/" class="fw5 f2 black no-underline">Kirk Schwenkler</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless-week/" class="no-underline f1 fw2 blue3 underline-hover">Serverless Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/javascript/" class="no-underline f1 fw2 blue3 underline-hover">JavaScript</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-07-26T12:00:00+01:00">July 26, 2020 12:00PM</p>
+        <a href="/cloudflare-workers-serverless-week/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The Edge Computing Opportunity: It’s Not What You Think</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Cloudflare Workers® is one of the largest, most widely used edge computing platforms. We announced Cloudflare Workers nearly three years ago and it's been generally available for the last two years....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/matthew-prince/" class="fw5 f2 black no-underline">Matthew Prince</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/serverless-week/" class="no-underline f1 fw2 blue3 underline-hover">Serverless Week</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/serverless/" class="no-underline f1 fw2 blue3 underline-hover">Serverless</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/workers/" class="no-underline f1 fw2 blue3 underline-hover">Cloudflare Workers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/edge/" class="no-underline f1 fw2 blue3 underline-hover">Edge</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/product-news/" class="no-underline f1 fw2 blue3 underline-hover">Product News</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"si":10,"rayId":"633cc8c3b813744d","version":"2021.2.0"}'></script>
+</body>
+
+</html>

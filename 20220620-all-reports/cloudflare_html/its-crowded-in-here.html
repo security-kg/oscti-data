@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>It&#x27;s crowded in here!</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=fdf4009e30" />
+
+    <script type="text/javascript" src="/assets/built/index.js?v=fdf4009e30"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="canonical" href="https://blog.cloudflare.com/its-crowded-in-here/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="It&#x27;s crowded in here!" />
+    <meta property="og:description" content="We recently gave a presentation on Programming socket lookup with BPF at the Linux Plumbers Conference 2019 in Lisbon, Portugal. This blog post is a recap of the problem statement and proposed solution we presented." />
+    <meta property="og:url" content="https://blog.cloudflare.com/its-crowded-in-here/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2019/10/idea_program_socket_lookup_with_bpf-3.png" />
+    <meta property="article:published_time" content="2019-10-12T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2019-10-14T15:14:12.000Z" />
+    <meta property="article:tag" content="eBPF" />
+    <meta property="article:tag" content="Linux" />
+    <meta property="article:tag" content="UDP" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="It&#x27;s crowded in here!" />
+    <meta name="twitter:description" content="We recently gave a presentation on Programming socket lookup with BPF at the Linux Plumbers Conference 2019 in Lisbon, Portugal. This blog post is a recap of the problem statement and proposed solution we presented." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/its-crowded-in-here/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2019/10/idea_program_socket_lookup_with_bpf-3.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Jakub Sitnicki" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="eBPF, Linux, UDP" />
+    <meta name="twitter:site" content="@cloudflare" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Jakub Sitnicki",
+        "image": "https://blog.cloudflare.com/content/images/2019/05/4_300698554542850065.jpg",
+        "url": "https://blog.cloudflare.com/author/jakub/",
+        "sameAs": []
+    },
+    "headline": "It&#x27;s crowded in here!",
+    "url": "https://blog.cloudflare.com/its-crowded-in-here/",
+    "datePublished": "2019-10-12T13:00:00.000Z",
+    "dateModified": "2019-10-14T15:14:12.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2019/10/idea_program_socket_lookup_with_bpf-3.png",
+    "keywords": "eBPF, Linux, UDP",
+    "description": "We recently gave a presentation on Programming socket lookup with BPF at the Linux Plumbers Conference 2019 in Lisbon, Portugal. This blog post is a recap of the problem statement and proposed solution we presented.",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<link rel="shortcut icon" href="https://blog.cloudflare.com/content/images/2019/12/favicon-8.png" type="image/png">
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-ebpf tag-linux tag-udp sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=fdf4009e30" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=fdf4009e30" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-ebpf tag-linux tag-udp ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">It&#x27;s crowded in here!</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2019-10-12T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">October 12, 2019 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/jakub/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2019/05/4_300698554542850065.jpg" alt="Jakub Sitnicki" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/jakub" class="fw5 f3 no-underline black mr3">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <p>We recently gave a presentation on <a href="https://linuxplumbersconf.org/event/4/contributions/487/">Programming socket lookup with BPF</a> at the Linux Plumbers Conference 2019 in Lisbon, Portugal. This blog post is a recap of the problem statement and proposed solution we presented.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://lh4.googleusercontent.com/Sx-zlmvr7oQCEgESKFhkK6Roa2FvWo5IVm4DXvvPhJIQGj11lXtsFztQaAIPFLwleAOPGh7sFw-GN2Cljy-STatv7Rj4GlRnuPolaZT_AM4a318VvTei_gOx4rcAN2A9zbDLss9k" class="kg-image"><figcaption>CC0 Public Domain, <a href="https://pxhere.com/en/photo/1526517">PxHere</a></figcaption></figure><p>Our edge servers are crowded. We run more than a dozen public facing services, leaving aside the all internal ones that do the work behind the scenes.</p><!--kg-card-begin: html--><div id="quiz-1-question" /><!--kg-card-end: html--><p>Quick Quiz #1: How many can you name? We blogged about them! <a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-1">Jump to answer</a>.</p><p>These services are exposed on more than a million Anycast <a href="https://www.cloudflare.com/ips/">public IPv4 addresses</a> partitioned into 100+ network prefixes.</p><p>To keep things uniform every Cloudflare edge server runs all services and responds to every Anycast address. This allows us to make efficient use of the hardware by load-balancing traffic between all machines. We have shared the details of Cloudflare <a href="https://blog.cloudflare.com/no-scrubs-architecture-unmetered-mitigation/">edge</a><a href="https://blog.cloudflare.com/cloudflare-architecture-and-how-bpf-eats-the-world/"> architecture</a> on the blog before.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/edge_data_center-1.png" class="kg-image"></figure><p>Granted not all services work on all the addresses but rather on a subset of them, covering one or several network prefixes.</p><p>So how do you set up your network services to listen on hundreds of IP addresses without driving the network stack over the edge?</p><p>Cloudflare engineers have had to ask themselves this question more than once over the years, and the answer has changed as our edge evolved. This evolution forced us to look for creative ways to work with the <a href="https://en.wikipedia.org/wiki/Berkeley_sockets">Berkeley sockets API</a>, a POSIX standard for assigning a network address and a port number to your application. It has been quite a journey, and we are not done yet.</p><h2 id="when-life-is-simple-one-address-one-socket">When life is simple - one address, one socket</h2><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/mapping_1_to_1-1.png" class="kg-image"></figure><p>The simplest kind of association between an (IP address, port number) and a service that we can imagine is one-to-one. A server responds to client requests on a single address, on a well known port. To set it up the application has to open one socket for each transport protocol (be it TCP or UDP) it wants to support. A network server like our <a href="https://www.cloudflare.com/dns/">authoritative DNS</a> would open up two sockets (one for UDP, one for TCP):</p><pre><code>(192.0.2.1, 53/tcp) ⇨ ("auth-dns", pid=1001, fd=3)
+(192.0.2.1, 53/udp) ⇨ ("auth-dns", pid=1001, fd=4)
+</code></pre><p>To take it to Cloudflare scale, the service is likely to have to receive on at least a /20 network prefix, which is a range of IPs with 4096 addresses in it.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/mapping_many_1_to_1-1.png" class="kg-image"></figure><p>This translates to opening 4096 sockets for each transport protocol. Something that is not likely to go unnoticed when looking at <a href="http://man7.org/linux/man-pages/man8/ss.8.html">ss tool</a> output.</p><pre><code>$ sudo ss -ulpn 'sport = 53'
+State  Recv-Q Send-Q  Local Address:Port Peer Address:Port
+…
+UNCONN 0      0           192.0.2.40:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11076))
+UNCONN 0      0           192.0.2.39:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11075))
+UNCONN 0      0           192.0.2.38:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11074))
+UNCONN 0      0           192.0.2.37:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11073))
+UNCONN 0      0           192.0.2.36:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11072))
+UNCONN 0      0           192.0.2.31:53        0.0.0.0:*    users:(("auth-dns",pid=77556,fd=11071))
+…</code></pre><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2019/10/lots_of_socks.jpg" class="kg-image"><figcaption>CC BY 2.0, Luca Nebuloni, <a href="https://flickr.com/photos/7897906@N06/20655224708">Flickr</a></figcaption></figure><p>The approach, while naive, has an advantage: when an IP from the range gets attacked with a UDP flood, the receive queues of sockets bound to the remaining IP addresses are not affected.</p><h2 id="life-can-be-easier-all-addresses-one-socket">Life can be easier - all addresses, one socket</h2><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/mapping_inaddr_any-1.png" class="kg-image"></figure><p>It seems rather silly to create so many sockets for one service to receive traffic on a range of addresses. Not only that, the more listening sockets there are, the longer the chains in the socket lookup hash table. We have learned the hard way that going in this direction <a href="https://blog.cloudflare.com/revenge-listening-sockets/">can hurt packet processing latency</a>.</p><p>The sockets API comes with a big hammer that can make our life easier - the <code>INADDR_ANY</code> aka <code>0.0.0.0</code> wildcard address. With <code>INADDR_ANY</code> we can make a single socket receive on all addresses assigned to our host, specifying just the port.</p><pre><code>s = socket(AF_INET, SOCK_STREAM, 0)
+s.bind(('0.0.0.0', 12345))
+s.listen(16)
+</code></pre><!--kg-card-begin: html--><div id="quiz-2-question" /><!--kg-card-end: html--><p>Quick Quiz #2: Is there another way to bind a socket to all local addresses? <a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-2">Jump to answer</a>.</p><p>In other words, compared to the naive “one address, one socket” approach, <code>INADDR_ANY</code> allows us to have a single catch-all listening socket for the whole IP range on which we accept incoming connections.</p><p>In Linux this is possible thanks to a two-phase listening socket lookup, where it falls back to search for an <code>INADDR_ANY</code> socket if a more specific match has not been found.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/tcp_socket_lookup-1.png" class="kg-image"></figure><p>Another upside of binding to <code>0.0.0.0</code> is that our application doesn’t need to be aware of what addresses we have assigned to our host. We are also free to assign or remove the addresses after binding the listening socket. No need to reconfigure the service when its listening IP range changes.</p><p>On the other hand if our service should be listening on just <code>A.B.C.0/20</code> prefix, binding to all local addresses is more than we need. We might unintentionally expose an otherwise internal-only service to external traffic without a proper firewall or a socket filter in place.</p><p>Then there is the security angle. Since we now only have one socket, attacks attempting to flood any of the IPs assigned to our host on our service’s port, will hit the catch-all socket and its receive queue. While in such circumstances the Linux <a href="https://blog.cloudflare.com/syn-packet-handling-in-the-wild/">TCP stack has your back</a>, UDP needs special care or legitimate traffic might drown in the flood of dropped packets.</p><p>Possibly the biggest downside, though, is that a service listening on the wildcard <code>INADDR_ANY</code> address claims the port number exclusively for itself. Binding over the wildcard-listening socket with a specific IP and port fails miserably due to the address already being taken (<code>EADDRINUSE</code>).</p><pre><code>bind(3, {sa_family=AF_INET, sin_port=htons(12345), sin_addr=inet_addr("0.0.0.0")}, 16) = 0
+bind(4, {sa_family=AF_INET, sin_port=htons(12345), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EADDRINUSE (Address already in use)
+</code></pre><p>Unless your service is UDP-only, setting the <code>SO_REUSEADDR</code> socket option, will not help you overcome this restriction. The only way out is to turn to <code>SO_REUSEPORT</code>, normally used to construct a load-balancing socket group. And that is only if you are lucky enough to run the port-conflicting services as the same user (UID). That is a story for another post.</p><!--kg-card-begin: html--><div id="quiz-3-question" /><!--kg-card-end: html--><p>Quick Quiz #3: Does setting the <code>SO_REUSEADDR</code> socket option have any effect at all when there is bind conflict? <a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-3">Jump to answer</a>.</p><h2 id="life-gets-real-one-port-two-services">Life gets real - one port, two services</h2><p>As it happens, at the Cloudflare edge we do host services that share the same port number but otherwise respond to requests on non-overlapping IP ranges. A prominent example of such port-sharing is our <a href="https://blog.cloudflare.com/dns-resolver-1-1-1-1/">1.1.1.1</a> recursive DNS resolver running side-by-side with the<a href="https://www.cloudflare.com/dns/"> authoritative DNS service</a> that we offer to all customers.</p><p>Sadly the s<a href="http://man7.org/linux/man-pages/man2/bind.2.html">ockets API</a> doesn’t allow us to express a setup in which two services share a port and accept requests on disjoint IP ranges.</p><p>However, as Linux development history shows, any networking API limitation can be overcome by introducing a new <a href="https://github.com/torvalds/linux/blame/master/include/uapi/asm-generic/socket.h">socket option</a>, with sixty-something options available (and counting!).</p><p>Enter <code>SO_BINDTOPREFIX</code>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/mapping_bindtoprefix-1.png" class="kg-image"></figure><p>Back in 2016 we proposed <a href="https://lore.kernel.org/netdev/1458699966-3752-1-git-send-email-gilberto.bertin@gmail.com/">an extension to the Linux network stack</a>. It allowed services to constrain a wildcard-bound socket to an IP range belonging to a network prefix.</p><pre><code class="language-python"># Service 1, 127.0.0.0/20, 1234/tcp
+net1, plen1 = '127.0.0.0', 20
+bindprefix1 = struct.pack('BBBBBxxx', *inet_aton(net1), plen1)
+
+s1 = socket(AF_INET, SOCK_STREAM, 0)
+s1.setsockopt(SOL_IP, IP_BINDTOPREFIX, bindprefix1)
+s1.bind(('0.0.0.0', 1234))
+s1.listen(1)
+
+# Service 2, 127.0.16.0/20, 1234/tcp
+net2, plen2 = '127.0.16.0', 20
+bindprefix2 = struct.pack('BBBBBxxx', *inet_aton(net2), plen2)
+
+s2 = socket(AF_INET, SOCK_STREAM, 0)
+s2.setsockopt(SOL_IP, IP_BINDTOPREFIX, bindprefix2)
+s2.bind(('0.0.0.0', 1234))
+s2.listen(1)
+</code></pre><p>This mechanism has served us well since then. Unfortunately, it didn’t get accepted upstream due to being too specific to our use-case. Having no better alternative we ended up maintaining patches in our kernel to this day.</p><h2 id="life-gets-complicated-all-ports-one-service">Life gets complicated - all ports, one service</h2><p>Just when we thought we had things figured out, we were faced with a new challenge. How to build a service that accepts connections on any of the 65,535 ports? The ultimate reverse proxy, if you will, code named <a href="https://www.cloudflare.com/products/cloudflare-spectrum/">Spectrum</a>.</p><p>The <code>bind</code> syscall offers very little flexibility when it comes to mapping a socket to a port number. You can either specify the number you want or let the network stack pick an unused one for you. There is no counterpart of <code>INADDR_ANY</code>, a wildcard value to select all ports (<code>INPORT_ANY</code>?).</p><p>To achieve what we wanted, we had to turn to <a href="https://blog.cloudflare.com/how-we-built-spectrum/">TPROXY</a>, a <a href="https://www.kernel.org/doc/Documentation/networking/tproxy.txt">Netfilter / <code>iptables</code> extension</a> designed for intercepting remote-destined traffic on the forward path. However, we use it to steer local-destined packets, that is ones targeted to our host, to a catch-all-ports socket.</p><pre><code>iptables -t mangle -I PREROUTING \
+         -d 192.0.2.0/24 -p tcp \
+         -j TPROXY --on-ip=127.0.0.1 --on-port=1234
+</code></pre><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/mapping_tproxy-1.png" class="kg-image"></figure><p>TPROXY-based setup comes at a price. For starters, your service needs elevated privileges to create a special catch-all socket (see the <a href="http://man7.org/linux/man-pages/man7/ip.7.html"><code>IP_TRANSPARENT</code> socket option</a>). Then you also have to understand and consider the subtle interactions between TPROXY and the receive path for your traffic profile, for example:</p><ul><li>does connection tracking register the flows redirected with TPROXY?</li><li>is listening socket contention during a SYN flood when using TPROXY a concern?</li><li>do other parts of the network stack, like XDP programs, need to know about TPROXY redirecting packets?</li></ul><p>These are some of the questions we needed to answer, and after running it in production for a while now, we have a good idea of what the consequences of using TPROXY are.</p><p>That said, it would not come as a shock, if tomorrow we’d discovered something new about TPROXY. Due to its complexity we’ve always considered using it to steer local-destined traffic a <a href="https://blog.cloudflare.com/how-we-built-spectrum/">hack</a>, a use-case outside of its intended application. No matter how well understood, a hack remains a hack.</p><h2 id="can-bpf-make-life-easier">Can BPF make life easier?</h2><p>Despite its complex nature TPROXY shows us something important. No matter what IP or port the listening socket is bound to, with a bit of support from the network stack, we can steer any connection to it. As long the application is ready to handle this situation, things work.</p><!--kg-card-begin: html--><div id="quiz-4-question" /><!--kg-card-end: html--><p>Quick Quiz #4: Are there really no problems with accepting any connection on any socket? <a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-4">Jump to answer</a>.</p><p>This is a really powerful concept. With a bunch of TPROXY rules, we can configure any mapping between (address, port) tuples and listening sockets.</p><p><strong>💡 Idea #1:</strong> A local-destined connection can be accepted by any listening socket.</p><p>We didn’t tell you the whole story before. When we published <code>SO_BINDTOPREFIX</code> patches, they did not just get rejected. <a href="https://meta.wikimedia.org/wiki/Cunningham%27s_Law">As sometimes happens</a> by posting the wrong answer, we got <a href="https://lore.kernel.org/netdev/1459261895.6473.176.camel@edumazet-glaptop3.roam.corp.google.com/">the right answer</a> to our problem</p><!--kg-card-begin: markdown--><blockquote>
+<p>❝BPF is absolutely the way to go here, as it allows for whatever user specified tweaks, like a list of destination subnetwork, or/and a list of source network, or the date/time of the day, or port knocking without netfilter, or … you name it.❞</p>
+</blockquote>
+<!--kg-card-end: markdown--><p></p><p><strong>💡 Idea #2:</strong> How we pick a listening socket can be tweaked with BPF.</p><p>Combine the two ideas together and we arrive at an exciting concept. Let’s run BPF code to match an incoming packet with a listening socket, ignoring the address the socket is bound to. 🤯</p><p>Here’s an example to illustrate it.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/idea_program_socket_lookup_with_bpf-2.png" class="kg-image"></figure><!--kg-card-begin: markdown--><p>All packets coming on <code>192.0.2.0/24</code> prefix, port <code>53</code> are steered to socket <code>sk:2</code>, while traffic targeted at <code>203.0.113.1</code>, on any port number lands in socket <code>sk:4</code>.</p>
+<!--kg-card-end: markdown--><h2 id="welcome-bpf-inet_lookup">Welcome BPF inet_lookup</h2><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/bpf_inet_lookup_hook-1.png" class="kg-image"></figure><p>To make this concept a reality we are proposing a new mechanism to program the socket lookup with BPF. What is socket lookup? It’s a stage on the receive path where the transport layer searches for a socket to dispatch the packet to. The last possible moment to steer packets before they land in the selected socket receive queue. In there we attach a new type of BPF program called <code>inet_lookup</code>.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/tcp_socket_lookup_with_bpf-1.png" class="kg-image"></figure><p>If you recall, socket lookup in the Linux TCP stack is a <a href="https://elixir.bootlin.com/linux/v5.4-rc2/source/include/net/inet_hashtables.h#L329">two phase process</a>. First the kernel will try to find an established (connected) socket matching the packet 4-tuple. If there isn’t one, it will continue by looking for a listening socket using just the packet 2-tuple as key.</p><p>Our proposed extension allows users to program the second phase, the listening socket lookup. If present, a BPF program is allowed to choose a listening socket and terminate the lookup. Our program is also free to ignore the packet, in which case the kernel will continue to look for a listening socket as usual.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/bpf_inet_lookup_operation-1.png" class="kg-image"></figure><p>How does this new type of BPF program operate? On input, as context, it gets handed a subset of information extracted from packet headers, including the packet 4-tuple. Based on the input the program accesses a BPF map containing references to listening sockets, and selects one to yield as the socket lookup result.</p><p>If we take a look at the corresponding BPF code, the program structure resembles a firewall rule. We have some match statements followed by an action.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/bpf_inet_lookup_code_sample-2.png" class="kg-image"></figure><p>You may notice that we don’t access the BPF map with sockets directly. Instead we follow an established pattern in BPF called “map based redirection”, where a dedicated BPF helper accesses the map and carries out any steps necessary to redirect the packet.</p><p>We’ve skipped over one thing. Where does the BPF map of sockets come from? We create it ourselves and populate it with sockets. This is most easily done if your service uses systemd <a href="http://0pointer.de/blog/projects/socket-activation.html">socket activation</a>. systemd will let you associate more than one service unit with a socket unit, and both of the services will receive a file descriptor for the same socket. From there it’s just a matter of inserting the socket into the BPF map.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2019/10/bpf_inet_lookup_socket_activation-1.png" class="kg-image"></figure><h2 id="demo-time-">Demo time!</h2><p>This is not just a concept. We have already published a first working <a href="https://lore.kernel.org/bpf/20190828072250.29828-1-jakub@cloudflare.com/">set of patches for the kernel</a> together with ancillary <a href="https://github.com/majek/inet-tool">user-space tooling</a> to configure the socket lookup to your needs.</p><p>If you would like to see it in action, you are in luck. We’ve put together a demo that shows just how easily you can bind a network service to (i) a single port, (ii) all ports, or (iii) a network prefix. On-the-fly, without having to restart the service! There is a port scan running to prove it.</p><p>You can also bind to all-addresses-all-ports (<code>0.0.0.0/0</code>) because why not? Take that <code>INADDR_ANY</code>. All thanks to BPF superpowers.</p><!--kg-card-begin: markdown--><p><a href="https://asciinema.org/a/266328"><img src="https://asciinema.org/a/266328.svg" alt="asciicast"></a></p>
+<!--kg-card-end: markdown--><h2 id="summary">Summary</h2><p>We have gone over how the way we bind services to network addresses on the Cloudflare edge has evolved over time. Each approach has its pros and cons, summarized below. We are currently working on a new BPF-based mechanism for binding services to addresses, which is intended to address the shortcomings of existing solutions.</p><p><strong>bind to one address and port</strong></p><p>👍 flood traffic on one address hits one socket, doesn’t affect the rest<br>👎 as many sockets as listening addresses, doesn’t scale</p><p><strong>bind to all addresses with <code>INADDR_ANY</code></strong></p><p>👍 just one socket for all addresses, the kernel thanks you<br>👍 application doesn’t need to know about listening addresses<br>👎 flood scenario requires custom protection, at least for UDP<br>👎 port sharing is tricky or impossible</p><p><strong>bind to a network prefix with <code>SO_BINDTOPREFIX</code></strong></p><p>👍 two services can share a port if their IP ranges are non-overlapping<br>👎 custom kernel API extension that never went upstream</p><p><strong>bind to all port with TPROXY</strong></p><p>👍 enables redirecting all ports to a listening socket and more<br>👎 meant for intercepting forwarded traffic early on the ingress path<br>👎 has subtle interactions with the network stack<br>👎 requires privileges from the application</p><p><strong>bind to anything you want with BPF <code>inet_lookup</code></strong></p><p>👍 allows for the same flexibility as with TPROXY or <code>SO_BINDTOPREFIX</code><br>👍 services don’t need extra capabilities, meant for local traffic only<br>👎 needs cooperation from services or PID 1 to build a socket map</p><hr><p>Getting to this point has been a team effort. A special thank you to Lorenz Bauer and <a href="https://blog.cloudflare.com/author/marek-majkowski/">Marek Majkowski</a> who have contributed in an essential way to the BPF <code>inet_lookup</code> implementation. The <code>SO_BINDTOPREFIX</code> patches were authored by <a href="https://blog.cloudflare.com/author/gilberto-bertin/">Gilberto Bertin</a>.</p><p>Fancy joining the team? <a href="https://www.cloudflare.com/careers/departments/?utm_referrer=blog">Apply here!</a></p><h2 id="quiz-answers">Quiz Answers</h2><h3 id="quiz-1">Quiz 1</h3><p>Q: How many Cloudflare services can you name?</p><ol><li><a href="https://www.cloudflare.com/cdn/">HTTP CDN</a> (tcp/80)</li><li><a href="https://www.cloudflare.com/ssl/">HTTPS CDN</a> (tcp/443, <a href="https://cloudflare-quic.com/">udp/443</a>)</li><li><a href="https://www.cloudflare.com/dns/">authoritative DNS</a> (udp/53)</li><li><a href="https://blog.cloudflare.com/dns-resolver-1-1-1-1/">recursive DNS</a> (udp/53, 853)</li><li><a href="https://blog.cloudflare.com/secure-time/">NTP with NTS</a> (udp/1234)</li><li><a href="https://blog.cloudflare.com/roughtime/">Roughtime time service</a> (udp/2002)</li><li><a href="https://blog.cloudflare.com/distributed-web-gateway/">IPFS Gateway</a> (tcp/443)</li><li><a href="https://blog.cloudflare.com/cloudflare-ethereum-gateway/">Ethereum Gateway</a> (tcp/443)</li><li><a href="https://blog.cloudflare.com/spectrum/">Spectrum proxy</a> (tcp/any, udp/any)</li><li><a href="https://blog.cloudflare.com/announcing-warp-plus/">WARP</a> (udp)</li></ol><p><a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-1-question">Go back</a></p><h3 id="quiz-2">Quiz 2</h3><p>Q: Is there another way to bind a socket to all local addresses?</p><p>Yes, there is - by not <code>bind()</code>’ing it at all. Calling <code>listen()</code> on an unbound socket is equivalent to binding it to <code>INADDR_ANY</code> and letting the kernel pick a free port.</p><pre><code>$ strace -e socket,bind,listen nc -l
+socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 3
+listen(3, 1)                            = 0
+^Z
+[1]+  Stopped                 strace -e socket,bind,listen nc -l
+$ ss -4tlnp
+State      Recv-Q Send-Q Local Address:Port               Peer Address:Port
+LISTEN     0      1            *:42669      </code></pre><p><a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-2-question">Go back</a></p><h3 id="quiz-3">Quiz 3</h3><p>Q: Does setting the <code>SO_REUSEADDR</code> socket option have any effect at all when there is bind conflict?</p><p>Yes. If two processes are racing to <code>bind</code> and <code>listen</code> on the same TCP port, on an overlapping IP, setting <code>SO_REUSEADDR</code> changes which syscall will report an error (<code>EADDRINUSE</code>). Without <code>SO_REUSEADDR</code> it will always be the second bind. With <code>SO_REUSEADDR</code> set there is a window of opportunity for a second <code>bind</code> to succeed but the subsequent <code>listen</code> to fail.</p><p><a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-3-question">Go back</a></p><h3 id="quiz-4"><strong>Quiz 4</strong></h3><p>Q: Are there really no problems with accepting any connection on any socket?</p><p>If the connection is destined for an address assigned to our host, i.e. a local address, there are no problems. However, for remote-destined connections, sending return traffic from a non-local address (i.e., one not present on any interface) will not get past the Linux network stack. The <code>IP_TRANSPARENT</code> socket option bypasses this protection mechanism known as <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=88ef4a5a78e63420dd1dd770f1bd1dc198926b04">source address check</a> to lift this restriction.</p><p><a href="https://blog.cloudflare.com/p/5e0f22d8-bcde-47a8-83b6-8410022eae36/#quiz-4-question">Go back</a></p>
+            </div>
+        </section>
+
+        <a href="/tag/ebpf/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">eBPF</a>
+        <a href="/tag/linux/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Linux</a>
+        <a href="/tag/udp/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">UDP</a>
+    </article>
+</main>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2020-09-18T12:00:00+01:00">September 18, 2020 12:00PM</p>
+        <a href="/building-rakelimit/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Raking the floods: my intern project using eBPF</h2>
+        </a>
+
+        <p class="gray1 lh-copy">SYN-cookies help mitigating SYN-floods for TCP, but how can we protect services from similar attacks that use UDP? We designed an algorithm and a library to fill this gap, and it’s open source!...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jonas/" class="fw5 f2 black no-underline">Jonas Otten</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/udp/" class="no-underline f1 fw2 blue3 underline-hover">UDP</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-18T16:00:00+01:00">May 18, 2019 4:00PM</p>
+        <a href="/cloudflare-architecture-and-how-bpf-eats-the-world/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Cloudflare architecture and how BPF eats the world</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Recently at I gave a short talk titled "Linux at Cloudflare". The talk ended up being mostly about BPF. It seems, no matter the question - BPF is the answer. Here is a transcript of a slightly adjusted version of that talk....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/anycast/" class="no-underline f1 fw2 blue3 underline-hover">Anycast</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2019-05-03T14:00:00+01:00">May 03, 2019 2:00PM</p>
+        <a href="/ebpf-cant-count/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">eBPF can&#x27;t count?!</h2>
+        </a>
+
+        <p class="gray1 lh-copy">It is unlikely we can tell you anything new about the extended Berkeley Packet Filter, eBPF for short, if you've read all the great man pages, docs, guides, and some of our blogs out there. But we can tell you a war story, who doesn't like those?...</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/jakub/" class="fw5 f2 black no-underline">Jakub Sitnicki</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/ebpf/" class="no-underline f1 fw2 blue3 underline-hover">eBPF</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+        </div>
+    </article>
+
+</div>
+<div class="pv4 ph3 mw7 center">
+    <div id="disqus_thread"></div>
+</div>
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript" src="/assets/built/prism.js?v=fdf4009e30"></script>
+<script type="text/javascript">
+    var disqus_shortname = 'cloudflare';
+    (function () {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+        Disqus.</a></noscript>
+<a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>

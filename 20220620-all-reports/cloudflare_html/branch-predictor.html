@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head class="sans-serif">
+
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="baidu-site-verification" content="KeThzeyMOr" />
+    <meta name="baidu-site-verification" content="code-NIlrS7gNhx" />
+
+    <title>Branch predictor: How many &quot;if&quot;s are too many? Including x86 and M1 benchmarks!</title>
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/3.4.1/themes/light.css" />
+    <link rel="stylesheet" type="text/css" href="/assets/built/index.css?v=2d300b5f9a" />
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_package_v0.16/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_package_v0.16/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_package_v0.16/favicon-16x16.png">
+    <link rel="mask-icon" href="/favicon_package_v0.16/safari-pinned-tab.svg" color="#f78100">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
+    <script type="text/javascript" src="/assets/built/index.js?v=2d300b5f9a"></script>
+    <script src="/assets/js/check-for-tex.js" defer></script>
+
+    <meta name="description" content="Is it ok to have if clauses that will basically never be run? Surely, there must be some performance cost to that..." />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://blog.cloudflare.com/branch-predictor/" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    
+    <meta property="og:site_name" content="The Cloudflare Blog" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Branch predictor: How many &quot;if&quot;s are too many? Including x86 and M1 benchmarks!" />
+    <meta property="og:description" content="Is it ok to have if clauses that will basically never be run? Surely, there must be some performance cost to that..." />
+    <meta property="og:url" content="https://blog.cloudflare.com/branch-predictor/" />
+    <meta property="og:image" content="https://blog.cloudflare.com/content/images/2021/05/Branch-Prediction-OG-1.png" />
+    <meta property="article:published_time" content="2021-05-06T13:00:00.000Z" />
+    <meta property="article:modified_time" content="2021-05-06T13:41:06.000Z" />
+    <meta property="article:tag" content="Programming" />
+    <meta property="article:tag" content="AMD" />
+    <meta property="article:tag" content="EPYC" />
+    <meta property="article:tag" content="Speed &amp;amp; Reliability" />
+    <meta property="article:tag" content="Deep Dive" />
+    
+    <meta property="article:publisher" content="https://www.facebook.com/cloudflare" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Branch predictor: How many &quot;if&quot;s are too many? Including x86 and M1 benchmarks!" />
+    <meta name="twitter:description" content="Is it ok to have if clauses that will basically never be run? Surely, there must be some performance cost to that..." />
+    <meta name="twitter:url" content="https://blog.cloudflare.com/branch-predictor/" />
+    <meta name="twitter:image" content="https://blog.cloudflare.com/content/images/2021/05/Branch-Prediction-OG.png" />
+    <meta name="twitter:label1" content="Written by" />
+    <meta name="twitter:data1" content="Marek Majkowski" />
+    <meta name="twitter:label2" content="Filed under" />
+    <meta name="twitter:data2" content="Programming, AMD, EPYC, Speed &amp; Reliability, Deep Dive" />
+    <meta name="twitter:site" content="@cloudflare" />
+    <meta name="twitter:creator" content="@majek04" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "The Cloudflare Blog",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg",
+            "width": 109,
+            "height": 40.5
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Marek Majkowski",
+        "image": "https://blog.cloudflare.com/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg",
+        "url": "https://blog.cloudflare.com/author/marek-majkowski/",
+        "sameAs": [
+            "https://twitter.com/majek04"
+        ]
+    },
+    "headline": "Branch predictor: How many &quot;if&quot;s are too many? Including x86 and M1 benchmarks!",
+    "url": "https://blog.cloudflare.com/branch-predictor/",
+    "datePublished": "2021-05-06T13:00:00.000Z",
+    "dateModified": "2021-05-06T13:41:06.000Z",
+    "image": "https://blog.cloudflare.com/content/images/2021/05/unnamed.png",
+    "keywords": "Programming, AMD, EPYC, Speed & Reliability, Deep Dive",
+    "description": "Is it ok to have if clauses that will basically never be run? Surely, there must be some performance cost to that...",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://blog.cloudflare.com/"
+    }
+}
+    </script>
+
+    <meta name="generator" content="Ghost 3.5" />
+    <link rel="alternate" type="application/rss+xml" title="The Cloudflare Blog" href="https://blog.cloudflare.com/rss/" />
+    <!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://tr.www.cloudflare.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','cfDataLayer','GTM-PKQFGQB');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Google Optimize -->
+<script src="https://www.googleoptimize.com/optimize.js?id=GTM-N4JSZJ8"></script>
+
+<meta name="msvalidate.01" content="CF295E1604697F9CAD18B5A232E871F6" />
+<meta class="swiftype" name="language" data-type="string" content="en" />
+<!--<script src="/assets/js/index.js"></script>-->
+<script type="text/javascript" src="//cdn.bizible.com/scripts/bizible.js" async=""></script>
+<script>
+var trackRecruitingLink = function(role, url) {
+   ga('send', 'event', 'recruiting', 'jobscore-click', role, {
+     'transport': 'beacon',
+     'hitCallback': function(){document.location = url;}
+   });
+}
+</script> 
+<script type="text/javascript">
+	(function() {
+		var didInit = false;
+		function initMunchkin() {
+			if(didInit === false) {
+				didInit = true;
+				Munchkin.init('713-XSC-918');
+			}
+		}
+		var s = document.createElement('script');
+		s.type = 'text/javascript';
+		s.async = true;
+		s.src = '//munchkin.marketo.net/munchkin.js';
+		s.onreadystatechange = function() {
+			if (this.readyState == 'complete' || this.readyState == 'loaded') {
+				initMunchkin();
+			}
+		};
+		s.onload = initMunchkin;
+		document.getElementsByTagName('head')[0].appendChild(s);
+		})();
+</script>
+<script>
+var HTMLAttrToAdd = document.querySelector("html");
+HTMLAttrToAdd.setAttribute("lang", "en");
+</script>
+<style>
+    table {
+        background-color: transparent;
+    }
+    td {
+		padding: 5px 1em;
+    }
+    pre {
+        max-height: 500px;
+        overflow-y: scroll;
+    }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script
+        defer
+        src='https://static.cloudflareinsights.com/beacon.min.js'
+        data-cf-beacon='{"token": "f446eacb44504e50864bad7c47ffa9e8"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</head>
+
+<body id="main-body" class="post-template tag-programming tag-amd tag-epyc tag-speed-and-reliability tag-deep-dive sans-serif">
+
+    <div class="site-wrapper">
+
+        <header class="flex flex-row flex-wrap justify-between items-end mw8 center mv3 pl3 pr2">
+    <div class="w-100 flex items-end justify-between justify-start-l">
+        <div class="w-100 tr">
+            <span class="dn di-l">
+                <a href="https://www.cloudflare.com/plans/enterprise/contact/" class="f1 gray4 no-underline underline-hover">Contact Sales:
+                </a>
+                <a href="tel:+18889935273" class="f1 gray4 no-underline underline-hover">+1 (888) 274-3482</a>
+            </span>
+        </div>
+    </div>
+    <div class="w-100 w-50-l flex items-end justify-between justify-start-l">
+        <a href="https://blog.cloudflare.com" class="header-logo mr4">
+            <img src="https://blog-cloudflare-com-assets.storage.googleapis.com/2019/06/logo-cloudflare-dark-1.svg" alt="The Cloudflare Blog" class="header-logo" />
+        </a>
+        <h2 class="mt0 mb1">
+            <a href="/" class="fw5 f5 gray3 no-underline">
+                <span class="dn di-l">The Cloudflare Blog</span>
+            </a>
+        </h2>
+    </div>
+    <div class="w-100 w-50-l dn db-l">
+        <div class="w-100 tr mkto-sub-message">
+            <p class="f2">Thanks for being here, come back soon. Get notified of new posts:</p>
+        </div>
+        <div class="w-100 tr">
+            <script src="//app-ab13.marketo.com/js/forms2/js/forms2.min.js"></script>
+            <div class="marketo-form-container">
+                <form id="mktoForm_1653"></form>
+            </div>
+            <script>
+                MktoForms2.loadForm("//app-ab13.marketo.com", "713-XSC-918", 1653, function(form) {
+                    document.querySelectorAll('#mktoForm_1653 .mktoEmailField')[0].placeholder = "Email Address";
+
+                    form.onSuccess(function(vals, thanksURL){
+                        // Hide form and show success msg
+                        document.getElementById("mktoForm_1653").style.display = "none";
+                        document.getElementsByClassName("mkto-sub-message")[0].style.display = "none";
+
+                        document.getElementsByClassName("js-form-success-msg")[0].style.display = "block";
+                        return false;
+                    });
+                });
+            </script>
+        </div>
+        <div class="w-100 tr dn js-form-success-msg">
+            <p class="f2">Subscription confirmed. Thank you for subscribing!</p>
+        </div>
+    </div>
+</header>
+
+<nav id="nav" class="w-100 bb b--black-10 z-1">
+    <div id="desktop-nav-items-container" class="flex flex-row flex-wrap justify-between items-center mw8 center mv3 mv0-l">
+        <div class="nav-item nav-item-desktop ml3 mr2 dn db-l pv3" data-tag="product-news">
+            <a href="/tag/product-news/" class="no-underline gray1 f2 fw5 pv3">Product News</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="speed-and-reliability">
+            <a href="/tag/speed-and-reliability/" class="no-underline gray1 f2 fw5 pv3">Speed &amp; Reliability</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="security">
+            <a href="/tag/security/" class="no-underline gray1 f2 fw5 pv3">Security</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="serverless">
+            <a href="/tag/serverless/" class="no-underline gray1 f2 fw5 pv3">Serverless</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="cloudflare-network">
+            <a href="/tag/cloudflare-network/" class="no-underline gray1 f2 fw5 pv3">Cloudflare Network</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="developers">
+            <a href="/tag/developers/" class="no-underline gray1 f2 fw5 pv3">Developers</a>
+        </div>
+        <div class="nav-item nav-item-desktop mh2 dn db-l pv3" data-tag="deep-dive">
+            <a href="/tag/deep-dive/" class="no-underline gray1 f2 fw5 pv3">Deep Dive</a>
+        </div>
+        <div class="nav-item nav-item-desktop ml2 mr3 dn db-l pv3" data-tag="life-at-cloudflare">
+            <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f2 fw5 pv3">Life @Cloudflare</a>
+        </div>
+        <a href="/search/"><img src="/assets/images/magnifier.svg?v=2d300b5f9a" class="js-search-box-trigger mw2 pointer ph3 ph2-l" />
+        </a>
+        <img src="/assets/images/hamburger.svg?v=2d300b5f9a" class="w2 pointer js-mobile-nav-trigger ph3 db dn-l" />
+    </div>
+
+    <div class="js-mobile-nav-container dn">
+        <div class="flex flex-column flex-wrap bg-gray9 o-95 absolute w-100 ph3 z-1">
+            <div class="pv3 ph2">
+                <a href="/tag/product-news/" class="no-underline gray1 f4 fw7">Product News</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/speed-and-reliability/" class="no-underline gray1 f4 fw7">Speed &amp; Reliability</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/security/" class="no-underline gray1 f4 fw7">Security</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/serverless/" class="no-underline gray1 f4 fw7">Serverless</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/cloudflare-network/" class="no-underline gray1 f4 fw7">Cloudflare Network</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/developers/" class="no-underline gray1 f4 fw7">Developers</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/deep-dive/" class="no-underline gray1 f4 fw7">Deep Dive</a>
+            </div>
+            <div class="pv3 ph2">
+                <a href="/tag/life-at-cloudflare/" class="no-underline gray1 f4 fw7">Life @Cloudflare</a>
+            </div>
+        </div>
+    </div>
+</nav>
+        
+
+
+<main id="post" class="flex flex-row flex-wrap items-center justify-center pt2 pt4-l">
+    <article
+        class="post-full mw-100 ph3 ph0-l fs-20px post tag-programming tag-amd tag-epyc tag-speed-and-reliability tag-deep-dive ">
+        <h1 class="f6 f7-l fw4 gray1 pt1 pt3-l mb1">Branch predictor: How many &quot;if&quot;s are too many? Including x86 and M1 benchmarks!</h1>
+
+
+        <p class="f3 fw5 gray5 db di-l mt2" localize datetime="2021-05-06T14:00:00+01:00">Loading...</p>
+        <noscript>
+            <p class="f3 fw5 gray5 db di-l mt2">May 06, 2021 2:00PM</p>
+        </noscript>
+
+        <ul class="flex flex-wrap pl0 mt4">
+            <li class="list flex items-center ml0 pl0 pb1">
+                <a href="/author/marek-majkowski/" class="static-avatar pr1">
+                    <img class="author-profile-image h2 w2 br-100 mr2" src="/content/images/2017/03/b5967d6c687939594adb6992723d0529.jpeg" alt="Marek Majkowski" />
+                </a>
+                <div class="author-name-tooltip">
+                    <a href="/author/marek-majkowski" class="fw5 f3 no-underline black mr3">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+
+        <section class="post-full-content">
+            <div class="post-content lh-copy gray1">
+                <figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/Branch-Prediction.png" class="kg-image"></figure><p>Some time ago I was looking at a hot section in our code and I saw this:</p><pre><code class="language-c++">
+	if (debug) {
+    	  log("...");
+    }
+    </code></pre><p>This got me thinking. This code is in a performance critical loop and it looks like a waste - we never run with the "debug" flag enabled<sup>[<a href="#footnotes">1</a>]</sup>. Is it ok to have <code>if</code> clauses that will basically never be run? Surely, there must be some performance cost to that...</p><h3 id="just-how-bad-is-peppering-the-code-with-avoidable-if-statements">Just how bad is peppering the code with avoidable <code>if</code> statements?</h3><p>Back in the days the general rule was: a fully predictable branch has close to zero CPU cost.</p><p>To what extent is this true? If one branch is fine, then how about ten? A hundred? A thousand? When does adding one more <code>if</code> statement become a bad idea?</p><p>At some point the negligible cost of simple branch instructions surely adds up to a significant amount. As another example, a colleague of mine found this snippet in our production code:</p><pre><code class="language-C++">
+const char *getCountry(int cc) {
+		if(cc == 1) return "A1";
+        if(cc == 2) return "A2";
+        if(cc == 3) return "O1";
+        if(cc == 4) return "AD";
+        if(cc == 5) return "AE";
+        if(cc == 6) return "AF";
+        if(cc == 7) return "AG";
+        if(cc == 1) return "AI";
+        ...
+        if(cc == 252) return "YT";
+        if(cc == 253) return "ZA";
+        if(cc == 254) return "ZM";
+        if(cc == 255) return "ZW";
+        if(cc == 256) return "XK";
+        if(cc == 257) return "T1";
+        return "UNKNOWN";
+}
+        </code></pre><p>Obviously, this code could be improved<sup>[<a href="#footnotes">2</a>]</sup>. But when I thought about it more: <em>should</em> it be improved? Is there an actual performance hit of a code that consists of a series of simple branches?</p><h3 id="understanding-the-cost-of-jump">Understanding the cost of jump</h3><p>We must start our journey with a bit of theory. We want to figure out if the CPU cost of a branch increases as we add more of them. As it turns out, assessing the cost of a branch is not trivial. On modern processors it takes between one and twenty CPU cycles. There are at least four categories of control flow instructions<sup>[<a href="#footnotes">3</a>]</sup>: unconditional branch (jmp on x86), call/return, conditional branch (e.g. je on x86) taken and conditional branch not taken. The taken branches are especially problematic: without special care they are inherently costly - we'll explain this in the following section. To bring down the cost, modern CPU's try to predict the future and figure out the branch <strong>target</strong> before the branch is actually fully executed! This is done in a special part of the processor called the branch predictor unit (BPU).</p><p>The branch predictor attempts to figure out a destination of a branching instruction very early and with very little context. This magic happens <strong>before</strong> the "decoder" pipeline stage and the predictor has very limited data available. It only has some past history and the address of the current instruction. If you think about it - this is super powerful. Given only current instruction pointer it can assess, with very high confidence, where the target of the jump will be.</p><figure class="kg-card kg-image-card kg-card-hascaption"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0-1.png" class="kg-image"><figcaption>Source: <a href="https://en.wikipedia.org/wiki/Branch_predictor">https://en.wikipedia.org/wiki/Branch_predictor</a></figcaption></figure><p>The BPU maintains a couple of data structures, but today we'll focus on Branch Target Buffer (BTB). It's a place where the BPU remembers the target instruction pointer of previously taken branches. The whole mechanism is much more complex, take a look a the <a href="http://www.ece.uah.edu/~milenka/docs/VladimirUzelac.thesis.pdf">Vladimir Uzelac's Master thesis</a> for details about branch prediction on CPU's from 2008 era:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--1-.png" class="kg-image"></figure><p>For the scope of this article we'll simplify and focus on the BTB only. We'll try to show how large it is and how it behaves under different conditions.</p><h3 id="why-is-branch-prediction-needed">Why is branch prediction needed?</h3><p>But first, why is branch prediction used at all? In order to get the best performance, the CPU pipeline must feed a constant flow of instructions. Consider what happens to the multi-stage CPU pipeline on a branch instruction. To illustrate let's consider the following ARM program:</p><pre><code class="language-c++">
+	BR label_a;
+    X1
+    ...
+label_a:
+ 	Y1
+    </code></pre><p>Assuming a simplistic CPU model, the operations would flow through the pipeline like this:</p><figure class="kg-card kg-image-card"><img src="https://lh3.googleusercontent.com/3P6PIWN6gPAdYzP8oDgrsaOMKgUmG51zIiFhbm071cZKM276S7vRb5atpTwlKrM1lFHRYsobw8P4e-Z9t1Vb9TGeutpBe2CkMrNGruWO8yb5Qz0vZ6Qn6RbOi5Tp8JmzXyU6TzS2" class="kg-image"></figure><p>In the first cycle the BR instruction is fetched. This is an unconditional branch instruction changing the execution flow of the CPU. At this point it's not yet decoded, but the CPU would like to fetch another instruction already! Without a branch predictor in cycle 2 the fetch unit either has to wait or simply continues to the next instruction in memory, hoping it will be the right one. </p><p>In our example, instruction X1 is fetched even though this isn't the correct instruction to run. In cycle 4, when the branch instruction finishes the execute stage, the CPU will be able to understand the mistake, and roll back the speculated instructions before they have any effect. At this point the fetch unit is updated to correctly get the right instruction - Y1 in our case.</p><p>This situation of losing a number of cycles due to fetching code from an incorrect place is called a "frontend bubble". Our theoretical CPU has a two-cycle frontend bubble when a branch target wasn’t predicted right.</p><p>In this example we see that, although the CPU does the right thing in the end, without good branch prediction it wasted effort on bad instructions. In the past, various techniques have been used to reduce this problem, such as static branch prediction and branch delay slots. But the dominant CPU designs today rely <a href="https://danluu.com/branch-prediction/#one-bit">on <em>dynamic branch prediction</em></a>. This technique is able to mostly avoid the frontend bubble problem, by predicting the correct address of the next instruction even for branches that aren’t fully decoded and executed yet.</p><h3 id="playing-with-the-btb">Playing with the BTB</h3><p>Today we're focusing on the BTB - a data structure managed by the branch predictor responsible for figuring out a target of a branch. It's important to note that the BTB is distinct from and independent of the system assessing if the branch was taken or not taken. Remember, we want to figure out if a cost of a branch increases as we run more of them. </p><p>Preparing an experiment to stress only the BTB is relatively simple (<a href="https://xania.org/201602/bpu-part-three">based on Matt Godbolt's work</a>). It turns out a sequence of unconditional <code>jmps</code> is totally sufficient. Consider this x86 code:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--2-.png" class="kg-image"></figure><p>This code stresses the BTB to an extreme - it just consists of a chain of <code>jmp +2</code> statements (i.e. literally jumping to the next instruction). In order to avoid wasting cycles on frontend pipeline bubbles, each taken jump needs a BTB hit. This branch prediction must happen very early in the CPU pipeline, before instruction decode is finished. This same mechanism is needed for any taken branch, whether it's unconditional, conditional or a function call.</p><p>The code above was run inside a test harness that measures how many CPU cycles elapse for each instruction. For example, in this run we're measuring times of dense - every two bytes - 1024 jmp instructions one after another:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--3-.png" class="kg-image"></figure><p>We’ll look at the results of experiments like this for a few different CPUs. But in this instance, it was run on a machine with an AMD EPYC 7642. Here, the cold run took 10.5 cycles per jmp, and then all subsequent runs took ~3.5 cycles per jmp. The code is prepared in such a way to make sure it's the BTB that is slowing down the first run. Take a look at the full code, there is quite some magic to warm up the L1 cache and iTLB without priming the BTB.</p><p><strong>Top tip 1. On this CPU a branch instruction that is taken but not predicted, costs ~7 cycles more than one that is taken and predicted.</strong> Even if the branch was unconditional.</p><h3 id="density-matters">Density matters</h3><p>To get a full picture we also need to think about the density of jmp instructions in the code. The code above did eight jmps per 16-byte code block. This is a lot. For example, the code below contains one jmp instruction in each block of 16 bytes. Notice that the <code>nop</code> opcodes are jumped over. The block size doesn't change the number of executed instructions, only the code density:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--4-.png" class="kg-image"></figure><p>Varying the jmp block size might be important. It allows us to control the placement of the jmp opcodes. Remember the BTB is indexed by instruction pointer address. Its value and its alignment might influence the placement in the BTB and help us reveal the BTB layout. Increasing the alignment will cause more nop padding to be added. The sequence of a single measured instruction - jmp in this case - and zero or more nops, I will call "block", and its size "block size". Notice that the larger the block size, the larger the working code size for the CPU. At larger values we might see some performance drop due to exhausting L1 cache space.</p><h3 id="the-experiment">The experiment</h3><p>Our experiment is crafted to show the performance drop depending on the number of branches, across different working code sizes. Hopefully, we will be able to prove the performance is mostly dependent on the number of blocks - and therefore the BTB size, and not the working code size.</p><p>See the <a href="https://github.com/cloudflare/cloudflare-blog/tree/master/2021-05-branch-prediction">code on GitHub</a>. If you want to see the generated machine code, though, you need to run a special command. It's created procedurally by the code, customized by passed parameters. Here's an example <code>gdb</code> incantation:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--5-.png" class="kg-image"></figure><p>Let's bring this experiment forward, what if we took the best times of each run - with a fully primed BTB - for varying values of jmp block sizes and number of blocks - working set size? Here you go:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--6-.png" class="kg-image"></figure><p>This is an astonishing chart. First, it's obvious something happens at the 4096 jmp mark<sup>[<a href="#footnotes">4</a>]</sup> regardless of how large the jmp block sizes - how many nop's we skip over. Reading it aloud:</p><ul><li>On the far left, we see that if the amount of code is small enough - less than 2048 bytes (256 times a block of 8 bytes) - it's possible to hit some kind of uop/L1 cache and get ~1.5 cycles per fully predicted branch. This is amazing.</li><li>Otherwise, if you keep your hot loop to 4096 branches then, no matter how dense your code is you are likely to see ~3.4 cycles per fully predicted branch</li><li>Above 4096 branches the branch predictor gives up and the cost of each branch shoots to ~10.5 cycles per jmp. This is consistent with what we saw above - unpredicted branch on flushed BTB took ~10.5 cycles.</li></ul><p>Great, so what does it mean? Well, you should avoid branch instructions if you want to avoid branch misses because you have at most 4096 of fast BTB slots. This is not a very pragmatic advice though - it's not like we deliberately put many unconditional <code>jmp</code>s in real code!</p><p>There are a couple of takeaways for the discussed CPU. I repeated the experiment with an always-taken conditional branch sequence and the resulting chart looks almost identical. The only difference being the predicted taken conditional-je instruction being 2 cycles slower than unconditional jmp.</p><p>An entry to BTB is added wherever a branch is "taken" - that is, the jump actually happens. An unconditional "jmp" or always taken conditional branch, will cost a BTB slot. To get best performance make sure to not have more than 4096 taken branches in the hot loop. The good news is that branches never-taken don't take space in the BTB. We can illustrate this with another experiment:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--7-.png" class="kg-image"></figure><p>This boring code is going over not-taken <code>jne</code> followed by two nops (block size=4). Aimed with this test (jne never-taken), the previous one (jmp always-taken) and a conditional branch <code>je</code> always-taken, we can draw this chart:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--8-.png" class="kg-image"></figure><p>First, without any surprise we can see the conditional 'je always-taken' is getting slightly more costly than the simple unconditional <code>jmp</code>, but only after the 4096 branches mark. This makes sense, the conditional branch is resolved later in the pipeline so the frontend bubble is longer. Then take a look at the blue line hovering near zero. This is the "jne never-taken" line flat at 0.3 clocks / block, no matter how many blocks we run in sequence. The takeaway is clear - you can have as many never-taken branches as you want, without incurring any cost. There isn't any spike at 4096 mark, meaning BTB is not used in this case. It seems the conditional jump not seen before is guessed to be not-taken.</p><p><strong>Top tip 2: conditional branches never-taken are basically free </strong>- at least on this CPU.</p><p>So far we established that branches always-taken occupy BTB, branches never taken do not. How about other control flow instructions, like the <code>call</code>?</p><p>I haven't been able to find this in the literature, but it seems call/ret also need the BTB entry for best performance. I was able to illustrate this on our AMD EPYC. Let's take a look at this test:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--9-.png" class="kg-image"></figure><p>This time we'll issue a number of <code>callq</code> instructions followed by <code>ret</code> - both of which should be fully predicted. The experiment is crafted so that each callq calls a unique function, to allow for retq prediction - each one returns to exactly one caller.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--10-.png" class="kg-image"></figure><p>This chart confirms the theory: no matter the code density - with the exception of 64-byte block size being notably slower -  the cost of predicted call/ret starts to deteriorate after the 2048 mark. At this point the BTB is filled with call and ret predictions and can't handle any more data. This leads to an important conclusion:</p><p><strong>Top tip 3. In the hot code you want to have less than 2K function calls </strong>- on this CPU.</p><p>In our test CPU a sequence of fully predicted call/ret takes about 7 cycles, which is about the same as two unconditional predicted <code>jmp</code> opcodes. It's consistent with our results above.</p><p>So far we thoroughly checked AMD EPYC 7642. We started with this CPU because the branch predictor is relatively simple and the charts were easy to read. It turns out more recent CPUs are less clear.</p><h3 id="amd-epyc-7713">AMD EPYC 7713 </h3><p>Newer AMD is more complex than the previous generations. Let's run the two most important experiments. First, the <code>jmp</code> one:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--11-.png" class="kg-image"></figure><p>For the always-taken branches case we can see a very good, sub 1 cycle, timings when the number of branches doesn't exceed 1024 and the code isn't too dense. </p><p><strong>Top tip 4. On this CPU it's possible to get &lt;1 cycle per predicted jmp when the hot loop fits in ~32KiB.</strong></p><p>Then there is some noise starting after the 4096 jmps mark. This is followed by a complete drop of speed at about 6000 branches. This is in line with the theory that BTB is 4096 entries long. We can speculate that some other prediction mechanism is successfully kicking in beyond that, and keeps up the performance up the ~6k mark.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--12-.png" class="kg-image"></figure><p>The call/ret chart shows a similar tale, the timings start breaking after 2048 mark, and completely fail to be predicted beyond ~3000.</p><h3 id="xeon-gold-6262">Xeon Gold 6262</h3><p>The Intel Xeon looks different from the AMD:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--13-.png" class="kg-image"></figure><p>Our test shows the predicted taken branch costs 2 cycles. Intel has documented a clock penalty for very dense branching code - this explains the 4-byte block size line hovering at ~3 cycles. The branch cost breaks at the 4096 jmp mark, confirming the theory that the Intel BTB can hold 4096 entries. The 64-byte block size chart looks confusing, but really isn't. The branch cost stays at flat 2 cycles up till the 512 jmp count. Then it increases. This is caused by the internal layout of the BTB which is said to be 8-way associative. It seems with the 64-byte block size we can utilize at most half of the 4096 BTB slots.</p><p><strong>Top tip 5. On Intel avoid placing your jmp/call/ret instructions at regular 64-byte intervals.</strong></p><p>Then the call/ret chart:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--14-.png" class="kg-image"></figure><p>Similarly, we can see the branch predictions failing after the 2048 jmp mark - in this experiment one block uses two flow control instructions: call and ret. This again confirms the BTB size of 4K entries. The 64-byte block size is generally slower due to the nop padding but also breaks faster due to the instructions alignment issue. Notice, we haven't seen this effect on AMD.</p><h3 id="apple-silicon-m1">Apple Silicon M1</h3><p>So far we saw examples of AMD and Intel server grade CPUs. How does an Apple Silicon M1 fit in this picture?</p><p>We expect it to be very different - it's designed for mobile and it's using ARM64 architecture. Let's see our two experiments:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--15-.png" class="kg-image"></figure><p>The predicted <code>jmp</code> test shows an interesting story. First, when the code fits 4096 bytes (1024*4 or 512*8, etc) you can expect a predicted <code>jmp</code> to cost 1 clock cycle. This is an excellent score.</p><p>Beyond that, generally, you can expect a cost of 3 clock cycles per predicted jmp. This is also very good. This starts to deteriorate when the working code grows beyond ~200KiB. This is visible with block size 64 breaking at 3072 mark 3072*64=196K, and for block 32 at 6144: 6144*32=196K. At this point the prediction seems to stop working. The documentation indicates that the M1 CPU has 192 KB L1 of instruction cache - our experiment matches that.</p><p>Let's compare the "predicted jmp" with the "unpredicted jmp" chart. Take this chart with a grain of salt, because flushing the branch predictor is notoriously difficult.</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--16-.png" class="kg-image"></figure><p>However, even if we don't trust the flush-bpu code (<a href="https://xania.org/201602/bpu-part-three">adapted from Matt Godbolt</a>), this chart reveals two things. First, the "unpredicted" branch cost seems to be correlated with the branch distance. The longer the branch the costlier it is. We haven't seen such behaviour on x86 CPUs.</p><p>Then there is the cost itself. We saw a predicted sequence of branches cost, and what a supposedly-unpredicted jmp costs. In the first chart we saw that beyond ~192KiB working code, the branch predictor seems to become ineffective. The supposedly-flushed BPU seems to show the same cost. For example, the cost of a 64-byte block size jmp with a small working set size is 3 cycles. A miss is ~8 cycles. For a large working set size both times are ~8 cycles. It seems that the BTB is linked to the L1 cache state. <a href="https://www.realworldtech.com/forum/?threadid=159985&amp;curpostid=160001">Paul A. Clayton suggested</a> a possibility of such a design back in 2016.</p><p><strong>Top tip 6. on M1 the predicted-taken branch generally takes 3 cycles and unpredicted but taken has varying cost, depending on jmp length. BTB is likely linked with L1 cache.</strong></p><p>The call/ret chart is funny:</p><figure class="kg-card kg-image-card"><img src="https://blog.cloudflare.com/content/images/2021/05/pasted-image-0--17-.png" class="kg-image"></figure><p>Like in the chart before, we can see a big benefit if hot code fits within 4096 bytes (512*4 or 256*8). Otherwise, you can count on 4-6 cycles per call/ret sequence (or, bl/ret as it's known in ARM). The chart shows funny alignment issues. It's unclear what they are caused by. Beware, comparing the numbers in this chart with x86 is unfair, since ARM <code>call</code> operation differs substantially from the x86 variant.</p><p>M1 seems pretty fast, with predicted branches usually at 3 clock cycles. Even unpredicted branches never cost more than 8 ticks in our benchmark. Call+ret sequence for dense code should fit under 5 cycles.</p><h3 id="summary">Summary</h3><p>We started our journey from a piece of trivial code, and asked a basic question: how costly is  adding a never-taken <code>if</code> branch in the hot portion of code?</p><p>Then we quickly dived in very low level CPU features. By the end of this article, hopefully, an astute reader might get better intuition how a modern branch predictors works. </p><p>On x86 the hot code needs to split the BTB budget between function calls and taken branches. The BTB has only a size of 4096 entries. There are strong benefits in keeping the hot code under 16KiB.</p><p>On the other hand on M1 the BTB seems to be limited by L1 instruction cache. If you're writing super hot code, ideally it should fit 4KiB.</p><p>Finally, can you add this one more <code>if</code> statement? If it's never-taken, it's probably ok. I found no evidence that such branches incur any extra cost. But do avoid always-taken branches and function calls.</p><!--kg-card-begin: markdown--><p><strong>Sources</strong></p>
+<p>I'm not the first person to investigate how BTB works. I based my experiments on:</p>
+<ul>
+<li><a href="http://www.ece.uah.edu/~milenka/docs/VladimirUzelac.thesis.pdf">Vladimir Uzelac thesis</a></li>
+<li><a href="https://xania.org/201602/bpu-part-three">Matt Godbolt work</a>. The series has 5 articles.</li>
+<li><a href="https://www.realworldtech.com/forum/?threadid=159985&amp;curpostid=159985">Travis Downs BTB questions</a> on Real World Tech</li>
+<li><a href="https://stackoverflow.com/questions/38811901/slow-jmp-instruction">various</a> <a href="https://stackoverflow.com/questions/51822731/why-did-intel-change-the-static-branch-prediction-mechanism-over-these-years">stackoverflow</a> <a href="https://stackoverflow.com/questions/38512886/btb-size-for-haswell-sandy-bridge-ivy-bridge-and-skylake">discussions</a>. Especially <a href="https://stackoverflow.com/questions/31280817/what-branch-misprediction-does-the-branch-target-buffer-detect">this one</a> and <a href="https://stackoverflow.com/questions/31642902/intel-cpus-instruction-queue-provides-static-branch-prediction">this</a></li>
+<li><a href="https://www.agner.org/optimize/microarchitecture.pdf">Agner Fog</a> microarchitecture guide has a good section on branch predictions.</li>
+</ul>
+<!--kg-card-end: markdown--><h3 id="acknowledgements">Acknowledgements</h3><p>Thanks to <a href="https://blog.cloudflare.com/author/david-wragg/">David Wragg</a> and <a href="https://twitter.com/danluu">Dan Luu</a> for technical expertise and proofreading help.</p><h3 id="ps">PS</h3><p>Oh, oh. But this is not the whole story! Similar research was the base to the <a href="https://spectreattack.com/spectre.pdf">Spectre v2</a> attack. The attack was exploiting the little known fact that the BPU state was not cleared between context switches. With the correct technique it was possible to train the BPU - in the case of Spectre it was iBTB - and force a privileged piece of code to be speculatively executed. This, combined with a cache side-channel data leak, allowed an attacker to steal secrets from the privileged kernel. Powerful stuff.</p><p>A proposed solution was to avoid using shared BTB. This can be done in two ways: make the indirect jumps to always fail to predict, or fix the CPU to avoid sharing BTB state across isolation domains. This is a long story, maybe for another time...</p><hr><!--kg-card-begin: html--><p><a name="footnotes">Footnotes</a></p><!--kg-card-end: html--><!--kg-card-begin: markdown--><p><small>1. One historical solution to this specific 'if debug' problem is called &quot;runtime nop'ing&quot;. The idea is to modify the code in runtime and patch the never-taken branch instruction with a <code>nop</code>. For example, see the &quot;ISENABLED&quot; discussion on <a href="https://bugzilla.mozilla.org/showbug.cgi?id=370906">https://bugzilla.mozilla.org/showbug.cgi?id=370906</a>.</small></p>
+<p><small>2. Fun fact: modern compilers are pretty smart. New gcc (&gt;=11) and older clang (&gt;=3.7) are able to actually optimize it quite a lot. <a href="https://godbolt.org/z/KWYEW3d9s">See for yourself</a>. But, let's not get distracted by that. This article is about low level machine code branch instructions!</small></p>
+<p><small>3. This is a simplification. There are of course more control flow instructions, like: software interrupts, syscalls, VMENTER/VMEXIT.</small></p>
+<p><small>4. Ok, I'm slightly overinterpreting the chart. Maybe the 4096 jmp mark is due to the 4096 uop cache or some instruction decoder artifact? To prove this spike is indeed BTB related I looked at Intel BPUCLEARS.EARLY and BACLEAR.CLEAR performance counters. Its value is small for block count under 4096 and large for block count greater than 5378. This is strong evidence that the performance drop is indeed caused by the BPU and likely BTB.</small></p>
+<!--kg-card-end: markdown-->
+            </div>
+        </section>
+
+        <a href="/tag/programming/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Programming</a>
+        <a href="/tag/amd/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">AMD</a>
+        <a href="/tag/epyc/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">EPYC</a>
+        <a href="/tag/speed-and-reliability/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Speed &amp; Reliability</a>
+        <a href="/tag/deep-dive/" class="dib pl2 pr2 pt1 pb1 mb2 bg-gray8 no-underline blue3 f2">Deep Dive</a>
+    </article>
+</main>
+
+<div class="pv4 ph3 mw7 center" id="social-buttons">
+    <h2>Comments</h2>
+    <div class="mt5-l mt4 flex flex-row-ns flex-column flex-wrap">
+        <a id="social-button-twitter" title="Discuss on Twitter" href="https://twitter.com/Cloudflare" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Twitter</span>
+        </a>
+        <a id="social-button-hn" title="Discuss on Hacker News" href="https://hn.algolia.com/?dateRange=all&page=0&prefix=false&query=blog.cloudflare.com&sort=byDate&type=story" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Hacker News</span>
+        </a>
+        <a id="social-button-reddit" title="Discuss on Reddit" href="https://www.reddit.com/r/CloudFlare/" target="_blank" class="mr2-ns mb0-l white link b pv3 ph3 mb3 dn" style="background-color:#0055DC;">
+            <span>Discuss on Reddit</span>
+        </a>
+    </div>
+</div>
+
+<div class="pv4 flex flex-row flex-wrap mw7 center">
+    <div class="w-100 ph3 bt b--gray8">
+        <p class="orange fw5 f4 mt4 ttu">Related Posts</p>
+    </div>
+
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2018-09-02T08:35:00+01:00">September 02, 2018 8:35AM</p>
+        <a href="/porting-our-software-to-arm64/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Porting Our Software to ARM64</h2>
+        </a>
+
+        <p class="gray1 lh-copy">As we enable more ARM64[1] machines in our network, I want to give some technical insight into the process we went through to reach software parity in our multi-architecture environment....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/alexander/" class="fw5 f2 black no-underline">Alexander Huynh</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/rust/" class="no-underline f1 fw2 blue3 underline-hover">Rust</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/speed-and-reliability/" class="no-underline f1 fw2 blue3 underline-hover">Speed &amp; Reliability</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2017-10-01T18:00:00+01:00">October 01, 2017 6:00PM</p>
+        <a href="/go-hack-nights/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Go Hack Nights at Cloudflare</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Recently we launched an internal monthly Go Hack Night at our San Francisco office, open to anyone who works at Cloudflare regardless of their department or position....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/ryan-djurovich/" class="fw5 f2 black no-underline">Ryan Djurovich</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/go/" class="no-underline f1 fw2 blue3 underline-hover">Go</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/hackathon/" class="no-underline f1 fw2 blue3 underline-hover">Hackathon</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/developers/" class="no-underline f1 fw2 blue3 underline-hover">Developers</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/events/" class="no-underline f1 fw2 blue3 underline-hover">Events</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2016-04-05T13:05:01+01:00">April 05, 2016 1:05PM</p>
+        <a href="/revenge-listening-sockets/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">The revenge of the listening sockets</h2>
+        </a>
+
+        <p class="gray1 lh-copy">Back in November we wrote a blog post about one latency spike. Today I'd like to share a continuation of that story. As it turns out, the misconfigured rmem setting wasn't the only source of added latency. It looked like Mr Wolf hadn't finished his job....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/marek-majkowski/" class="fw5 f2 black no-underline">Marek Majkowski</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/dns/" class="no-underline f1 fw2 blue3 underline-hover">DNS</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/reliability/" class="no-underline f1 fw2 blue3 underline-hover">Reliability</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+    <article class="w-100 w-100-m w-50-l ph3 mb4">
+        <p class="f3 fw5 gray5" data-iso-date="2015-12-17T14:15:37Z">December 17, 2015 2:15PM</p>
+        <a href="/partial-kernel-bypass-merged-netmap/" class="no-underline gray1 f4 fw5">
+            <h2 class="gray1 f4 fw5 mt2">Partial kernel bypass merged into netmap main</h2>
+        </a>
+
+        <p class="gray1 lh-copy">In a previous post we described our work on a new netmap mode called single-rx-queue. After submitting the pull request, the netmap maintainers told us that the patch was interesting, but they would prefer something more configurable instead of a tailored custom mode....</p>
+        <ul class="flex pl0 fw6 f2">
+            <span>By&nbsp;</span>
+            <li class="list flex items-center">
+                <div class="author-name-tooltip">
+                    
+                    <a href="/author/gilberto-bertin/" class="fw5 f2 black no-underline">Gilberto Bertin</a>
+                </div>
+            </li>
+        </ul>
+        <div class="flex flex-row flex-wrap">
+            
+            <a href="/tag/programming/" class="no-underline f1 fw2 blue3 underline-hover">Programming</a>
+            <span class="f1 fw2 blue3 no-underline underline-hover">,&nbsp;</span>
+            <a href="/tag/linux/" class="no-underline f1 fw2 blue3 underline-hover">Linux</a>
+        </div>
+    </article>
+
+</div>
+
+
+
+
+        <footer class="pt4 pb4 pl1 pr1 main-footer">
+  <div class="mw8 center dn db-l ph3">
+    <div class="flex flex-row justify-between">
+      <div class="main-footer__menu-group">
+        <ul id="sales-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="sales-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group f1">
+            Sales
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/enterprise/contact/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="enterprise_sales"
+              class="f1 blue3 no-underline underline-hover">
+              Enterprise Sales
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/partners/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="become_a_partner" class="f1 blue3 no-underline underline-hover">
+              Become a Partner
+            </a>
+          </li>
+        </ul>
+        <p class="phone f1 blue3 no-underline underline-hover">
+          <p class="tel f1 blue3 no-underline underline-hover">Contact Sales:</p>
+          <p><a data-i18n-phonenumber="" class="tel f1 blue3 no-underline underline-hover" href="tel:+18889935273">+1
+              (888) 99 FLARE</a></p>
+
+          <noscript><a class="phone f1 blue3 no-underline underline-hover" href="tel:+16503198930">+1 650 319
+              8930</a></noscript>
+        </p>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="getting-started-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="getting-started-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Getting Started
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/plans/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="plans" class="f1 blue3 no-underline underline-hover">
+              Pricing
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/case-studies/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="case_studies" class="f1 blue3 no-underline underline-hover">
+              Case Studies
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/resources/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="white_papers" class="f1 blue3 no-underline underline-hover">
+              White Papers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/webinars/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="webinars" class="f1 blue3 no-underline underline-hover">
+              Webinars
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/learning/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="learning_center" class="f1 blue3 no-underline underline-hover">
+              Learning Center
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="community-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="community-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Community
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://community.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="community_hub" class="f1 blue3 no-underline underline-hover">
+              Community Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://blog.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="blog" class="f1 blue3 no-underline underline-hover">
+              Blog
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/galileo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="galileo" class="f1 blue3 no-underline underline-hover">
+              Project Galileo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/athenian/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="athenian" class="f1 blue3 no-underline underline-hover">
+              Athenian Project
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.tv/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="tv" class="f1 blue3 no-underline underline-hover">
+              Cloudflare TV
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="developers-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="developers-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Developers
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://developers.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="developer_hub" class="f1 blue3 no-underline underline-hover">
+              Developer Hub
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/technical-resources/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="technical_resources"
+              class="f1 blue3 no-underline underline-hover">
+              Technical Resources
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/products/cloudflare-workers/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="cloudflare_workers"
+              class="f1 blue3 no-underline underline-hover">
+              Cloudflare Workers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/integrations/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="integrations" class="f1 blue3 no-underline underline-hover">
+              Integrations
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="support-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="support-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Support
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://support.cloudflare.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="support" class="f1 blue3 no-underline underline-hover">
+              Support
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://www.cloudflarestatus.com" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="status" class="f1 blue3 no-underline underline-hover">
+              Cloudflare Status
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/compliance/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="compliance" class="f1 blue3 no-underline underline-hover">
+              Compliance
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/gdpr/introduction/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="gdpr" class="f1 blue3 no-underline underline-hover">
+              GDPR
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="main-footer__menu-group">
+        <ul id="company-menu" class="list pl0">
+          <li class="pt1 pb1 f1" data-submenu="company-menu"
+            class="main-footer__menu-group__header js-toggle-footer-group">
+            Company
+            <i class="icon-caret-down"></i>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/about-overview/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="overview" class="f1 blue3 no-underline underline-hover">
+              About Cloudflare
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/people/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="our_team" class="f1 blue3 no-underline underline-hover">
+              Our Team
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/press/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="press" class="f1 blue3 no-underline underline-hover">
+              Press
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/analysts/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="analysts" class="f1 blue3 no-underline underline-hover">
+              Analysts
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/careers/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="careers" class="f1 blue3 no-underline underline-hover">
+              Careers
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/internetsummit/" data-tracking-category="footer"
+              data-tracking-action="click" data-tracking-label="internet_summit"
+              class="f1 blue3 no-underline underline-hover">
+              Internet Summit
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/logo/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="logo" class="f1 blue3 no-underline underline-hover">
+              Logo
+            </a>
+          </li>
+          <li class="pt1 pb1">
+            <a href="https://cloudflare.com/network/" data-tracking-category="footer" data-tracking-action="click"
+              data-tracking-label="network_map" class="f1 blue3 no-underline underline-hover">
+              Network Map
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mw8 center ph3">
+    <div class="flex flex-row flex-wrap justify-between pt4">
+      <div class="flex flex-row items-start w-100 w-50-l pb4 pb0-l">
+        <a target="_blank" rel="noopener" href="https://www.facebook.com/Cloudflare/" class="w-10"><img
+            src="https://cloudflare.com/img/footer/facebook.svg" class="w-60"></a>
+        <a target=" _blank" rel="noopener" href="https://twitter.com/Cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/twitter.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.linkedin.com/company/cloudflare-inc-" class="w-10"><img
+            src="https://cloudflare.com/img/footer/linkedin.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.youtube.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/youtube.svg" class="w-60"></a>
+        <a target="_blank" rel="noopener" href="https://www.instagram.com/cloudflare" class="w-10"><img
+            src="https://cloudflare.com/img/footer/instagram.svg" class="w-60"></a>
+      </div>
+      <div class="w-100 w-50-l tr-l tl-ns">
+        <div>
+          <span class="main-footer__copyright f1">© 2020 Cloudflare, Inc.</span>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/privacypolicy/"
+            class="main-footer__copyright f1 no-underline underline-hover">Privacy
+            Policy</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/website-terms/"
+            class="main-footer__copyright f1 no-underline underline-hover">Terms of Use</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/abuse/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trust &amp; Safety</a>
+          <span class="main-footer__copyright f1">|</span>
+          <a href="https://cloudflare.com/trademark/"
+            class="main-footer__copyright f1 no-underline underline-hover">Trademark</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>    </div>
+
+
+    <script type="text/javascript">
+    (function () {
+        // Social media, make request to worker
+        var urlObj = new URL(window.location.href);
+        var currenturl = urlObj.origin + urlObj.pathname;
+        try {
+            $.get("https://api.blog.cloudflare.com/social?u=" + currenturl, function( res ) {
+                if (!res.data.twitter && !res.data.hn && !res.data.reddit) {
+                    $("#social-buttons").hide();
+                }
+
+                if (res.data.twitter) {
+                    var twitterurl = "https://twitter.com/intent/tweet?in_reply_to=" + res.data.twitter.id;
+                    $("#social-button-twitter").attr("href", twitterurl);
+                    $("#social-button-twitter").show()
+                }
+
+                if (!res.data.hn) {
+                    $("#social-button-hn").attr("href", "https://news.ycombinator.com/submitlink?u=" + currenturl);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.hn) {
+                    $("#social-button-hn").attr("href", res.data.hn.comments_link);
+                    $("#social-button-hn").show();
+                }
+
+                if (res.data.reddit) {
+                    $("#social-button-reddit").attr("href", res.data.reddit.comments_link);
+                    $("#social-button-reddit").show();
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            $("#social-buttons").hide();
+        }
+    })();
+</script>
+
+<script type="text/javascript" src="/assets/built/prism.js?v=2d300b5f9a"></script>
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+<script>!function (d, s, id) { var js, fjs = d.getElementsByTagName(s)[0], p = /^http:/.test(d.location) ? 'http' : 'https'; if (!d.getElementById(id)) { js = d.createElement(s); js.id = id; js.src = p + '://platform.twitter.com/widgets.js'; fjs.parentNode.insertBefore(js, fjs); } }(document, 'script', 'twitter-wjs');
+</script>
+<script>(function (d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=596756540369391";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+</script>
+<script src="//platform.linkedin.com/in.js" type="text/javascript">lang: en_US</script>
+<script type="text/javascript">
+        (function () {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/platform.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+        })();
+</script>
+
+
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://tr.www.cloudflare.com/ns.html?id=GTM-PKQFGQB"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<script>
+    var links = document.links;
+
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {  
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    } 
+</script>
+
+</body>
+
+</html>
