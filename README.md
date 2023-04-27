@@ -45,7 +45,7 @@ series = {SIGMOD '21}
 
 ## Dataset Overview
 
-The OSCTI dataset contains unstructured OSCTI reports collected from various cybersecurity sources, including: articles, blogs, news, etc. Our goal is to provide a comprehensive, up-to-date resource for security professionals, researchers, and enthusiasts.
+The OSCTI dataset contains unstructured OSCTI reports collected from various cybersecurity sources, including: articles, blogs, news, etc. Our goal is to provide a comprehensive, up-to-date resource for security professionals, researchers, and enthusiasts. Maintainer: Zhengjie Ji.
 
 ## File Structure
 
