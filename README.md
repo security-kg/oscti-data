@@ -1,9 +1,11 @@
 # OSCTI Dataset
 
 
-This repository contains the data crawled by our self-designed crawler. In this document, you'll find important information on the structure and content of the released data. For detailed statistics, please refer to the Google sheet: [oscti-data](https://docs.google.com/spreadsheets/d/1HhA0CSSSa8lg_lQzoXNrdvaGVHidLZpdzk6krU5xpvI/edit?usp=sharing).
+This repository contains the OSCTI (open-source cyber threat intelligence) reports data collected by a team of Virginia Tech and UC Berkeley researchers. In this README, you'll find important information about the structure and content of the dataset. For detailed information on the websites that we track, please refer to the Google sheet: [oscti-data](https://docs.google.com/spreadsheets/d/1HhA0CSSSa8lg_lQzoXNrdvaGVHidLZpdzk6krU5xpvI/edit?usp=sharing).
 
-OSCTI Dataset is collected for our ThreatKG system published on arXiv. If you use our dataset, please cite the following paper: [ThreatKG: A Threat Knowledge Graph for Automated Open-Source Cyber Threat Intelligence Gathering and Management](https://arxiv.org/pdf/2212.10388.pdf).
+The OSCTI dataset is collected for our ThreatKG research published on arXiv. If you use this dataset for your research, we kindly request that you cite the following papers: 
+
+[ThreatKG: A Threat Knowledge Graph for Automated Open-Source Cyber Threat Intelligence Gathering and Management](https://arxiv.org/pdf/2212.10388.pdf).
 
 ```bibtex
 @misc{gao2022threatkg,
@@ -16,7 +18,7 @@ OSCTI Dataset is collected for our ThreatKG system published on arXiv. If you us
 }
 ```
 
-Please also refer to our demo paper: [A System for Automated Open-Source Threat Intelligence Gathering and Management](https://people.cs.vt.edu/penggao/papers/securitykg-sigmod21demo.pdf) and the [demo video](https://www.youtube.com/watch?v=wR4TdK7uc_U).
+[A System for Automated Open-Source Threat Intelligence Gathering and Management](https://people.cs.vt.edu/penggao/papers/securitykg-sigmod21demo.pdf).
 
 ```bibtex
 @inproceedings{10.1145/3448016.3452745,
@@ -43,7 +45,7 @@ series = {SIGMOD '21}
 
 ## Dataset Overview
 
-The OSCTI dataset contains unstructured CTI reports collected from various open sources, including: articles, blogs, news, etc. Our goal is to provide a comprehensive, up-to-date resource for security professionals, researchers, and enthusiasts.
+The OSCTI dataset contains unstructured OSCTI reports collected from various cybersecurity sources, including: articles, blogs, news, etc. Our goal is to provide a comprehensive, up-to-date resource for security professionals, researchers, and enthusiasts.
 
 ## File Structure
 
@@ -68,4 +70,4 @@ The data files are in PDF or HTML format.
 
 ## License
 
-OSCTI Dataset is released under the MIT License. By using the dataset, you agree to the terms and conditions of the license.
+The OSCTI dataset is released under the MIT License. By using the dataset, you agree to the terms and conditions of the license.
